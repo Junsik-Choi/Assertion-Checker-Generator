@@ -157,32 +157,42 @@ def clone_row_style(ws, template_row: int, target_row: int, cols):
 
 # ---------- 폭 변환([msb:lsb] -> 비트수 정수 텍스트) ----------
 def bits_text(w):
-    if w is None:
-        return "1"
-    s = str(w).strip()
-    if s == "":
-        return "1"
-    m = re.match(r'^\[\s*(\d+)\s*:\s*(\d+)\s*\]$', s)
-    if m:
-        msb = int(m.group(1))
-        lsb = int(m.group(2))
-        return str(abs(msb - lsb) + 1)
-    m = re.match(r'^\[\s*\d+\s*\]$', s)
-    if m:
-        return "1"
-    if s.isdigit():
+    try:
+        if not isinstance(w, str):
+            return "1"
+        s = w.strip()
+        if s == "" or s.lower() == "none":
+            return "1"
+        m = re.match(r'^\[\s*(\d+)\s*:\s*(\d+)\s*\]$', s)
+        if m:
+            msb = int(m.group(1))
+            lsb = int(m.group(2))
+            return str(abs(msb - lsb) + 1)
+        m = re.match(r'^\[\s*\d+\s*\]$', s)
+        if m:
+            return "1"
+        if s.isdigit():
+            return s
+        # 수식/매크로는 원문 유지
         return s
-    # 수식/매크로는 원문 유지
-    return s
+    except Exception:
+        return "1"
 
-# ---------- 클리어(값만 비우고 서식 유지) ----------
-def last_used_row_in_cols(ws, cols, start_row):
-    max_row = ws.max_row
-    for r in range(max_row, start_row - 1, -1):
-        for c in cols:
-            if ws.cell(row=r, column=c).value not in (None, ""):
-                return r
-    return start_row - 1
+def set_cell_value_merged_safe(ws, row, col, value):
+    """
+    병합 셀 범위 내라면 좌상단 셀에만 값을 넣고, 나머지는 무시
+    """
+    for merged_range in ws.merged_cells.ranges:
+        # merged_range가 문자열이 아닐 경우 무시
+        try:
+            if (row, col) in merged_range:
+                min_row, min_col = merged_range.min_row, merged_range.min_col
+                if (row, col) == (min_row, min_col):
+                    ws.cell(row=row, column=col).value = value
+                return
+        except TypeError:
+            continue
+    ws.cell(row=row, column=col).value = value
 
 def clear_base(ws):
     for label in ("Target Name", "Target Path", "Base Clock", "Base Reset"):
@@ -207,6 +217,19 @@ def clear_io(ws):
     for r in range(start, end + 1):
         for c in cols:
             ws.cell(row=r, column=c).value = None  # 값만 지움(서식 유지)
+
+def last_used_row_in_cols(ws, cols, start_row):
+    """
+    주어진 열들 중에서 start_row부터 마지막으로 값이 있는 행 번호를 반환
+    """
+    max_row = ws.max_row
+    last = start_row - 1
+    for r in range(start_row, max_row + 1):
+        for c in cols:
+            v = ws.cell(row=r, column=c).value
+            if v not in (None, ""):
+                last = r
+    return last
 
 # -------------------- 메인 --------------------
 def main():
@@ -266,27 +289,27 @@ def main():
     # 4) Base 재기입(항상 덮어씀)
     def run_base_target_name():
         c = ensure_base_label(ws, "Target Name")
-        right_cell(ws, c).value = module
+        set_cell_value_merged_safe(ws, c.row, c.column + 1, module)
         logger.debug("Base 채움: Target Name -> %s", module)
     tasks.append((run_base_target_name, "Base: Target Name"))
 
     def run_base_target_path():
         c = ensure_base_label(ws, "Target Path")
-        right_cell(ws, c).value = target_path_str
+        set_cell_value_merged_safe(ws, c.row, c.column + 1, target_path_str)
         logger.debug("Base 채움: Target Path -> %s", target_path_str)
     tasks.append((run_base_target_path, "Base: Target Path"))
 
     def run_base_clock():
         c = ensure_base_label(ws, "Base Clock")
         clk = ",".join(x.get("name", "") for x in clocks if x.get("name"))
-        right_cell(ws, c).value = clk
+        set_cell_value_merged_safe(ws, c.row, c.column + 1, clk)
         logger.debug("Base 채움: Base Clock -> %s", clk)
     tasks.append((run_base_clock, "Base: Base Clock"))
 
     def run_base_reset():
         c = ensure_base_label(ws, "Base Reset")
         rst = ",".join(x.get("name", "") for x in resets if x.get("name"))
-        right_cell(ws, c).value = rst
+        set_cell_value_merged_safe(ws, c.row, c.column + 1, rst)
         logger.debug("Base 채움: Base Reset -> %s", rst)
     tasks.append((run_base_reset, "Base: Base Reset"))
 
@@ -299,10 +322,8 @@ def main():
         def run_in(n=name, b=bits):
             hdr = find_io_header(ws) or create_io_header(ws)
             row = next_empty_row(ws, hdr["inputs_col"], hdr["row"] + 1)
-            template_row = row - 1 if row - 1 >= hdr["row"] + 1 else hdr["row"] + 1
-            clone_row_style(ws, template_row, row, [hdr["inputs_col"], hdr["inputs_bits_col"]])
-            ws.cell(row=row, column=hdr["inputs_col"]).value = n
-            ws.cell(row=row, column=hdr["inputs_bits_col"]).value = b
+            set_cell_value_merged_safe(ws, row, hdr["inputs_col"], n)
+            set_cell_value_merged_safe(ws, row, hdr["inputs_bits_col"], b)
             logger.debug("Input 추가: %s (%s)", n, b)
         tasks.append((run_in, f"Inputs: {name}"))
 
@@ -315,10 +336,8 @@ def main():
         def run_out(n=name, b=bits):
             hdr = find_io_header(ws) or create_io_header(ws)
             row = next_empty_row(ws, hdr["outputs_col"], hdr["row"] + 1)
-            template_row = row - 1 if row - 1 >= hdr["row"] + 1 else hdr["row"] + 1
-            clone_row_style(ws, template_row, row, [hdr["outputs_col"], hdr["outputs_bits_col"]])
-            ws.cell(row=row, column=hdr["outputs_col"]).value = n
-            ws.cell(row=row, column=hdr["outputs_bits_col"]).value = b
+            set_cell_value_merged_safe(ws, row, hdr["outputs_col"], n)
+            set_cell_value_merged_safe(ws, row, hdr["outputs_bits_col"], b)
             logger.debug("Output 추가: %s (%s)", n, b)
         tasks.append((run_out, f"Outputs: {name}"))
 
@@ -335,10 +354,8 @@ def main():
         def run_pa(n=pname, b=pbits):
             hdr = find_io_header(ws) or create_io_header(ws)
             row = next_empty_row(ws, hdr["params_col"], hdr["row"] + 1)
-            template_row = row - 1 if row - 1 >= hdr["row"] + 1 else hdr["row"] + 1
-            clone_row_style(ws, template_row, row, [hdr["params_col"], hdr["params_bits_col"]])
-            ws.cell(row=row, column=hdr["params_col"]).value = n
-            ws.cell(row=row, column=hdr["params_bits_col"]).value = b
+            set_cell_value_merged_safe(ws, row, hdr["params_col"], n)
+            set_cell_value_merged_safe(ws, row, hdr["params_bits_col"], b)
             logger.debug("Parameter 추가: %s (%s)", n, b)
         tasks.append((run_pa, f"Parameters: {pname}"))
 
