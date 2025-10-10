@@ -431,27 +431,33 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 stdscr.erase()
             _render_onboarding(stdscr, state)
             max_y, max_x = stdscr.getmaxyx()
-            # Bottom hint for onboarding input
-            hint_y = max_y - 2
+            # Optional status line for onboarding (errors/success)
+            if status_msg:
+                try:
+                    stdscr.addnstr(max_y - 3, 2, _truncate(status_msg, max_x - 4), max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                except curses.error:
+                    pass
+            # Bottom hint for onboarding input (place hint one line above the prompt)
+            hint_y = max_y - 3
             try:
                 stdscr.move(hint_y, 0)
                 stdscr.clrtoeol()
                 stdscr.addnstr(hint_y, 2, _truncate("Enter path and press Enter. Tab: complete. Esc: cancel.", max_x - 4), max_x - 4, curses.A_DIM)
             except curses.error:
                 pass
-            # Input prompt (force clear to prevent ghosting)
+            # Input prompt (force clear to prevent ghosting) placed one line below hint
             prompt = "> "
             edit_w = max_x - len(prompt) - 1
             current = "".join(input_buf)
             try:
-                stdscr.addnstr(max_y - 1, 0, " " * max_x, max_x)
-                stdscr.addstr(max_y - 1, 0, prompt)
-                stdscr.addnstr(max_y - 1, len(prompt), _truncate(current, edit_w), edit_w)
+                stdscr.addnstr(max_y - 2, 0, " " * max_x, max_x)
+                stdscr.addstr(max_y - 2, 0, prompt)
+                stdscr.addnstr(max_y - 2, len(prompt), _truncate(current, edit_w), edit_w)
                 try:
                     curses.curs_set(1)
                 except Exception:
                     pass
-                stdscr.move(max_y - 1, len(prompt) + min(cursor_pos, edit_w))
+                stdscr.move(max_y - 2, len(prompt) + min(cursor_pos, edit_w))
             except curses.error:
                 pass
             stdscr.refresh()
@@ -509,16 +515,46 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             # Enter: commit
             if ch in (10, 13, curses.KEY_ENTER):
                 cmdline = "".join(input_buf).strip()
-                input_buf.clear(); cursor_pos = 0
-                if not cmdline and state.onboarding_stage == 'excel' and state.onboarding_excel_autofound:
-                    # Accept autodetected
+                stage = state.onboarding_stage or ""
+                # Default: clear status unless error occurs
+                status_msg = ""
+                if stage == 'rtl':
+                    from pathlib import Path as _P
+                    p = _P(cmdline).expanduser()
+                    if str(p).strip() and p.exists():
+                        state.rtl_start = p
+                        # Build modules list for next step
+                        try:
+                            mods_ctx, _mi, _occs = build_context_from_rtl(p, None)
+                            state.onboarding_modules = sorted(list(mods_ctx.keys()))
+                        except Exception:
+                            state.onboarding_modules = []
+                        state.onboarding_stage = 'module'
+                        status_msg = f"rtl set: {p}"
+                        input_buf.clear(); cursor_pos = 0
+                    else:
+                        status_msg = "Invalid RTL path (not found)."
+                        # keep input so user can edit
+                elif stage == 'excel':
+                    # Delegate to command handler (supports empty accept)
                     out_msg, opened_overlay = _handle_command(state, cmdline)
+                    input_buf.clear(); cursor_pos = 0
+                    if opened_overlay:
+                        overlay_active = True
+                        overlay_page = 0
+                        overlay_scroll = 0
+                    else:
+                        status_msg = out_msg or status_msg
                 else:
+                    # For 'module' and any other, delegate to handler
                     out_msg, opened_overlay = _handle_command(state, cmdline)
-                if opened_overlay:
-                    overlay_active = True
-                    overlay_page = 0
-                    overlay_scroll = 0
+                    input_buf.clear(); cursor_pos = 0
+                    if opened_overlay:
+                        overlay_active = True
+                        overlay_page = 0
+                        overlay_scroll = 0
+                    else:
+                        status_msg = out_msg or status_msg
                 continue
             # Regular char
             if 0 <= ch <= 255:
@@ -1350,7 +1386,8 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
         y += 1
 
         # Create boxed list area below banner with horizontal margins
-        min_reserved = 2  # space for hint + prompt (no extra gap)
+        # Reserve 3 lines: hint, prompt (with '>'), and a trailing blank to avoid clipping
+        min_reserved = 3
         list_y = y + 1
         if max_y - list_y - min_reserved < 5:
             list_y = max(1, max_y - (min_reserved + 6))
@@ -1449,8 +1486,8 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                 stdscr.addnstr(list_y + 3, list_margin_x + 2, _truncate(msg, inner_w), inner_w, curses.A_DIM)
             except curses.error:
                 pass
-        # Hints block (color-coded)
-        hint_y = max_y - 2
+        # Hints block (color-coded) on the line above the prompt
+        hint_y = max_y - 3
         try:
             # Clear hint line fully before writing
             stdscr.addnstr(hint_y, 0, " " * max_x, max_x)
@@ -1474,20 +1511,20 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             seg("q", "white", True); seg("quit")
         except curses.error:
             pass
-        # Prompt
+        # Prompt (one line below hint, not on the very last line)
         prompt = "> "
         try:
             # Clear prompt line fully to avoid residual characters
-            stdscr.addnstr(max_y - 1, 0, " " * max_x, max_x)
-            # Place prompt one visual line below hint (already last line)
-            stdscr.addstr(max_y - 1, 0, prompt)
+            stdscr.addnstr(max_y - 2, 0, " " * max_x, max_x)
+            # Place prompt one visual line below hint
+            stdscr.addstr(max_y - 2, 0, prompt)
         except curses.error:
             pass
         stdscr.refresh()
         # Read line
         curses.echo()
         try:
-            cmdline = stdscr.getstr(max_y - 1, len(prompt), max(8, max_x - len(prompt) - 2)).decode(errors='ignore').strip()
+            cmdline = stdscr.getstr(max_y - 2, len(prompt), max(8, max_x - len(prompt) - 2)).decode(errors='ignore').strip()
         except Exception:
             cmdline = ""
         curses.noecho()
