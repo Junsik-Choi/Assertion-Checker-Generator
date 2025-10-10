@@ -58,7 +58,7 @@ def discover_files(root: Path, exts: List[str]) -> List[Path]:
     return files
 
 def find_rtl_root_from(start: Path) -> Tuple[Path, bool]:
-    # start가 파일이면 상위 디렉터리부터, 디렉터리면 그 디렉터리부터 'RTL' 탐색
+    # start가 파일이면 상위 디렉토리부터, 디렉터리면 그 디렉터리부터 'RTL' 탐색
     cur = start if start.is_dir() else start.parent
     orig = cur
     while True:
@@ -349,7 +349,9 @@ def parse_param_defaults_from_header(param_ports: str) -> Dict[str, str]:
     items = split_top_level_commas(param_ports)
     for it in items:
         it2 = collapse_ws(it)
-        m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*(.+)$", it2)
+        # 기존: m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*(.+)$", it2)
+        # 개선: '=' 뒤에 콤마 또는 끝까지 모두 잡음
+        m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*([^,]+)", it2)
         if m:
             name = m.group(2)
             expr = m.group(3).strip()
@@ -693,13 +695,15 @@ def ports_bundle_for_module(modules: Dict[str, Any], target: str) -> Dict[str, A
         elif p["dir"] == "inout":
             inouts.append(item)
     cls = classify_groups(m["ports"])
+    # 파라미터는 포트에서 분류하지 말고 param_defaults에서 직접 추출
+    parameters = [{"name": k, "value": v} for k, v in m.get("param_defaults", {}).items()]
     return {
         "inputs": inputs,
         "outputs": outputs,
         "inouts": inouts,
         "clocks": cls["clocks"],
         "resets": cls["resets"],
-        "parameters": cls["parameters"]
+        "parameters": parameters
     }
 
 # -----------------------------
@@ -814,9 +818,33 @@ def run_grouping_flow(modules: Dict[str, Any], target: str, occs: List[Dict[str,
     - JSON 키 순서: top_path, module, paths, instances, clocks, resets, inputs, outputs, inouts, parameters
     - inputs에서 clock/reset 이름은 제거하여 중복 표시 방지.
     """
+    #25/09/26 update
     if not occs:
-        print("대상 모듈의 인스턴스를 찾지 못하였습니다.")
+        print("대상 모듈의 인스턴스를 찾지 못하였습니다. 최상위 모듈로 처리합니다.")
+        cls = classify_groups(modules[target]["ports"])
+        ex_names = make_exclusion_name_set(cls)
+        ports_resolved = ports_bundle_for_module(modules, target)
+        ports_resolved["inputs"] = [it for it in ports_resolved["inputs"] if it["name"] not in ex_names]
+
+        obj = {
+            "top_path": "",
+            "module": target,
+            "paths": [],
+            "instances": [],
+            "clocks": cls["clocks"],
+            "resets": cls["resets"],
+            "inputs": ports_resolved["inputs"],
+            "outputs": ports_resolved["outputs"],
+            "inouts": ports_resolved["inouts"],
+            "parameters": parameters  # <-- 여기서 param_defaults 사용
+        }
+        outdir = Path("out/groups").resolve()
+        outdir.mkdir(parents=True, exist_ok=True)
+        fname = f"{sanitize_filename(target)}.group00.json"
+        save_json(obj, outdir / fname)
+        print(f"그룹 JSON이 저장되었습니다: {outdir/fname}")
         return
+
 
     print("대상 모듈 인스턴스 목록은 다음과 같습니다.")
     print("==== 인스턴스 목록 시작 ====")
@@ -834,6 +862,9 @@ def run_grouping_flow(modules: Dict[str, Any], target: str, occs: List[Dict[str,
     # 이름 기반 분류(Clock/Reset/Parameter)는 한 번만 계산
     cls = classify_groups(modules[target]["ports"])
     ex_names = make_exclusion_name_set(cls)
+
+    # 파라미터 정보 추출
+    parameters = [{"name": k, "value": v} for k, v in modules[target].get("param_defaults", {}).items()]
 
     available = set(range(1, len(occs) + 1))
     group_idx = 1
@@ -861,7 +892,7 @@ def run_grouping_flow(modules: Dict[str, Any], target: str, occs: List[Dict[str,
             "inputs": ports_resolved["inputs"],
             "outputs": ports_resolved["outputs"],
             "inouts": ports_resolved["inouts"],
-            "parameters": cls["parameters"]
+            "parameters": parameters  # <-- 여기서 param_defaults 사용
         }
 
         fname = f"{sanitize_filename(target)}.group{group_idx:02d}.json"
@@ -915,7 +946,7 @@ def run_grouping_flow(modules: Dict[str, Any], target: str, occs: List[Dict[str,
             "inputs": ports_resolved["inputs"],
             "outputs": ports_resolved["outputs"],
             "inouts": ports_resolved["inouts"],
-            "parameters": cls["parameters"]
+            "parameters": parameters  # <-- 여기서 param_defaults 사용
         }
 
         fname = f"{sanitize_filename(target)}.group{group_idx:02d}.json"
