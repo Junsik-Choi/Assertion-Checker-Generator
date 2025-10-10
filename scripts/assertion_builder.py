@@ -39,6 +39,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+import platform
+import shutil
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 # Make local 'scripts' directory importable no matter the CWD
@@ -59,6 +61,81 @@ from rtl_parser import (  # type: ignore
 )
 
 from assertions import get_registered_plugins, BaseAssertionPlugin  # type: ignore
+
+
+def _run_pip_install(packages: List[str]) -> Tuple[bool, str]:
+    """Attempt to install given pip packages non-interactively. Returns (ok, output)."""
+    if not packages:
+        return True, ""
+    cmd = [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-input",
+    ] + packages
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        out = (proc.stdout or "") + (proc.stderr or "")
+        return proc.returncode == 0, out
+    except Exception as e:
+        return False, f"pip failed: {e}"
+
+
+def _ensure_runtime_deps(require_tui: bool) -> None:
+    """
+    Ensure required Python dependencies are available. If missing, try to install.
+    - Always checks: pandas, openpyxl (used by plugins/fill scripts)
+    - If require_tui: also ensure curses (windows-curses on Windows)
+    Fails with SystemExit if a required package cannot be installed.
+    """
+    missing: List[str] = []
+
+    # Core Excel stack
+    try:
+        import pandas  # type: ignore  # noqa: F401
+    except Exception:
+        missing.append("pandas")
+    try:
+        import openpyxl  # type: ignore  # noqa: F401
+    except Exception:
+        missing.append("openpyxl")
+
+    # TUI dependency
+    win_needs_curses = False
+    if require_tui:
+        try:
+            import curses  # type: ignore  # noqa: F401
+        except Exception:
+            if platform.system() == "Windows":
+                # On Windows, the shim package provides _curses
+                missing.append("windows-curses")
+                win_needs_curses = True
+            else:
+                # On non-Windows, curses should be in stdlib; if not, abort
+                raise SystemExit("curses module not available; cannot launch TUI")
+
+    if missing:
+        ok, out = _run_pip_install(missing)
+        if not ok:
+            print(out)
+            raise SystemExit(f"Failed to install required packages: {', '.join(missing)}")
+
+    # Verify imports after install
+    try:
+        import pandas  # type: ignore  # noqa: F401
+        import openpyxl  # type: ignore  # noqa: F401
+    except Exception as e:
+        raise SystemExit(f"Dependencies not satisfied after install attempt: {e}")
+
+    if require_tui:
+        try:
+            import curses  # type: ignore  # noqa: F401
+        except Exception as e:
+            if win_needs_curses:
+                raise SystemExit("windows-curses installed but curses still unavailable; cannot launch TUI")
+            raise SystemExit(f"curses unavailable: {e}")
 
 
 def build_module_context(rtl_start: Path, target_module: Optional[str]) -> Dict[str, Any]:
@@ -331,10 +408,16 @@ def interactive_wizard():
 
 
 def main():
-    # Interactive when no args
+    # Default: launch TUI when no args
     if len(sys.argv) == 1:
-        cfg = interactive_wizard()
-        return run_builder(**cfg)
+        try:
+            _ensure_runtime_deps(require_tui=True)
+            from cli_tui import run as run_tui  # type: ignore
+        except Exception as e:
+            print(f"[Info] TUI failed to start ({e}); falling back to wizard.")
+            cfg = interactive_wizard()
+            return run_builder(**cfg)
+        return run_tui()
 
     parser = argparse.ArgumentParser(description="Modular Assertion Builder")
     parser.add_argument("--rtl-start", help="Start path (file or dir) to scan RTL")
@@ -345,9 +428,23 @@ def main():
     parser.add_argument("--use-default-excel", action="store_true", help="Ignore --excel and use default Data/Assertion_TF.xlsx")
     parser.add_argument("--enable", action="append", help="Enable only listed plugins (name). Can repeat.")
     parser.add_argument("--json", action="store_true", help="Emit consolidated JSON of inputs/outputs/parameters")
+    parser.add_argument("--tui", action="store_true", help="Launch full-screen TUI")
+    parser.add_argument("--wizard", action="store_true", help="Launch interactive wizard instead of TUI")
     args = parser.parse_args()
 
+    # Explicit TUI launch
+    if getattr(args, "tui", False) and not getattr(args, "wizard", False):
+        _ensure_runtime_deps(require_tui=True)
+        from cli_tui import run as run_tui  # type: ignore
+        return run_tui()
+
+    # Explicit wizard
+    if getattr(args, "wizard", False):
+        cfg = interactive_wizard()
+        return run_builder(**cfg)
+
     # Validate required when not interactive
+    _ensure_runtime_deps(require_tui=False)
     if not args.rtl_start:
         raise SystemExit("--rtl-start is required when not using interactive mode")
     # Excel path selection with optional default

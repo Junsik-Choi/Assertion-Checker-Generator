@@ -88,3 +88,49 @@
 [19:40:55] DEBUG: Output 추가: o_vsync (1)
 [19:40:55] DEBUG: 저장 완료: .\define.xlsx
 [19:40:55] INFO: 모든 작업 완료
+[01:12:02] INFO: 작업 시작 (총 23 단계)
+[01:12:02] INFO: 백업 생성: D:\Programing\Assertion_github\Assertion-Checker-Generator\Data\Assertion_TF_backup_20251009_011202.xlsx
+[01:12:02] DEBUG: 기존 값 클리어(서식 유지)
+[01:12:02] DEBUG: Base 채움: Target Name -> out_sync_gen
+[01:12:02] DEBUG: Base 채움: Target Path -> 
+[01:12:02] DEBUG: Base 채움: Base Clock -> clk
+[01:12:02] DEBUG: Base 채움: Base Reset -> i_resetn
+[01:12:02] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[01:12:02] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[01:12:02] DEBUG: Input 추가: i_VTOT (1)
+[01:12:02] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[01:12:02] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[01:12:02] DEBUG: Input 추가: i_de (1)
+[01:12:02] DEBUG: Input 추가: i_hsw (6)
+[01:12:02] DEBUG: Input 추가: i_hsync (1)
+[01:12:02] DEBUG: Input 추가: i_hsync_cnt (1)
+[01:12:02] DEBUG: Input 추가: i_hsync_edge (1)
+[01:12:02] DEBUG: Input 추가: i_vsw (6)
+[01:12:02] DEBUG: Input 추가: i_vsync (1)
+[01:12:02] DEBUG: Input 추가: i_vsync_cnt (1)
+[01:12:02] DEBUG: Output 추가: o_de_final (1)
+[01:12:02] DEBUG: Output 추가: o_hsync_final (1)
+[01:12:02] DEBUG: Output 추가: o_vsync_final (1)
+[18:55:44] INFO: 작업 시작 (총 23 단계)
+[18:55:44] INFO: 백업 생성: D:\Programing\Assertion_github\Assertion-Checker-Generator\Data\Assertion_TF_backup_20251010_185544.xlsx
+[18:55:44] DEBUG: 기존 값 클리어(서식 유지)
+[18:55:44] DEBUG: Base 채움: Target Name -> out_sync_gen
+[18:55:44] DEBUG: Base 채움: Target Path -> 
+[18:55:44] DEBUG: Base 채움: Base Clock -> clk
+[18:55:44] DEBUG: Base 채움: Base Reset -> i_resetn
+[18:55:44] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[18:55:44] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[18:55:44] DEBUG: Input 추가: i_VTOT (1)
+[18:55:44] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[18:55:44] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[18:55:44] DEBUG: Input 추가: i_de (1)
+[18:55:44] DEBUG: Input 추가: i_hsw (6)
+[18:55:44] DEBUG: Input 추가: i_hsync (1)
+[18:55:44] DEBUG: Input 추가: i_hsync_cnt (1)
+[18:55:44] DEBUG: Input 추가: i_hsync_edge (1)
+[18:55:44] DEBUG: Input 추가: i_vsw (6)
+[18:55:44] DEBUG: Input 추가: i_vsync (1)
+[18:55:44] DEBUG: Input 추가: i_vsync_cnt (1)
+[18:55:44] DEBUG: Output 추가: o_de_final (1)
+[18:55:44] DEBUG: Output 추가: o_hsync_final (1)
+[18:55:44] DEBUG: Output 추가: o_vsync_final (1)

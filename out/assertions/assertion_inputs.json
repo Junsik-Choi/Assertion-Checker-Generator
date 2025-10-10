@@ -1,0 +1,153 @@
+{
+  "module": "out_sync_gen",
+  "clocks": [
+    {
+      "name": "clk",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "i_resetn",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "i_H_ACTIVE_TH",
+      "width": ""
+    },
+    {
+      "name": "i_H_WAIT_TH",
+      "width": ""
+    },
+    {
+      "name": "i_VTOT",
+      "width": ""
+    },
+    {
+      "name": "i_V_ACTIVE_TH",
+      "width": ""
+    },
+    {
+      "name": "i_V_WAIT_TH",
+      "width": ""
+    },
+    {
+      "name": "i_de",
+      "width": ""
+    },
+    {
+      "name": "i_hsw",
+      "width": "[5:0]"
+    },
+    {
+      "name": "i_hsync",
+      "width": ""
+    },
+    {
+      "name": "i_hsync_cnt",
+      "width": ""
+    },
+    {
+      "name": "i_hsync_edge",
+      "width": ""
+    },
+    {
+      "name": "i_vsw",
+      "width": "[5:0]"
+    },
+    {
+      "name": "i_vsync",
+      "width": ""
+    },
+    {
+      "name": "i_vsync_cnt",
+      "width": ""
+    }
+  ],
+  "outputs": [
+    {
+      "name": "o_de_final",
+      "width": ""
+    },
+    {
+      "name": "o_hsync_final",
+      "width": ""
+    },
+    {
+      "name": "o_vsync_final",
+      "width": ""
+    }
+  ],
+  "inouts": [],
+  "parameters": [],
+  "sheets": {
+    "counter": {
+      "cnt_left_header": NaN,
+      "cnt_right_header": NaN,
+      "left_header": [
+        NaN,
+        NaN,
+        NaN,
+        NaN,
+        NaN
+      ],
+      "right_header": [
+        NaN,
+        NaN,
+        NaN,
+        NaN
+      ],
+      "NaN": [
+        {
+          "NaN": "",
+          "NaN": "Counter",
+          "NaN": "",
+          "NaN": "",
+          "NaN": ""
+        },
+        {
+          "NaN": "",
+          "NaN": "Target",
+          "NaN": "Plus condition",
+          "NaN": "Trigger Condition",
+          "NaN": "Reset Condition"
+        },
+        {
+          "NaN": "",
+          "NaN": "cnt",
+          "NaN": "plus_condition",
+          "NaN": "",
+          "NaN": ""
+        }
+      ],
+      "NaN": [
+        {
+          "NaN": "",
+          "NaN": "",
+          "NaN": "",
+          "NaN": "Expected Preset(Logic Part)"
+        },
+        {
+          "NaN": "Expect Count Value",
+          "NaN": "",
+          "NaN": "",
+          "NaN": "always @(posedge clk or negedge resetn) begin\n  if(!resetn) begin\n    cnt <= 0;\n  end\n  else if(reset_condition) begin\n    cnt <= 0;\n  end\n  else if(plus_condition) begin\n    cnt <= cnt+1;\n  end\n  else begin\n    cnt <= cnt;\n  end\nend"
+        },
+        {
+          "NaN": "",
+          "NaN": "",
+          "NaN": "",
+          "NaN": "Expected Preset(Property Part)"
+        },
+        {
+          "NaN": "",
+          "NaN": "",
+          "NaN": "",
+          "NaN": "Property p_counter\n    @(posedge clk) disable iff(!resetn)\n    Trigger_condition |-> (cnt == expect_count_value);\nendproperty"
+        }
+      ]
+    }
+  }
+}

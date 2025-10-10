@@ -15,3 +15,11 @@ Progress: 0% -> 0% (+0%)
 Summary: Histry Update 기능 추가. Issue Tracking, Pregress Checking 용도로 활용할 것. 
 해당 Python 프로그램을 실행하면, Git Name과 Email을 불러와 입력한 History를 기록 및 Progress를 관리 가능
 
+----------------------------------------
+[2025-09-25 01:30:07 대한민국 표준시+0900]
+User: Junsik-Choi <jschoi5334@gmail.com> (GitHub: Junsik-Choi)
+Branch: main @ 9864cf1 - Enhance README.md with detailed documentation for the modular Assertion Builder, including interactive and CLI modes, plugin architecture, and usage examples.
+Progress: 0% -> 0% (+0%)
+Summary:
+모듈형 Assertion Builder 도입: 인터랙티브 마법사, 플러그인 구조(카운터 플러그인 포함), Define 시트 자동화, README 정비. 전체 워크플로우 사용자 친화성 및 확장성 강화
+

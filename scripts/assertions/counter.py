@@ -12,7 +12,7 @@ from .registry import register
 @register
 class CounterPlugin(BaseAssertionPlugin):
     plugin_name = "counter"
-    sheet_name = "counter_gen"
+    sheet_name = "Counter"
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
         raw = pd.read_excel(xls_path, sheet_name=self.sheet_name, header=None)
