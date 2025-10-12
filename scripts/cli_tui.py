@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from textwrap import wrap as _textwrap
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from datetime import datetime
 
 # Ensure we can import local scripts
 _THIS_DIR = Path(__file__).resolve().parent
@@ -51,6 +52,78 @@ from rtl_parser import (  # type: ignore
     resolve_ports_with_params,
     classify_groups,
 )
+from assertion_builder import fill_define_excel_if_needed  # type: ignore
+try:
+    from openpyxl import load_workbook  # type: ignore
+except Exception:
+    load_workbook = None  # type: ignore
+
+
+def _robust_copy(src: Path, dst: Path) -> Path:
+    """Copy file src->dst robustly. If dst exists or copy fails, try a unique name and raw copy."""
+    target = dst
+    if target.exists():
+        stem = dst.stem
+        suffix = dst.suffix
+        for i in range(1, 1000):
+            cand = dst.with_name(f"{stem}-{i}{suffix}")
+            if not cand.exists():
+                target = cand
+                break
+    try:
+        shutil.copy2(src, target)
+        return target
+    except Exception:
+        # Fallback: raw read/write
+        try:
+            with open(src, "rb") as rf, open(target, "wb") as wf:
+                while True:
+                    chunk = rf.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    wf.write(chunk)
+            return target
+        except Exception as e:
+            raise RuntimeError(f"Copy failed: {e}")
+
+
+def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
+    """Create session Excel in Data/, verify Define sheet, run fill_define.py. Returns (ok, err)."""
+    try:
+        if not state.excel_path or not Path(state.excel_path).exists():
+            return False, "Reference Excel not set"
+        sess_dir = (_THIS_DIR.parent / "Data").resolve()
+        sess_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        mod = state.target_module or (state.module_info.module or "module")
+        new_xlsx = sess_dir / f"{mod}-{ts}.xlsx"
+        new_xlsx = _robust_copy(Path(state.excel_path), new_xlsx)
+        state.session_excel_path = new_xlsx
+        # Verify Define sheet
+        if not load_workbook:
+            return False, "openpyxl missing"
+        wb = load_workbook(str(new_xlsx))
+        if "Define" not in wb.sheetnames:
+            return False, "Define sheet missing"
+        # Run fill_define.py and require success
+        define_json = fill_define_excel_if_needed(new_xlsx, {
+            "module": state.module_info.module,
+            "clocks": state.module_info.clocks,
+            "resets": state.module_info.resets,
+            "inputs": state.module_info.inputs,
+            "outputs": state.module_info.outputs,
+            "inouts": state.module_info.inouts,
+            "parameters": state.module_info.parameters,
+        }, sess_dir)
+        fill_script = _THIS_DIR / "fill_define.py"
+        if not fill_script.exists():
+            return False, "fill_define.py not found"
+        rc = subprocess.run([sys.executable, str(fill_script), str(new_xlsx), str(define_json)], check=False).returncode
+        if rc != 0:
+            return False, "fill_define.py failed"
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 _APP_VERSION = "v1.0"
 
@@ -89,6 +162,12 @@ class AppState:
     onboarding_modules: List[str] = field(default_factory=list)
     onboarding_excel_autofound: Optional[Path] = None
     onboarding_compl_index: int = 0
+    onboarding_cand_page: int = 0
+    onboarding_cand_visible: bool = False
+    onboarding_cand_h: int = 0
+    # Session Excel generated for this run
+    session_excel_path: Optional[Path] = None
+    excel_error: Optional[str] = None
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -122,9 +201,13 @@ def _truncate(text: str, width: int) -> str:
 
 def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tuple[Dict[str, Any], ModuleInfo, List[Any]]:
     exts = [".v", ".sv"]
-    rtl_root, _found = find_rtl_root_from(rtl_start)
-    start_scope_dir = rtl_start if rtl_start.is_dir() else rtl_start.parent
-    files = sorted(set(discover_files(rtl_root, exts)) | set(discover_files(start_scope_dir, exts)), key=lambda p: str(p))
+    # If a single file was provided, parse only that file; else use root + scope dir
+    if rtl_start.is_file():
+        files = [rtl_start]
+    else:
+        rtl_root, _found = find_rtl_root_from(rtl_start)
+        start_scope_dir = rtl_start if rtl_start.is_dir() else rtl_start.parent
+        files = sorted(set(discover_files(rtl_root, exts)) | set(discover_files(start_scope_dir, exts)), key=lambda p: str(p))
     modules = build_modules_db(files, allow_unknown=False)
     if not modules:
         raise RuntimeError("No modules parsed from RTL scope")
@@ -295,7 +378,17 @@ def _list_modules_lines(modules: Dict[str, Any], max_rows: int) -> List[str]:
 
 
 def run() -> None:
-    curses.wrapper(_main)
+    try:
+        curses.wrapper(_main)
+    except Exception as e:
+        # Graceful fallback for rare cases where stdscr is None or curses fails
+        try:
+            import platform
+            if platform.system() == "Windows":
+                print("[Error] TUI failed to initialize (curses). If not installed, run: pip install windows-curses")
+        except Exception:
+            pass
+        raise
 
 
 def _main(stdscr: "curses._CursesWindow") -> None:
@@ -425,27 +518,63 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         # Onboarding wizard rendering
         if state.onboarding_active:
             # Render onboarding UI
+            # Avoid full clear here to prevent flicker of transient popups. Use erase only.
             try:
-                stdscr.clear()
-            except Exception:
                 stdscr.erase()
+            except Exception:
+                pass
             _render_onboarding(stdscr, state)
             max_y, max_x = stdscr.getmaxyx()
-            # Optional status line for onboarding (errors/success)
+            # Optional status line for onboarding (errors/success) above candidates/hints
             if status_msg:
                 try:
-                    stdscr.addnstr(max_y - 3, 2, _truncate(status_msg, max_x - 4), max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                    stdscr.addnstr(max_y - 5, 2, _truncate(status_msg, max_x - 4), max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
                 except curses.error:
                     pass
-            # Bottom hint for onboarding input (place hint one line above the prompt)
-            hint_y = max_y - 3
+            # Decide dynamic candidates strip height before placing hint/prompt (only in RTL step)
+            # Estimate grid based on current compl_items and screen width
+            cand_h = 0
+            prompt_row = max_y - 2
+            if (state.onboarding_stage or "") == 'rtl' and compl_items:
+                try:
+                    items_all = [nm + ("/" if is_dir else "") for (nm, is_dir) in compl_items]
+                    longest = max((len(s) for s in items_all), default=8)
+                    col_w = min(max(12, longest + 2), 32)
+                    cols = max(1, (max_x - 4) // col_w)
+                    rows_needed = max(1, (len(items_all) + cols - 1) // cols)
+                    # Header + rows, limit to 10 and to available space
+                    cand_h = min(10, rows_needed + 1, max(0, max_y - 4))
+                    cand_h = max(3, cand_h)
+                    state.onboarding_cand_h = cand_h
+                    state.onboarding_cand_visible = True
+                except Exception:
+                    cand_h = 3
+                    state.onboarding_cand_h = cand_h
+                    state.onboarding_cand_visible = True
+            # Anchor candidates to the line just above the prompt; grow upwards
+            if cand_h:
+                cand_bottom = prompt_row - 1
+                cand_top = max(1, cand_bottom - (cand_h - 1))
+                hint_y = max(1, cand_top - 1)
+            else:
+                cand_top = 0
+                hint_y = prompt_row - 1
             try:
                 stdscr.move(hint_y, 0)
                 stdscr.clrtoeol()
-                stdscr.addnstr(hint_y, 2, _truncate("Enter path and press Enter. Tab: complete. Esc: cancel.", max_x - 4), max_x - 4, curses.A_DIM)
+                stage = (state.onboarding_stage or "").lower()
+                if stage == 'rtl':
+                    hint_text = "Enter path and press Enter. Tab: complete. Esc: cancel."
+                elif stage == 'module':
+                    hint_text = "Type number. f <text>: filter, F: clear, n/N: page, prev/back: previous"
+                else:
+                    hint_text = "Type path and Enter (or accept autodetected). prev/back: previous"
+                stdscr.addnstr(hint_y, 2, _truncate(hint_text, max_x - 4), max_x - 4, curses.A_DIM)
             except curses.error:
                 pass
-            # Input prompt (force clear to prevent ghosting) placed one line below hint
+
+            # (popup rendered after prompt, just before blocking getch)
+            # Input prompt (force clear to prevent ghosting) placed near bottom
             prompt = "> "
             edit_w = max_x - len(prompt) - 1
             current = "".join(input_buf)
@@ -460,6 +589,46 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 stdscr.move(max_y - 2, len(prompt) + min(cursor_pos, edit_w))
             except curses.error:
                 pass
+            # Draw candidates strip last on stdscr (wide, up to 10 lines) so it persists reliably and doesn't overlap (RTL step only)
+            if (state.onboarding_stage or "") == 'rtl' and compl_items and cand_h:
+                try:
+                    # Recompute anchored top using prompt row and current cand_h so it won't drift
+                    prompt_row = max_y - 2
+                    cand_bottom = prompt_row - 1
+                    cand_top = max(1, cand_bottom - (cand_h - 1))
+                    # Clear the region
+                    for r in range(cand_h):
+                        stdscr.move(cand_top + r, 0); stdscr.clrtoeol()
+                    items_all = [nm + ("/" if is_dir else "") for (nm, is_dir) in compl_items]
+                    # Header on first line
+                    stdscr.addnstr(cand_top, 2, _truncate("Candidates:", max_x - 4), max_x - 4, curses.A_BOLD)
+                    # Grid layout for alignment
+                    grid_rows = max(1, cand_h - 1)
+                    # Determine column width from longest label, clamp for readability
+                    longest = max((len(s) for s in items_all), default=8)
+                    col_w = min(max(12, longest + 2), 32)
+                    cols = max(1, (max_x - 4) // col_w)
+                    visible_capacity = grid_rows * cols
+                    # Paging
+                    total_pages = max(1, (len(items_all) + visible_capacity - 1) // visible_capacity)
+                    cur_page = state.onboarding_cand_page % total_pages
+                    start_idx = cur_page * visible_capacity
+                    items = items_all[start_idx:start_idx + visible_capacity]
+                    for r in range(grid_rows):
+                        for c in range(cols):
+                            idx = r * cols + c
+                            if idx >= len(items):
+                                break
+                            label = items[idx]
+                            x = 2 + c * col_w
+                            y = cand_top + 1 + r
+                            stdscr.addnstr(y, x, _truncate(label, col_w - 1), col_w - 1, curses.color_pair(_PAIR_BY_NAME.get("cyan",0)))
+                    # If truncated, show (more)
+                    if total_pages > 1:
+                        more_text = f"... (more {cur_page+1}/{total_pages})"
+                        stdscr.addnstr(cand_top + grid_rows, max(2, max_x - len(more_text) - 2), _truncate(more_text, len(more_text)), len(more_text), curses.A_DIM)
+                except curses.error:
+                    pass
             stdscr.refresh()
             ch = stdscr.getch()
             # Basic editing keys
@@ -487,30 +656,50 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 cursor_pos = 0; continue
             if ch in (curses.KEY_END,):
                 cursor_pos = len(input_buf); continue
-            # Tab completion for path
+            # Tab completion for path (raw mode in onboarding): Linux-like
             if ch == 9:
                 line = "".join(input_buf)
-                new_line, new_cursor, items, base_dir = _path_complete(line, cursor_pos)
-                # Cycle through candidates like Linux shells
+                # In onboarding, treat whole line as path prefix
+                new_line, new_cursor, items, base_dir = _path_complete_raw(line, cursor_pos)
                 if items:
-                    # Reset cycling if base dir changed
-                    if compl_base != base_dir:
-                        state.onboarding_compl_index = 0
+                    # Show candidates; insert ONLY common prefix increment (no first-item commit)
                     compl_base = base_dir
                     compl_items = items
-                    if state.onboarding_compl_index >= len(compl_items):
-                        state.onboarding_compl_index = 0
-                    name, is_dir = compl_items[state.onboarding_compl_index]
-                    next_path = os.path.join(base_dir, name)
-                    if is_dir and not next_path.endswith(os.sep):
-                        next_path += os.sep
-                    input_buf = list(next_path)
-                    cursor_pos = len(input_buf)
-                    state.onboarding_compl_index = (state.onboarding_compl_index + 1) % len(compl_items)
+                    names = [nm for (nm, _isdir) in items]
+                    common = _common_prefix(names)
+                    base_str = str(base_dir).rstrip("/\\").replace("\\", "/")
+                    next_prefix = (base_str + "/" + common) if base_str else common
+                    # If common grows beyond current typed prefix, extend input by the new delta only
+                    if next_prefix and not line.endswith(next_prefix):
+                        input_buf = list(next_prefix)
+                        cursor_pos = len(input_buf)
+                        # typing happened implicitly → ensure candidate page stays at 0 on first Tab
+                        if not state.onboarding_cand_visible:
+                            state.onboarding_cand_page = 0
+                        state.onboarding_cand_visible = True
+                    else:
+                        # No new common part → advance candidates page (wrap)
+                        # Compute paging using same geometry as renderer
+                        max_y, max_x = stdscr.getmaxyx()
+                        # Recompute dynamic grid
+                        longest = max((len(nm + ('/' if isd else '')) for (nm, isd) in items), default=8)
+                        col_w = min(max(12, longest + 2), 32)
+                        cols = max(1, (max_x - 4) // col_w)
+                        # Use last computed cand_h from state to keep baseline anchored
+                        grid_rows = max(1, (state.onboarding_cand_h - 1) if state.onboarding_cand_h else 6)
+                        visible_capacity = grid_rows * cols
+                        total_pages = max(1, (len(items) + visible_capacity - 1) // visible_capacity)
+                        state.onboarding_cand_page = (state.onboarding_cand_page + 1) % total_pages
                 else:
-                    # Fallback to common prefix expansion
-                    input_buf = list(new_line)
-                    cursor_pos = new_cursor
+                    # No candidates: apply common-prefix if any; otherwise do nothing (beep)
+                    if new_line != line:
+                        input_buf = list(new_line)
+                        cursor_pos = new_cursor
+                    else:
+                        try:
+                            curses.beep()
+                        except Exception:
+                            pass
                 continue
             # Enter: commit
             if ch in (10, 13, curses.KEY_ENTER):
@@ -530,6 +719,12 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                         except Exception:
                             state.onboarding_modules = []
                         state.onboarding_stage = 'module'
+                        # Hard clear once when moving to Step 2 to avoid residuals
+                        try:
+                            # Use the current stdscr provided to _main via closure; avoid global curses.stdscr
+                            stdscr.clear(); stdscr.refresh()
+                        except Exception:
+                            pass
                         status_msg = f"rtl set: {p}"
                         input_buf.clear(); cursor_pos = 0
                     else:
@@ -556,7 +751,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     else:
                         status_msg = out_msg or status_msg
                 continue
-            # Regular char
+            # Regular char (any typing clears candidates)
             if 0 <= ch <= 255:
                 try:
                     c = chr(ch)
@@ -565,6 +760,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 if c:
                     input_buf.insert(cursor_pos, c)
                     cursor_pos += 1
+                    compl_items = []
             continue
 
         # Normal dashboard rendering
@@ -590,10 +786,11 @@ def _main(stdscr: "curses._CursesWindow") -> None:
 
         # Draw left-top: Module/IP info (two-column KV with wrapping and zebra)
         _draw_box(win_left_top, "Module / Paths")
+        excel_show = state.session_excel_path or state.excel_path or ""
         kv_items = [
             ("RTL", _safe_str(state.rtl_start or "")),
             ("Module", state.module_info.module or (state.target_module or "")),
-            ("Excel", _safe_str(state.excel_path or "")),
+            ("Excel", _safe_str(excel_show)),
             ("Out", _safe_str(state.out_dir)),
         ]
         inner_w = left_w - 2
@@ -607,17 +804,25 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 state.excel_path = auto_excel
             else:
                 excel_color = "red"
-        kv_tuples = _format_kv_wrapped(kv_items, total_width=inner_w, label_width=label_w, add_blank_between=True, value_color=None)
+        # Color Excel line red if an Excel error occurred
+        value_color = None
+        kv_tuples = _format_kv_wrapped(kv_items, total_width=inner_w, label_width=label_w, add_blank_between=True, value_color=value_color)
         # Re-color Excel line to red if missing
         recolored: List[Tuple[str, Optional[str]]] = []
         for line, color in kv_tuples:
-            if line.strip().startswith("Excel") and excel_color:
-                recolored.append((line, excel_color))
+            if line.strip().startswith("Excel") and (excel_color or state.excel_error):
+                recolored.append((line, "red"))
             else:
                 recolored.append((line, color))
         # Write KV section
         row_ptr_left = 1
         _write_colored_zebra(win_left_top, recolored, row_ptr_left, 1, base_row_index=0)
+        # Show short error under Excel if any
+        if state.excel_error:
+            try:
+                win_left_top.addnstr(row_ptr_left + len(recolored), 1, _truncate(f"Excel error: {_safe_str(state.excel_error)}", inner_w - 2), inner_w - 2, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+            except curses.error:
+                pass
 
         # Draw left-bottom: clocks/resets/params with numbering for clocks/resets
         _draw_box(win_left_bot, "Clocks / Resets / Params")
@@ -667,9 +872,14 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         _draw_box(win_cond, "Condition Signals (ms)")
         cond_h, cond_w2 = win_cond.getmaxyx()
         cond_inner_w = cond_w2 - 2
-        max_name = max((len(c.get('name','')) for c in state.conditions), default=8)
+        def _label_with_bits(c: Dict[str, Any]) -> Tuple[str, str]:
+            nm = c.get('name','')
+            bits = c.get('bits', 1)
+            label = f"{nm} ({bits}bits)" if bits else nm
+            return label, c.get('expr','')
+        cond_items = [_label_with_bits(c) for c in state.conditions]
+        max_name = max((len(nm) for nm, _ in cond_items), default=8)
         name_w = min(max(8, max_name), max(8, cond_inner_w // 3))
-        cond_items = [(c.get('name',''), c.get('expr','')) for c in state.conditions]
         cond_lines = _format_kv_wrapped(cond_items, total_width=cond_inner_w, label_width=name_w, add_blank_between=True, value_color=None)
         _write_colored_zebra(win_cond, cond_lines, 1, 1, base_row_index=0)
 
@@ -853,31 +1063,65 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                     # Build modules list for next stage
                     try:
                         mods_ctx, _mi, _occs = build_context_from_rtl(p, None)
-                        state.onboarding_modules = sorted(list(mods_ctx.keys()))
+                        # If file: only modules from that file
+                        if p.is_file():
+                            from rtl_parser import modules_defined_under  # type: ignore
+                            # Use helper to filter modules by file path
+                            cand = [name for name, m in mods_ctx.items() if Path(m["file"]).resolve() == p.resolve()]
+                            state.onboarding_modules = sorted(list(set(cand)))
+                        else:
+                            state.onboarding_modules = sorted(list(mods_ctx.keys()))
                     except Exception:
                         state.onboarding_modules = []
                     state.onboarding_stage = 'module'
                     return f"rtl set: {p}", False
             except Exception:
                 pass
-        # 2) Module stage: number to pick, f filter, n/N page
+        # 2) Module stage: number to pick, f filter, F clear, n/N page (wrap), prev/back to return
         if stage == 'module':
             if cmdline.isdigit():
                 idx = int(cmdline) - 1
                 if 0 <= idx < len(state.onboarding_modules):
                     state.target_module = state.onboarding_modules[idx]
+                    # If starting scope was a directory, bind rtl_start to chosen module's file
+                    try:
+                        if state.modules_db and state.target_module in state.modules_db:
+                            fpath = Path(state.modules_db[state.target_module]["file"])  # type: ignore
+                            if fpath.exists():
+                                state.rtl_start = fpath
+                        # Refresh module_info now so panels have data in Step 3
+                        modules, mi, occs = build_context_from_rtl(state.rtl_start or Path("."), state.target_module)
+                        state.modules_db = modules
+                        state.module_info = mi
+                        state.occs = occs
+                    except Exception:
+                        pass
                     state.onboarding_stage = 'excel'
                     return f"Picked module: {state.target_module}", False
             if cmd == 'f' and args:
                 state.onboarding_filter = " ".join(args)
                 state.onboarding_page = 0
                 return f"Filter set: {state.onboarding_filter}", False
+            if raw_cmd == 'F' or (cmd == 'f' and not args):
+                state.onboarding_filter = ""
+                state.onboarding_page = 0
+                return "Filter cleared", False
             if cmd == 'n' and not args:
-                state.onboarding_page += 1
+                # wrap around
+                total = len(state.onboarding_modules)
+                page_size = max(1, (8 if True else 8))  # placeholder, will be recomputed in render
+                pages = max(1, (total + page_size - 1) // page_size)
+                state.onboarding_page = (state.onboarding_page + 1) % pages
                 return f"Page {state.onboarding_page}", False
             if raw_cmd == 'N' and not args:
-                state.onboarding_page = max(0, state.onboarding_page - 1)
+                total = len(state.onboarding_modules)
+                page_size = max(1, (8 if True else 8))
+                pages = max(1, (total + page_size - 1) // page_size)
+                state.onboarding_page = (state.onboarding_page - 1) % pages
                 return f"Page {state.onboarding_page}", False
+            if cmd in ("prev", "back"):
+                state.onboarding_stage = 'rtl'
+                return "Back to Step 1/3 — RTL", False
         # 3) Excel stage: accept empty to take autodetected; or raw path
         if stage == 'excel':
             from pathlib import Path as _P
@@ -886,6 +1130,11 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 state.onboarding_active = False
                 state.onboarding_stage = None
                 _save_session_snapshot(state)
+                # Create per-session Excel and prefill Define
+                ok, err = _create_session_excel_and_fill(state)
+                if not ok:
+                    state.excel_error = err or "Excel error"
+                    _set_error_message(state.excel_error)
                 return f"Excel set: {state.excel_path}", False
             try:
                 p = _P(cmdline).expanduser()
@@ -894,7 +1143,14 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                     state.onboarding_active = False
                     state.onboarding_stage = None
                     _save_session_snapshot(state)
+                    ok, err = _create_session_excel_and_fill(state)
+                    if not ok:
+                        state.excel_error = err or "Excel error"
+                        _set_error_message(state.excel_error)
                     return f"Excel set: {state.excel_path}", False
+                if cmd in ("prev", "back"):
+                    state.onboarding_stage = 'module'
+                    return "Back to Step 2/3 — Module", False
             except Exception:
                 pass
 
@@ -1002,6 +1258,31 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             name, expr = rest.split("=", 1)
         name = name.strip()
         expr = expr.strip()
+        # Extract trailing width token if present (e.g., '... 4')
+        trailing_width: Optional[int] = None
+        try:
+            toks = expr.split()
+            if toks and toks[-1].isdigit():
+                trailing_width = int(toks[-1])
+                expr = " ".join(toks[:-1]).strip()
+        except Exception:
+            pass
+        # Map numeric aliases 1.. to input/inout, oN to outputs
+        def _alias_replace(token: str) -> str:
+            if token.startswith('o') and token[1:].isdigit():
+                idx = int(token[1:])
+                outs = (state.module_info.outputs + state.module_info.inouts)
+                if 1 <= idx <= len(outs):
+                    return outs[idx-1].get('name','')
+            if token.isdigit():
+                ins = (state.module_info.inputs + state.module_info.inouts)
+                idx = int(token)
+                if 1 <= idx <= len(ins):
+                    return ins[idx-1].get('name','')
+            return token
+        expr_tokens = _tokenize_expr(expr)
+        expr_tokens = [ _alias_replace(t) for t in expr_tokens ]
+        expr = " ".join(expr_tokens)
         if not name or not expr:
             _highlight_ms_help()
             _set_help_filter_cmd("ms")
@@ -1013,9 +1294,48 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             _set_help_filter_cmd("ms")
             _set_error_message(f"Invalid signal expression: {err}")
             return f"Invalid signal expression: {err}", True
-        state.conditions.append({"name": name, "expr": expr})
+        # Cycle detection
+        try:
+            if _has_cycle_with_new(name, expr, state):
+                _highlight_ms_help()
+                _set_help_filter_cmd("ms")
+                _set_error_message("Cycle detected among condition signals")
+                return "Invalid: cycle detected", True
+        except Exception:
+            pass
+        # Infer width from selects if present; fallback to trailing_width or 1
+        width = trailing_width or 1
+        # Simple inference: detect [msb:lsb]
+        import re
+        m = re.search(r"\[(\d+)\s*:\s*(\d+)\]", expr)
+        if m:
+            try:
+                msb = int(m.group(1)); lsb = int(m.group(2))
+                if msb >= lsb:
+                    width = (msb - lsb + 1)
+                    _set_error_message(f"Note: bit-select interpreted as {width} bits")
+            except Exception:
+                pass
+        # Store and refresh UI (show as name (Nbits))
+        state.conditions.append({"name": name, "expr": expr, "bits": width})
         _save_session_snapshot(state)
-        return f"Condition added: {name}", False
+        # Append to session Excel Define sheet starting at L8 if available
+        try:
+            if state.session_excel_path and load_workbook:
+                wb = load_workbook(str(state.session_excel_path))
+                ws = wb[wb.sheetnames[0]]  # assume first sheet is Define or compatible
+                # Find first empty row from 8 downward in column L
+                r = 8
+                while ws.cell(row=r, column=12).value not in (None, ""):
+                    r += 1
+                ws.cell(row=r, column=12, value=name)
+                ws.cell(row=r, column=13, value=expr)
+                ws.cell(row=r, column=14, value=width)
+                wb.save(str(state.session_excel_path))
+        except Exception as e:
+            _set_error_message(f"Excel append failed: {e}")
+        _save_session_snapshot(state)
+        return f"Condition added: {name} ({width}bits)", False
 
     if cmd == "f" or raw_cmd == "F":
         # f <substr> to set filter; F (upper) or 'f' without args to clear
@@ -1405,18 +1725,39 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             stdscr.addnstr(max(1, list_y - 1), list_margin_x + 2, _truncate(guide, max_x - 4 - list_margin_x), max_x - 4 - list_margin_x, curses.A_DIM)
         except curses.error:
             pass
-        # Show directory candidates above prompt when available (cyan)
+        # Show directory candidates popup immediately above the input line
         if compl_items:
-            cand_y = max(1, max_y - 4)
+            # Build popup window sized to content and ensure visibility
+            max_cols = min(3, max(1, max_x // 20))
+            items = [nm + ("/" if is_dir else "") for (nm, is_dir) in compl_items[:24]]
+            col_w = max(8, max((len(s) for s in items), default=8)) + 2
+            cols = min(max_cols, max(1, (max_x - 4) // col_w))
+            rows = max(1, (len(items) + cols - 1) // cols)
+            win_w = min(max_x, 2 + cols * col_w + 2)
+            win_h = min(rows + 2, 10)
+            # Place directly above the prompt line (which is max_y-2)
+            win_y = max(1, (max_y - 2) - win_h)
+            win_x = 0
             try:
-                stdscr.move(cand_y, 0); stdscr.clrtoeol()
-                stdscr.addnstr(cand_y, 2, _truncate("Candidates:", max_x - 4), max_x - 4, curses.A_BOLD)
-                line_x = 2 + len("Candidates:") + 1
-                for i, (nm, is_dir) in enumerate(compl_items[:6]):
-                    label = nm + ("/" if is_dir else "")
-                    color = curses.color_pair(_PAIR_BY_NAME.get("cyan",0))
-                    stdscr.addnstr(cand_y, line_x, _truncate(label, max_x - line_x - 2), max_x - line_x - 2, color)
-                    line_x += len(label) + 2
+                pop = curses.newwin(win_h, win_w, win_y, win_x)
+                pop.box()
+                try:
+                    pop.addnstr(0, 2, _truncate(" Candidates ", win_w - 4), win_w - 4, curses.A_BOLD)
+                except curses.error:
+                    pass
+                idx = 0
+                for r in range(1, win_h - 1):
+                    for c in range(cols):
+                        if idx >= len(items):
+                            break
+                        label = items[idx]
+                        x = 1 + c * col_w + 1
+                        try:
+                            pop.addnstr(r, x, _truncate(label, col_w - 1), col_w - 1, curses.color_pair(_PAIR_BY_NAME.get("cyan",0)))
+                        except curses.error:
+                            pass
+                        idx += 1
+                pop.refresh()
             except curses.error:
                 pass
         # Draw ASCII box directly on stdscr
@@ -1656,6 +1997,48 @@ def _resolve_signal_refs(state: AppState) -> Dict[str, Dict[str, Any]]:
     return refs
 
 
+def _condition_deps(expr: str, state: AppState) -> List[str]:
+    """Return list of condition-signal names referenced by this expr."""
+    names = {c.get("name", "") for c in state.conditions}
+    toks = _tokenize_expr(expr)
+    deps: List[str] = []
+    for t in toks:
+        if t in names:
+            deps.append(t)
+    return deps
+
+
+def _has_cycle_with_new(name: str, expr: str, state: AppState) -> bool:
+    """Detect cycle if we add condition `name` with `expr` to existing graph."""
+    # Build adjacency: existing + proposed
+    adj: Dict[str, List[str]] = {}
+    for c in state.conditions:
+        nm = c.get("name", "")
+        if not nm:
+            continue
+        adj[nm] = _condition_deps(c.get("expr", ""), state)
+    adj[name] = _condition_deps(expr, state)
+
+    # DFS cycle check from `name`
+    seen: set[str] = set()
+    stack: set[str] = set()
+
+    def dfs(n: str) -> bool:
+        if n in stack:
+            return True
+        if n in seen:
+            return False
+        seen.add(n)
+        stack.add(n)
+        for m in adj.get(n, []):
+            if dfs(m):
+                return True
+        stack.remove(n)
+        return False
+
+    return dfs(name)
+
+
 def _validate_condition_expr(expr: str, state: AppState) -> Tuple[bool, str]:
     tokens = _tokenize_expr(expr)
     refs = _resolve_signal_refs(state)
@@ -1748,18 +2131,24 @@ def _path_complete(line: str, cursor_pos: int) -> Tuple[str, int, List[Tuple[str
         path_prefix = ""
     # Expanduser/vars
     expanded = os.path.expandvars(os.path.expanduser(path_prefix))
-    base_dir = Path(expanded).parent if not expanded.endswith(os.sep) else Path(expanded)
+    # Treat both '/' and '\\' as directory separators for completion logic
+    sep_end = expanded.endswith('/') or expanded.endswith('\\')
+    base_dir = Path(expanded).parent if not sep_end else Path(expanded)
     if str(base_dir) == "":
         base_dir = Path(".")
     try:
         entries: List[Tuple[str, bool]] = []
         if base_dir.exists():
             for p in sorted(base_dir.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+                if p.name.startswith('.'):
+                    continue
+                if p.name.startswith('$') or p.name.startswith(':'):
+                    continue
                 if p.name.startswith("~$"):
                     continue
                 # match prefix last segment
                 last = Path(expanded).name
-                if expanded.endswith(os.sep) or p.name.lower().startswith(last.lower() if last else ""):
+                if sep_end or p.name.lower().startswith(last.lower() if last else ""):
                     entries.append((p.name, p.is_dir()))
         # compute common prefix to auto-complete
         common = _common_prefix([e[0] for e in entries if e[0]]) if entries else ""
@@ -1772,6 +2161,43 @@ def _path_complete(line: str, cursor_pos: int) -> Tuple[str, int, List[Tuple[str
     except Exception:
         return line, cursor_pos, [], ""
 
+
+def _path_complete_raw(line: str, cursor_pos: int) -> Tuple[str, int, List[Tuple[str, bool]], str]:
+    # Treat the entire line up to cursor as a path prefix (used in onboarding stages)
+    head = line[:cursor_pos]
+    tail = line[cursor_pos:]
+    try:
+        prefix = head.strip()
+        expanded = os.path.expandvars(os.path.expanduser(prefix))
+        # If user typed nothing, start from CWD
+        if expanded.strip() == "":
+            expanded = os.getcwd()
+        sep_end = expanded.endswith('/') or expanded.endswith('\\')
+        base_dir = Path(expanded).parent if not sep_end else Path(expanded)
+        if str(base_dir) == "":
+            base_dir = Path(".")
+        entries: List[Tuple[str, bool]] = []
+        if base_dir.exists():
+            for p in sorted(base_dir.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
+                if p.name.startswith('.'):
+                    continue
+                if p.name.startswith('$') or p.name.startswith(':'):
+                    continue
+                if p.name.startswith("~$"):
+                    continue
+                last = Path(expanded).name
+                if sep_end or p.name.lower().startswith(last.lower() if last else ""):
+                    entries.append((p.name, p.is_dir()))
+        common = _common_prefix([e[0] for e in entries if e[0]]) if entries else ""
+        if common:
+            # Use forward slashes for consistency across platforms
+            base_str = str(base_dir).rstrip("/\\").replace("\\", "/")
+            new_prefix = (base_str + "/" + common) if base_str else common
+            new_head = new_prefix
+            return new_head + tail, len(new_head), entries, str(base_dir)
+        return line, cursor_pos, entries, str(base_dir)
+    except Exception:
+        return line, cursor_pos, [], ""
 
 def _common_prefix(names: List[str]) -> str:
     if not names:
@@ -1796,54 +2222,76 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
     # Box below title, with margins and safe height
     margin_x = 2
     top = 2
-    reserved_bottom = 2  # leave space for prompt/hints
-    box_h = max(8, max_y - top - reserved_bottom)
+    reserved_bottom = 14  # space for candidates strip (up to 10) + hint + prompt
+    box_h = max(6, max_y - top - reserved_bottom)
     box_w = max(20, max_x - (margin_x * 2))
+    # Compact the box to avoid large empty area and overlap
+    stage = (state.onboarding_stage or "").lower()
+    if stage == 'rtl':
+        box_h = min(box_h, 8)
+    elif stage == 'module':
+        box_h = min(box_h, 12)
+    elif stage == 'excel':
+        box_h = min(box_h, 10)
     if top + box_h > max_y:
-        box_h = max(8, max_y - top - 1)
+        box_h = max(6, max_y - top - 1)
     _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
     # No extra subtitle for a more professional look; rely on clear step guides below
     # Stage-specific content
     if state.onboarding_stage == 'rtl':
         lines = [
             "Step 1/3 — RTL Root",
-            "Enter RTL path and press Enter. Use Tab to explore like a terminal.",
-            "Tab shows candidates above and autocompletes common prefixes.",
+            "- Enter file (.v/.sv) to pick modules in that file only.",
+            "- Enter folder to scan all modules under it (recursive).",
+            "- Tab: show candidates + extend common prefix. Use '/'.",
+            "- Esc: cancel. prev/back: previous (exit).",
         ]
         for i, t in enumerate(lines):
             try:
                 stdscr.addnstr(top + 2 + i, margin_x + 2, _truncate(t, box_w - 4), box_w - 4)
             except curses.error:
                 pass
-        # Show completion candidates if any
-        # Reuse global completion list if present
-        # Render a viewport area
-        try:
-            stdscr.addnstr(top + 6, margin_x + 2, "Candidates (Tab):", box_w - 4, curses.A_BOLD)
-        except curses.error:
-            pass
-        # The actual candidate list is rendered in main completion popup; here we just show hint
+        # Candidates are rendered in a reserved strip near the bottom; do not draw here
     elif state.onboarding_stage == 'module':
+        # Expand box to use available height except candidates/hint/prompt area
+        box_h = max(8, max_y - top - 10)
+        _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
+        content_bottom = top + box_h - 2  # last drawable row inside the box
         try:
-            stdscr.addnstr(top + 2, margin_x + 2, "Step 2/3 — Module: type number and press Enter. Use f filter, n/N page.", box_w - 4, curses.A_BOLD)
+            stdscr.addnstr(min(top + 2, content_bottom), margin_x + 2, "Step 2/3 — Module: number+Enter. f <text> filter, F clear, n/N page (wrap), prev/back.", box_w - 4, curses.A_BOLD)
         except curses.error:
             pass
-        # Render filtered, paginated module list
+        # Render filtered, paginated module list in 3 columns
         mods = state.onboarding_modules
         if state.onboarding_filter:
             mods = [m for m in mods if state.onboarding_filter.lower() in m.lower()]
         page = max(0, state.onboarding_page)
-        page_size = box_h - 6
-        start = page * page_size
-        end = min(len(mods), start + page_size)
-        for idx, m in enumerate(mods[start:end]):
-            label = f"  [{start + idx + 1}] {m}"
+        inner_h = max(1, content_bottom - (top + 4) + 1)
+        inner_w = box_w - 4
+        cols = 3
+        col_w = max(10, inner_w // cols)
+        rows = max(1, inner_h)
+        items_per_page = rows * cols
+        total = len(mods)
+        start = (page * items_per_page) % max(1, ((total + items_per_page - 1) // items_per_page) * items_per_page)
+        slice_mods = mods[start:start + items_per_page]
+        # Grid render with clamping
+        for i, m in enumerate(slice_mods):
+            r = i % rows
+            c = i // rows
+            y = top + 4 + r
+            if y > content_bottom:
+                break
+            x = margin_x + 2 + c * col_w
+            label = f"[{start + i + 1}] {m}"
             try:
-                stdscr.addnstr(top + 4 + idx, margin_x + 2, _truncate(label, box_w - 4), box_w - 4)
+                stdscr.addnstr(y, x, _truncate(label, col_w - 2), col_w - 2)
             except curses.error:
                 pass
+        # Footer with page info (wrap-aware)
         try:
-            stdscr.addnstr(top + box_h - 2, margin_x + 2, f"Showing {start+1}-{end} of {len(mods)}", box_w - 4, curses.A_DIM)
+            pages = max(1, (total + items_per_page - 1) // items_per_page)
+            stdscr.addnstr(content_bottom, margin_x + 2, _truncate(f"Page {page % pages + 1}/{pages}  Total: {total}", inner_w), inner_w, curses.A_DIM)
         except curses.error:
             pass
     elif state.onboarding_stage == 'excel':
@@ -1852,12 +2300,31 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
         try:
             stdscr.addnstr(top + 2, margin_x + 2, _truncate(title, box_w - 4), box_w - 4, curses.A_BOLD)
             if found and not state.excel_path:
-                stdscr.addnstr(top + 4, margin_x + 2, _truncate("Specify the path to the reference Excel file.", box_w - 4), box_w - 4, curses.A_DIM)
-                stdscr.addnstr(top + 5, margin_x + 2, _truncate("If the program can automatically detect the Excel file, press Enter to skip.", box_w - 4), box_w - 4, curses.A_DIM)
-                stdscr.addnstr(top + 6, margin_x + 2, _truncate("If the file cannot be found or you want to apply a new reference Excel file, please enter the file path manually.", box_w - 4), box_w - 4, curses.A_DIM)
-                stdscr.addnstr(top + 8, margin_x + 2, _truncate("Auto-detected:", box_w - 4), box_w - 4, curses.A_DIM)
-                stdscr.addnstr(top + 8, margin_x + 16, _truncate(str(found), box_w - 18), box_w - 18, curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
-                stdscr.addnstr(top + 10, margin_x + 2, _truncate("Press Enter to accept or type a path.", box_w - 4), box_w - 4)
+                content_bottom = top + box_h - 2
+                y = min(top + 4, content_bottom)
+                stdscr.addnstr(y, margin_x + 2, _truncate("Specify the path to the reference Excel file.", box_w - 4), box_w - 4, curses.A_DIM)
+                y = min(y + 1, content_bottom)
+                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept autodetected file or type a path.", box_w - 4), box_w - 4, curses.A_DIM)
+                y = min(y + 1, content_bottom)
+                stdscr.addnstr(y, margin_x + 2, _truncate("Use '/' separator. prev/back: previous step.", box_w - 4), box_w - 4, curses.A_DIM)
+                available_w = box_w - 4
+                y = min(y + 2, content_bottom)
+                stdscr.addnstr(y, margin_x + 2, _truncate("Auto-detected:", available_w), available_w, curses.A_DIM)
+                stdscr.addnstr(y, margin_x + 16, _truncate(str(found), max(0, available_w - 14)), max(0, available_w - 14), curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
+                # Emphasized confirmation line (clamped inside box)
+                try:
+                    y = min(y + 1, content_bottom)
+                    x = margin_x + 2
+                    msg_green = "Excel auto-detected!! "
+                    stdscr.addnstr(y, x, _truncate(msg_green, max(0, box_w - 4)), max(0, box_w - 4), curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
+                    x += len(msg_green)
+                    if x < margin_x + 2 + (box_w - 4):
+                        msg_white = "Press Enter to continue"
+                        stdscr.addnstr(y, x, _truncate(msg_white, (margin_x + 2 + (box_w - 4)) - x), (margin_x + 2 + (box_w - 4)) - x, curses.A_BOLD)
+                except curses.error:
+                    pass
+                y = min(y + 1, content_bottom)
+                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept or type a path.", box_w - 4), box_w - 4)
             else:
                 stdscr.addnstr(top + 4, margin_x + 2, _truncate("Type a path and press Enter.", box_w - 4), box_w - 4)
             if not found and not state.excel_path:
@@ -1887,11 +2354,22 @@ def _handle_onboarding_input(stdscr: "curses._CursesWindow", state: AppState, ch
             return True
         return False
     if state.onboarding_stage == 'module':
-        if ch in (ord('n'),):
-            state.onboarding_page += 1
-            return True
-        if ch in (ord('N'),):
-            state.onboarding_page = max(0, state.onboarding_page - 1)
+        if ch in (ord('n'), ord('N')):
+            # wrap page advance/back based on last rendered geometry
+            total = len(state.onboarding_modules)
+            # Recompute items per page similar to renderer (uses 3 cols)
+            # We don't have box_h here; approximate from screen height
+            max_y, max_x = stdscr.getmaxyx()
+            inner_h = max(8, max_y - 10) - 6
+            cols = 3
+            items_per_page = max(1, inner_h) * cols
+            pages = max(1, (total + items_per_page - 1) // items_per_page)
+            cur = state.onboarding_page % pages
+            if ch == ord('n'):
+                cur = (cur + 1) % pages
+            else:
+                cur = (cur - 1) % pages
+            state.onboarding_page = cur
             return True
         # Filtering with 'f <substr>' handled in command parser; here we just refresh
         if ch in (10, 13):

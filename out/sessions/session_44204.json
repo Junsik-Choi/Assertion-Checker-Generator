@@ -1,0 +1,6 @@
+{
+  "rtl_start": "EDA\\RTL\\video_sync_out_gen.v",
+  "target_module": "SRAM",
+  "excel_path": "D:\\Programing\\Assertion_github\\Assertion-Checker-Generator\\Data\\Assertion_TF.xlsx",
+  "out_dir": "out\\assertions"
+}

@@ -1,0 +1,6 @@
+{
+  "rtl_start": "EDA\\RTL\\sfr_cap.v",
+  "target_module": "sfr_cap",
+  "excel_path": "D:\\Programing\\Assertion_github\\Assertion-Checker-Generator\\Data\\Assertion_TF.xlsx",
+  "out_dir": "out\\assertions"
+}

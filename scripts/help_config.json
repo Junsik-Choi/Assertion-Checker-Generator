@@ -4,33 +4,36 @@
       "key": "commands",
       "title": "Commands",
       "items": [
-        { "cmd": "new", "example": "new", "desc": "Start a new session (launch onboarding)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "new", "example": "new", "desc": "Start a new session (onboarding)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "<number>", "example": "2", "desc": "Load previous session by its number", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "f <substr>", "example": "f blur", "desc": "Filter sessions or modules by text", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "n / N", "example": "n", "desc": "Next / previous page in lists", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "help | h", "example": "help", "desc": "Show/close help overlay", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
-        { "cmd": "scan", "example": "scan", "desc": "Parse RTL and populate module/ports", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "set rtl <path>", "example": "set rtl EDA/RTL", "desc": "Set RTL root (Tab: path complete)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set module <name>", "example": "set module top", "desc": "Set target module name", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set excel <path>", "example": "set excel Data/Assertion_TF.xlsx", "desc": "Set Excel file (auto-detected if found)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set out <path>", "example": "set out out/assertions", "desc": "Set output directory", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "fill", "example": "fill", "desc": "Populate Define sheet via fill_define.py", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "json", "example": "json", "desc": "Write inputs JSON (ports + sheets)", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "sv", "example": "sv", "desc": "Generate unified SV checker", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "f <substr>", "example": "f DE", "desc": "Filter ports by name (contains)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "F", "example": "F", "desc": "Clear port filter", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "n / N", "example": "n", "desc": "Next / previous port page", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "quit | q", "example": "q", "desc": "Exit the TUI", "cmd_color": "white", "example_color": "white", "desc_color": "white" }
+        { "cmd": "help | h", "example": "help", "desc": "Open/close help overlay (this)", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "quit | q", "example": "q", "desc": "Exit the TUI", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+
+        { "cmd": "set rtl <path>", "example": "set rtl D:/proj/top.sv", "desc": "File: restrict modules to that file; Folder: scan all under it (Tab completion)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "set module <name>", "example": "set module blur_scaler", "desc": "Pick target module (Step 2 also lets you choose)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "set excel <path>", "example": "set excel Data/Assertion_TF.xlsx", "desc": "Reference Excel (auto-detected if found)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "set out <path>", "example": "set out out/assertions", "desc": "Output directory for artifacts", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+
+        { "cmd": "scan", "example": "scan", "desc": "Parse RTL, populate module/ports/clocks/resets", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "fill / json / sv", "example": "fill", "desc": "Define fill / inputs JSON / SV generation", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+
+        { "cmd": "f <substr>", "example": "f den", "desc": "Filter ports or modules (contains)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "F", "example": "F", "desc": "Clear filter", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "n / N", "example": "n", "desc": "Next / previous page (wrap)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "prev / back", "example": "prev", "desc": "Go to previous onboarding step", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "Tab (path)", "example": "D:/proj/ + Tab", "desc": "Show candidates, extend common prefix; if many: Tab pages candidates", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" }
       ]
     },
     {
       "key": "signals",
       "title": "Condition Signals (ms)",
       "items": [
-        { "cmd": "ms name = expr", "example": "ms valid = (1||2)&&3", "desc": "Create condition signal", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
-        { "cmd": "ms name expr", "example": "ms active (I_DATA||I_DEN)&&I_HSYNC", "desc": "'=' optional (same as above)", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
-        { "cmd": "bits", "example": "A[0], A[1:0], [1] I_DATA[2:0]", "desc": "Bit selects supported", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "errors", "example": "unknown or unmatched brackets", "desc": "Invalid expressions rejected; help highlights 'ms'", "cmd_color": "red", "example_color": "red", "desc_color": "white" }
+        { "cmd": "ms name = expr", "example": "ms valid = (1||2)&&3", "desc": "Create a condition signal. '=' optional.", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
+        { "cmd": "aliases", "example": "1,2.. → inputs; o1,o2.. → outputs", "desc": "Numeric refs map to Inputs/Inouts; oN maps to Outputs/Inouts.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+        { "cmd": "width", "example": "I_BUS[7:0]  /  ... 4", "desc": "Width from [msb:lsb] or trailing number; default 1.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+        { "cmd": "refs", "example": "ms combined (valid && eq)", "desc": "You can reference previously defined conditions (cycle not allowed).", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+        { "cmd": "excel", "example": "L/M/N from L8", "desc": "Appends name/expr/bits to session Excel Define sheet.", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "errors", "example": "unknown signal / unmatched ']' / cycle", "desc": "Invalid expressions rejected; ms page is highlighted and error shown.", "cmd_color": "red", "example_color": "red", "desc_color": "white" }
       ]
     },
     {

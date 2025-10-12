@@ -1,0 +1,61 @@
+{
+    "cursorStats.statusBarColorThresholds": [
+        
+        {
+            "percentage": 95,
+            "color": "#CC0000"
+        },
+        {
+            "percentage": 90,
+            "color": "#FF3333"
+        },
+        {
+            "percentage": 85,
+            "color": "#FF4D4D"
+        },
+        {
+            "percentage": 80,
+            "color": "#FF6600"
+        },
+        {
+            "percentage": 75,
+            "color": "#FF8800"
+        },
+        {
+            "percentage": 70,
+            "color": "#FFAA00"
+        },
+        {
+            "percentage": 65,
+            "color": "#FFCC00"
+        },
+        {
+            "percentage": 60,
+            "color": "#FFE066"
+        },
+        {
+            "percentage": 50,
+            "color": "#DCE775"
+        },
+        {
+            "percentage": 40,
+            "color": "#66BB6A"
+        },
+        {
+            "percentage": 30,
+            "color": "#81C784"
+        },
+        {
+            "percentage": 20,
+            "color": "#B3E6B3"
+        },
+        {
+            "percentage": 10,
+            "color": "#E8F5E9"
+        },
+        {
+            "percentage": 0,
+            "color": "#FFFFFF"
+        }
+    ]
+}
