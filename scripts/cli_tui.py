@@ -2296,10 +2296,10 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
             pass
     elif state.onboarding_stage == 'excel':
         title = "Step 3/3 — Excel"
-        found = state.onboarding_excel_autofound
+        found = state.onboarding_excel_autofound or state.excel_path
         try:
             stdscr.addnstr(top + 2, margin_x + 2, _truncate(title, box_w - 4), box_w - 4, curses.A_BOLD)
-            if found and not state.excel_path:
+            if found:
                 content_bottom = top + box_h - 2
                 y = min(top + 4, content_bottom)
                 stdscr.addnstr(y, margin_x + 2, _truncate("Specify the path to the reference Excel file.", box_w - 4), box_w - 4, curses.A_DIM)
