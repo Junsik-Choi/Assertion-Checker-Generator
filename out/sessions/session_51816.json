@@ -1,0 +1,6 @@
+{
+  "rtl_start": "EDA\\RTL",
+  "target_module": "out_sync_gen",
+  "excel_path": "C:\\Users\\JunsChoi\\OneDrive - HARMAN\\문서\\TF자료\\Assertion TF\\Assertion Script\\Data\\Assertion_TF.xlsx",
+  "out_dir": "C:\\Users\\JunsChoi\\OneDrive - HARMAN\\문서\\TF자료\\Assertion TF\\Assertion Script\\out\\assertions"
+}
