@@ -92,8 +92,23 @@ def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
     Create session Excel in out/sessions/<module>-<timestamp>/, 
     verify Define sheet, run fill_define.py. Returns (ok, err).
     """
+    # Debug logging to file
+    debug_log = _THIS_DIR.parent / "out" / "session_creation_debug.log"
+    debug_log.parent.mkdir(parents=True, exist_ok=True)
+    
+    def log_debug(msg):
+        with open(debug_log, "a", encoding="utf-8") as f:
+            from datetime import datetime
+            f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
+    
     try:
+        log_debug("=== _create_session_excel_and_fill() CALLED ===")
+        log_debug(f"state.excel_path = {state.excel_path}")
+        log_debug(f"state.target_module = {state.target_module}")
+        log_debug(f"state.module_info.module = {state.module_info.module}")
+        
         if not state.excel_path or not Path(state.excel_path).exists():
+            log_debug("ERROR: Reference Excel not set or doesn't exist")
             return False, "Reference Excel not set"
         
         # 세션 디렉터리를 out/sessions/<module>-<timestamp>/ 형태로 생성
@@ -101,54 +116,164 @@ def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
         mod = state.target_module or (state.module_info.module or "module")
         session_name = f"{mod}-{ts}"
         sess_dir = (_THIS_DIR.parent / "out" / "sessions" / session_name).resolve()
+        
+        log_debug(f"Creating session directory: {sess_dir}")
+        
         sess_dir.mkdir(parents=True, exist_ok=True)
+        log_debug(f"Session directory created successfully")
+        
+        # Create assertions output directory within session
+        assertions_dir = sess_dir / "assertions"
+        assertions_dir.mkdir(parents=True, exist_ok=True)
+        log_debug(f"Assertions directory created: {assertions_dir}")
+        
+        # Update state.out_dir to point to session-specific assertions folder
+        state.out_dir = assertions_dir
         
         # 엑셀 파일을 세션 폴더로 복사
         new_xlsx = sess_dir / f"{mod}.xlsx"
-        new_xlsx = _robust_copy(Path(state.excel_path), new_xlsx)
-        state.session_excel_path = new_xlsx
+        log_debug(f"Copying Excel from {state.excel_path} to {new_xlsx}")
+        
+        try:
+            new_xlsx = _robust_copy(Path(state.excel_path), new_xlsx)
+            state.session_excel_path = new_xlsx
+            log_debug(f"Excel copied successfully to {new_xlsx}")
+            log_debug(f"state.session_excel_path SET TO: {state.session_excel_path}")
+        except Exception as copy_err:
+            log_debug(f"ERROR during copy: {copy_err}")
+            return False, f"Failed to copy Excel: {copy_err}"
         
         # Verify Define sheet
+        log_debug("Verifying Define sheet...")
         if not load_workbook:
+            log_debug("ERROR: openpyxl missing")
             return False, "openpyxl missing"
-        wb = load_workbook(str(new_xlsx))
-        if "Define" not in wb.sheetnames:
-            return False, "Define sheet missing in reference Excel"
-        wb.close()
+        try:
+            wb = load_workbook(str(new_xlsx))
+            if "Define" not in wb.sheetnames:
+                wb.close()
+                log_debug("ERROR: Define sheet missing")
+                return False, "Define sheet missing in reference Excel"
+            wb.close()
+            log_debug("Define sheet verified OK")
+        except Exception as wb_err:
+            log_debug(f"ERROR opening workbook: {wb_err}")
+            return False, f"Failed to open workbook: {wb_err}"
         
         # Define JSON을 같은 세션 폴더에 생성
+        log_debug("Creating define JSON...")
         define_json = fill_define_excel_if_needed(new_xlsx, {
             "module": state.module_info.module,
+            "rtl_file_path": state.module_info.rtl_file_path,  # Add RTL file path
             "clocks": state.module_info.clocks,
             "resets": state.module_info.resets,
             "inputs": state.module_info.inputs,
             "outputs": state.module_info.outputs,
             "inouts": state.module_info.inouts,
             "parameters": state.module_info.parameters,
+            "conditions": state.conditions,  # Add condition signals
         }, sess_dir)
+        log_debug(f"Define JSON created: {define_json}")
         
         # Run fill_define.py
+        log_debug("Running fill_define.py...")
         fill_script = _THIS_DIR / "fill_define.py"
         if not fill_script.exists():
+            log_debug("ERROR: fill_define.py not found")
             return False, "fill_define.py not found"
-        rc = subprocess.run(
+        
+        # Set environment to use UTF-8 encoding
+        import os
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        
+        result = subprocess.run(
             [sys.executable, str(fill_script), str(new_xlsx), str(define_json)], 
             check=False,
             capture_output=True,
-            text=True
-        ).returncode
-        if rc != 0:
-            return False, "fill_define.py failed to populate Define sheet"
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env=env,
+            cwd=_THIS_DIR.parent  # Set working directory to project root
+        )
         
-        return True, f"Session created: {sess_dir}"
+        log_debug(f"fill_define.py returned: {result.returncode}")
+        if result.stdout:
+            log_debug(f"fill_define.py stdout: {result.stdout}")
+        if result.stderr:
+            log_debug(f"fill_define.py stderr: {result.stderr}")
+        
+        if result.returncode != 0:
+            log_debug("ERROR: fill_define.py failed")
+            # Don't fail the session creation just because fill_define failed
+            # The Excel and folder are already created successfully
+            log_debug("WARNING: Continuing despite fill_define failure (Excel already created)")
+        
+        log_debug(f"SUCCESS! Session created at: {sess_dir}")
+        log_debug(f"Final state.session_excel_path: {state.session_excel_path}")
+        
+        msg = f"✓ Session created: {_sanitize_path_for_display(str(sess_dir))}"
+        msg += f"\n✓ Session Excel: {_sanitize_path_for_display(str(new_xlsx))}"
+        return True, msg
     except Exception as e:
-        return False, f"Session creation error: {str(e)}"
+        import traceback
+        err_msg = f"Session creation error: {str(e)}\n{traceback.format_exc()}"
+        log_debug(f"EXCEPTION: {err_msg}")
+        return False, err_msg
+
+
+def _update_define_sheet(state: AppState) -> None:
+    """
+    Update Define sheet in session Excel with current module_info.
+    Called after scan or when module info changes.
+    """
+    if not state.session_excel_path or not state.session_excel_path.exists():
+        raise RuntimeError("Session Excel not found")
+    
+    # Create define JSON in session directory
+    sess_dir = state.session_excel_path.parent
+    define_json = fill_define_excel_if_needed(state.session_excel_path, {
+        "module": state.module_info.module,
+        "rtl_file_path": state.module_info.rtl_file_path,  # Add RTL file path
+        "clocks": state.module_info.clocks,
+        "resets": state.module_info.resets,
+        "inputs": state.module_info.inputs,
+        "outputs": state.module_info.outputs,
+        "inouts": state.module_info.inouts,
+        "parameters": state.module_info.parameters,
+        "conditions": state.conditions,  # Add condition signals
+    }, sess_dir)
+    
+    # Run fill_define.py
+    fill_script = _THIS_DIR / "fill_define.py"
+    if not fill_script.exists():
+        raise RuntimeError("fill_define.py not found")
+    
+    # Set environment to use UTF-8 encoding
+    import os
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    
+    rc = subprocess.run(
+        [sys.executable, str(fill_script), str(state.session_excel_path), str(define_json)],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+        errors='replace',
+        env=env
+    ).returncode
+    
+    if rc != 0:
+        raise RuntimeError("fill_define.py failed")
 
 _APP_VERSION = "v1.0"
 
 @dataclass
 class ModuleInfo:
     module: str = ""
+    rtl_file_path: str = ""  # Full path to .v file containing the module
     inputs: List[Dict[str, Any]] = field(default_factory=list)
     outputs: List[Dict[str, Any]] = field(default_factory=list)
     inouts: List[Dict[str, Any]] = field(default_factory=list)
@@ -306,8 +431,14 @@ def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tup
     ex_names = {x["name"] for x in cls.get("clocks", [])} | {x["name"] for x in cls.get("resets", [])}
     inputs_filtered = [it for it in ports_resolved["inputs"] if it["name"] not in ex_names]
 
+    # Find the file path where this module is defined
+    rtl_file_path = ""
+    if target_module in modules and "file" in modules[target_module]:
+        rtl_file_path = str(modules[target_module]["file"])
+
     mi = ModuleInfo(
         module=target_module,
+        rtl_file_path=rtl_file_path,
         inputs=inputs_filtered,
         outputs=ports_resolved["outputs"],
         inouts=ports_resolved["inouts"],
@@ -423,8 +554,14 @@ def _ensure_dir(p: Path) -> None:
 
 
 def _run_builder(state: AppState, do_fill: bool = False, do_json: bool = False, do_sv: bool = False) -> Tuple[int, str]:
-    if not state.rtl_start or not state.target_module or not state.excel_path:
-        return 2, "rtl/module/excel must be set first"
+    if not state.rtl_start or not state.target_module:
+        return 2, "rtl/module must be set first"
+    
+    # Use session Excel path (not reference Excel)
+    excel_path = state.session_excel_path
+    if not excel_path or not Path(excel_path).exists():
+        return 2, "session Excel not available - please complete onboarding"
+    
     _ensure_dir(state.out_dir)
     builder = _THIS_DIR / "assertion_builder.py"
     if not builder.exists():
@@ -437,7 +574,7 @@ def _run_builder(state: AppState, do_fill: bool = False, do_json: bool = False, 
         "--target-module",
         state.target_module,
         "--excel",
-        str(state.excel_path),
+        str(excel_path),
         "--out",
         str(state.out_dir),
     ]
@@ -521,10 +658,15 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             except Exception:
                 state.rtl_start = None
             state.target_module = chosen.get("target_module") or None
+            
+            # CRITICAL: Never restore excel_path (reference Excel)
+            # Only restore session_excel_path
+            state.excel_path = None  # Always None - we don't use reference paths
+            
             try:
-                state.excel_path = Path(chosen.get("excel_path", "")) if chosen.get("excel_path") else None
+                state.session_excel_path = Path(chosen.get("session_excel_path", "")) if chosen.get("session_excel_path") else None
             except Exception:
-                state.excel_path = None
+                state.session_excel_path = None
             try:
                 if chosen.get("out_dir"):
                     state.out_dir = Path(chosen.get("out_dir")).resolve()
@@ -538,6 +680,12 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     state.module_info = mi
                     state.target_module = mi.module
                     state.occs = occs
+                    
+                    # Try to find latest session Excel for this module if not already set
+                    if not state.session_excel_path:
+                        latest_excel = _find_latest_session_excel(mi.module)
+                        if latest_excel:
+                            state.session_excel_path = latest_excel
                 except Exception:
                     pass
         elif chooser_result == "new":
@@ -615,7 +763,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     pass
             
             # Hints
-            hint_line = "Commands: set <num> <value> | done | cancel"
+            hint_line = "Commands: set <num> <value> | done | q (quit)"
             try:
                 stdscr.addnstr(max_y - 3, 2, _truncate(hint_line, max_x - 4), max_x - 4, curses.A_DIM)
             except curses.error:
@@ -920,6 +1068,11 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             continue
 
         # Normal dashboard rendering
+        # Clear any leftover messages from onboarding
+        if not state.onboarding_active and "Session created" in status_msg:
+            last_output = []
+            status_msg = "Ready"
+        
         # 레이아웃 구조:
         # - Left: Module/Paths (top) + Clocks/Resets/Params (bottom) - 20% width, full height
         # - Right (80%): 상단 60% - Inputs | Outputs | Condition Signals (3등분)
@@ -939,9 +1092,22 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         cond_w = right_w - in_w - out_w  # Remaining width
         
         # Create windows
-        # Left side: Module/Paths (top) + Clocks/Resets/Params (bottom)
-        left_top_h = max(7, min(14, right_top_h // 2))
-        left_bot_h = max(3, max_y - 3 - left_top_h)  # Extend to bottom
+        # Left side: Module/Paths dynamically sized, Clocks/Resets/Params fills remainder
+        # Calculate Module/Paths height based on content
+        kv_items_preview = [
+            ("RTL", _sanitize_path_for_display(_safe_str(state.rtl_start or ""))),
+            ("Module", state.module_info.module or (state.target_module or "")),
+            ("Excel", "placeholder"),
+            ("Out", _sanitize_path_for_display(_safe_str(state.out_dir))),
+        ]
+        inner_w_preview = left_w - 2
+        max_label_preview = max(len(k) for k, _ in kv_items_preview) if kv_items_preview else 8
+        label_w_preview = min(max(8, max_label_preview), max(8, inner_w_preview // 3))
+        kv_tuples_preview = _format_kv_wrapped(kv_items_preview, total_width=inner_w_preview, label_width=label_w_preview, add_blank_between=True, value_color=None)
+        
+        # Module/Paths height: title(1) + border(2) + content + margin(1)
+        left_top_h = min(len(kv_tuples_preview) + 4, max_y - 10)  # Leave space for Clocks/Resets
+        left_bot_h = max(6, max_y - 3 - left_top_h)  # Extend to bottom
         
         win_left_top = curses.newwin(left_top_h, left_w, 0, 0)
         win_left_bot = curses.newwin(left_bot_h, left_w, left_top_h, 0)
@@ -956,43 +1122,40 @@ def _main(stdscr: "curses._CursesWindow") -> None:
 
         # Draw left-top: Module/IP info (two-column KV with wrapping and zebra)
         _draw_box(win_left_top, "Module / Paths")
-        excel_show = state.session_excel_path or state.excel_path or ""
+        
+        # CRITICAL: Only show session Excel path, never reference Excel
+        if state.session_excel_path and Path(state.session_excel_path).exists():
+            excel_show = state.session_excel_path
+            excel_error = False
+        else:
+            excel_show = ""
+            excel_error = True
+        
         kv_items = [
-            ("RTL", _safe_str(state.rtl_start or "")),
+            ("RTL", _sanitize_path_for_display(_safe_str(state.module_info.rtl_file_path or state.rtl_start or ""))),
             ("Module", state.module_info.module or (state.target_module or "")),
-            ("Excel", _safe_str(excel_show)),
-            ("Out", _safe_str(state.out_dir)),
+            ("Excel", _sanitize_path_for_display(_safe_str(excel_show)) if excel_show else "ERROR: Session Excel not loaded"),
+            ("Out", _sanitize_path_for_display(_safe_str(state.out_dir))),
         ]
         inner_w = left_w - 2
         max_label = max(len(k) for k, _ in kv_items) if kv_items else 8
         label_w = min(max(8, max_label), max(8, inner_w // 3))
-        # Try to auto-detect Excel path if missing
-        excel_color: Optional[str] = None
-        if not state.excel_path:
-            auto_excel = _auto_find_excel()
-            if auto_excel:
-                state.excel_path = auto_excel
-            else:
-                excel_color = "red"
-        # Color Excel line red if an Excel error occurred
+        
+        # Color Excel line red if missing
         value_color = None
         kv_tuples = _format_kv_wrapped(kv_items, total_width=inner_w, label_width=label_w, add_blank_between=True, value_color=value_color)
-        # Re-color Excel line to red if missing
+        
+        # Re-color Excel line to red if error
         recolored: List[Tuple[str, Optional[str]]] = []
         for line, color in kv_tuples:
-            if line.strip().startswith("Excel") and (excel_color or state.excel_error):
+            if line.strip().startswith("Excel") and excel_error:
                 recolored.append((line, "red"))
             else:
                 recolored.append((line, color))
+        
         # Write KV section
         row_ptr_left = 1
         _write_colored_zebra(win_left_top, recolored, row_ptr_left, 1, base_row_index=0)
-        # Show short error under Excel if any
-        if state.excel_error:
-            try:
-                win_left_top.addnstr(row_ptr_left + len(recolored), 1, _truncate(f"Excel error: {_safe_str(state.excel_error)}", inner_w - 2), inner_w - 2, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
-            except curses.error:
-                pass
 
         # Draw left-bottom: clocks/resets/params with numbering for clocks/resets
         _draw_box(win_left_bot, "Clocks / Resets / Params")
@@ -1058,7 +1221,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         
         def _label_with_bits(c: Dict[str, Any]) -> Tuple[str, str]:
             nm = c.get('name', '')
-            bits = c.get('bits', 1)
+            bits = c.get('width', 1)  # Changed from 'bits' to 'width'
             label = f"{nm} ({bits}bits)" if bits and bits > 1 else nm
             return label, c.get('expr', '')
         
@@ -1276,10 +1439,21 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
     if state.onboarding_active and (state.onboarding_stage or "") == 'excel':
         if (cmdline.strip() == "") and state.onboarding_excel_autofound and not state.excel_path:
             state.excel_path = state.onboarding_excel_autofound
+            
+            # CRITICAL: Create session before finishing onboarding
+            ok, err = _create_session_excel_and_fill(state)
+            if not ok:
+                state.excel_error = err or "Session creation failed"
+                _set_error_message(state.excel_error)
+                return f"Session creation failed: {err}\nPlease try again or enter a different path", False
+            
+            # Session created successfully
             state.onboarding_active = False
             state.onboarding_stage = None
             _save_session_snapshot(state)
-            return f"Excel set: {state.excel_path}", False
+            # Clear screen to prevent message remnants
+            status_msg = "Session created - Ready!"
+            return f"✓ Session created successfully!\n✓ Excel: {state.session_excel_path}", False
     toks = cmdline.split()
     if not toks:
         return "", False
@@ -1294,7 +1468,7 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         if stage == 'rtl':
             from pathlib import Path as _P
             try:
-                p = _P(cmdline).expanduser()
+                p = _P(cmdline).expanduser().resolve()  # Add .resolve() here
                 if str(p).strip() and p.exists():
                     state.rtl_start = p
                     # Build modules list for next stage
@@ -1323,7 +1497,7 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                     # If starting scope was a directory, bind rtl_start to chosen module's file
                     try:
                         if state.modules_db and state.target_module in state.modules_db:
-                            fpath = Path(state.modules_db[state.target_module]["file"])  # type: ignore
+                            fpath = Path(state.modules_db[state.target_module]["file"]).resolve()  # type: ignore
                             if fpath.exists():
                                 state.rtl_start = fpath
                         # Refresh module_info now so panels have data in Step 3
@@ -1362,34 +1536,105 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         # 3) Excel stage: accept empty to take autodetected; or raw path
         if stage == 'excel':
             from pathlib import Path as _P
+            # Debug logging
+            debug_log = _THIS_DIR.parent / "out" / "session_creation_debug.log"
+            debug_log.parent.mkdir(parents=True, exist_ok=True)
+            with open(debug_log, "a", encoding="utf-8") as f:
+                from datetime import datetime
+                f.write(f"\n[{datetime.now().strftime('%H:%M:%S')}] === ONBOARDING EXCEL STAGE ===\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] cmdline: '{cmdline}'\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] len(cmdline): {len(cmdline)}\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] not cmdline: {not cmdline}\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] autofound: {state.onboarding_excel_autofound}\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Condition 1 (not cmdline and autofound): {not cmdline and state.onboarding_excel_autofound}\n")
+            
+            # Condition 1: Empty input + autofound Excel
             if not cmdline and state.onboarding_excel_autofound:
+                with open(debug_log, "a", encoding="utf-8") as f:
+                    f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Using autofound Excel\n")
+                
                 state.excel_path = state.onboarding_excel_autofound
                 state.onboarding_active = False
                 state.onboarding_stage = None
-                _save_session_snapshot(state)
+                
+                with open(debug_log, "a", encoding="utf-8") as f:
+                    f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Calling _create_session_excel_and_fill...\n")
+                
                 # Create per-session Excel and prefill Define
                 ok, err = _create_session_excel_and_fill(state)
+                
+                with open(debug_log, "a", encoding="utf-8") as f:
+                    f.write(f"[{datetime.now().strftime('%H:%M:%S')}] _create_session_excel_and_fill returned: ok={ok}\n")
+                    f.write(f"[{datetime.now().strftime('%H:%M:%S')}] state.session_excel_path after call: {state.session_excel_path}\n")
+                
                 if not ok:
                     state.excel_error = err or "Excel error"
                     _set_error_message(state.excel_error)
-                return f"Excel set: {state.excel_path}", False
-            try:
-                p = _P(cmdline).expanduser()
-                if str(p).strip() and p.exists():
-                    state.excel_path = p
-                    state.onboarding_active = False
-                    state.onboarding_stage = None
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {err}\n")
+                    # Don't exit onboarding - let user try again
+                    return f"Session creation failed: {err}\nPlease try again or enter a different Excel path", False
+                else:
+                    # Save after successful session creation
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] SUCCESS - saving snapshot...\n")
                     _save_session_snapshot(state)
-                    ok, err = _create_session_excel_and_fill(state)
-                    if not ok:
-                        state.excel_error = err or "Excel error"
-                        _set_error_message(state.excel_error)
-                    return f"Excel set: {state.excel_path}", False
-                if cmd in ("prev", "back"):
-                    state.onboarding_stage = 'module'
-                    return "Back to Step 2/3 — Module", False
-            except Exception:
-                pass
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Snapshot saved\n")
+                    # Show success message with session folder info
+                    return err or f"✓ Session created successfully!\n✓ Excel: {state.session_excel_path}", False
+            
+            # Condition 2: User provided a path
+            if cmdline.strip() and cmd not in ("prev", "back", "help", "h"):
+                try:
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Condition 2: User provided path\n")
+                    
+                    p = _P(cmdline).expanduser()
+                    
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Parsed path: {p}\n")
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Path exists: {p.exists() if str(p).strip() else 'N/A'}\n")
+                    
+                    if str(p).strip() and p.exists():
+                        state.excel_path = p
+                        state.onboarding_active = False
+                        state.onboarding_stage = None
+                        ok, err = _create_session_excel_and_fill(state)
+                        if not ok:
+                            state.excel_error = err or "Excel error"
+                            _set_error_message(state.excel_error)
+                            with open(debug_log, "a", encoding="utf-8") as f:
+                                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: {err}\n")
+                            # Return to Excel stage, don't proceed
+                            state.onboarding_active = True
+                            state.onboarding_stage = 'excel'
+                            return f"Session creation failed: {err}\nPlease try again", False
+                        else:
+                            # Save after successful session creation
+                            _save_session_snapshot(state)
+                            # Show success message with session folder info
+                            return err or f"✓ Session created successfully!\n✓ Excel: {state.session_excel_path}", False
+                    else:
+                        return f"Excel path not found: {p}\nPlease enter a valid path", False
+                except Exception as e:
+                    with open(debug_log, "a", encoding="utf-8") as f:
+                        import traceback
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] EXCEPTION in Condition 2: {e}\n")
+                        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] Traceback: {traceback.format_exc()}\n")
+                    return f"Error processing path: {e}\nPlease try again", False
+            
+            # Condition 3: Navigation commands
+            if cmd in ("prev", "back"):
+                state.onboarding_stage = 'module'
+                return "Back to Step 2/3 — Module", False
+            
+            # If we reach here, no valid input was provided
+            with open(debug_log, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ NO VALID INPUT - Staying in Excel stage\n")
+            
+            # Stay in Excel stage, don't proceed without Excel
+            return "Please enter an Excel path or press Enter to use the auto-detected one", False
 
     if cmd in ("help", "h"):
         return "Showing help...", True
@@ -1399,15 +1644,21 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         if not state.module_info.module:
             return "Please scan RTL first (use 'scan' command)", False
         
-        # Create session Excel if not already created
+        # Check if session Excel exists, if not create it automatically
         if not state.session_excel_path:
             if not state.excel_path or not Path(state.excel_path).exists():
-                return "Reference Excel not set. Please set Excel path first.", False
+                return "Please complete onboarding first (RTL, Module, Excel setup)", False
             
+            # Automatically create session Excel
+            state.log("Creating session Excel automatically...")
             ok, err = _create_session_excel_and_fill(state)
             if not ok:
                 return f"Failed to create session Excel: {err}", False
+            
+            _save_session_snapshot(state)
+            state.log(f"✓ Session Excel created: {_sanitize_path_for_display(str(state.session_excel_path))}")
         
+        # Enter assertion wizard
         state.assertion_wizard_active = True
         state.assertion_wizard_stage = 'select_type'
         state.assertion_selected_type = None
@@ -1429,6 +1680,65 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
 
     if cmd in ("quit", "q", "exit"):
         raise SystemExit(0)
+    
+    if cmd == "debug":
+        # Hidden debug command to check Define sheet contents
+        if not state.session_excel_path or not state.session_excel_path.exists():
+            return "ERROR: No session Excel loaded", False
+        
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(str(state.session_excel_path))
+            
+            if "Define" not in wb.sheetnames:
+                wb.close()
+                return "ERROR: Define sheet not found in Excel", False
+            
+            ws = wb["Define"]
+            output_lines = ["=== Define Sheet Contents ===\n"]
+            
+            # Check header row
+            output_lines.append("Header Row (A1:E1):")
+            for col in range(1, 6):
+                cell_val = ws.cell(1, col).value
+                output_lines.append(f"  Col {col}: {cell_val}")
+            
+            output_lines.append("\nPort Rows (A2:E50):")
+            found_ports = 0
+            for row in range(2, 51):
+                port_name = ws.cell(row, 1).value  # Column A: Port Name
+                port_type = ws.cell(row, 2).value  # Column B: Type
+                direction = ws.cell(row, 3).value  # Column C: Direction
+                width = ws.cell(row, 4).value     # Column D: Width
+                desc = ws.cell(row, 5).value      # Column E: Description
+                
+                if port_name:  # Only show rows with port names
+                    found_ports += 1
+                    output_lines.append(f"  Row {row}: {port_name} | {port_type} | {direction} | {width} | {desc}")
+                    if found_ports >= 20:  # Limit output
+                        output_lines.append(f"  ... (showing first 20 ports)")
+                        break
+            
+            if found_ports == 0:
+                output_lines.append("  ❌ NO PORTS FOUND!")
+            else:
+                output_lines.append(f"\n✓ Total ports found: {found_ports}")
+            
+            # Check module_info
+            output_lines.append("\n=== Current module_info ===")
+            output_lines.append(f"Module: {state.module_info.module}")
+            output_lines.append(f"Clocks: {len(state.module_info.clocks)} - {[c.get('name') for c in state.module_info.clocks[:5]]}")
+            output_lines.append(f"Resets: {len(state.module_info.resets)} - {[r.get('name') for r in state.module_info.resets[:5]]}")
+            output_lines.append(f"Inputs: {len(state.module_info.inputs)} - {[i.get('name') for i in state.module_info.inputs[:5]]}")
+            output_lines.append(f"Outputs: {len(state.module_info.outputs)} - {[o.get('name') for o in state.module_info.outputs[:5]]}")
+            output_lines.append(f"Parameters: {len(state.module_info.parameters)} - {[p.get('name') for p in state.module_info.parameters[:5]]}")
+            
+            wb.close()
+            return "\n".join(output_lines), False
+        except Exception as e:
+            import traceback
+            return f"Debug failed: {e}\n{traceback.format_exc()}", False
+    
     if cmd == "clear":
         state.messages.clear()
         return "Cleared messages", False
@@ -1437,18 +1747,18 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         if args[0] == "rtl" and len(args) >= 2:
             p = Path(" ".join(args[1:])).expanduser().resolve()
             state.rtl_start = p
-            return f"rtl set: {p}", False
+            return f"rtl set: {_sanitize_path_for_display(str(p))}", False
         if args[0] == "module" and len(args) >= 2:
             state.target_module = " ".join(args[1:])
             return f"module set: {state.target_module}", False
         if args[0] == "excel" and len(args) >= 2:
             p = Path(" ".join(args[1:])).expanduser().resolve()
             state.excel_path = p
-            return f"excel set: {p}", False
+            return f"excel set: {_sanitize_path_for_display(str(p))}", False
         if args[0] == "out" and len(args) >= 2:
             p = Path(" ".join(args[1:])).expanduser().resolve()
             state.out_dir = p
-            return f"out set: {p}", False
+            return f"out set: {_sanitize_path_for_display(str(p))}", False
         return "Usage: set rtl|module|excel|out <value>", False
 
     if cmd == "scan":
@@ -1462,6 +1772,22 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             state.occs = occs
             tops = find_top_modules(modules)
             extra = f" (tops: {', '.join(tops[:5])}{'...' if len(tops)>5 else ''})" if tops else ""
+            
+            # Try to find latest session Excel for this module
+            if not state.session_excel_path:
+                latest_excel = _find_latest_session_excel(mi.module)
+                if latest_excel:
+                    state.session_excel_path = latest_excel
+                    extra += f"\n✓ Found session Excel: {_sanitize_path_for_display(str(latest_excel))}"
+            
+            # Update Define sheet in session Excel if exists
+            if state.session_excel_path and state.session_excel_path.exists():
+                try:
+                    _update_define_sheet(state)
+                    return f"Scan complete. Target: {mi.module}{extra}\n✓ Define sheet updated", False
+                except Exception as e:
+                    return f"Scan complete. Target: {mi.module}{extra}\n⚠ Define sheet update failed: {e}", False
+            
             return f"Scan complete. Target: {mi.module}{extra}", False
         except Exception as e:
             return f"Scan failed: {e}", False
@@ -1540,7 +1866,7 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             return token
         expr_tokens = _tokenize_expr(expr)
         expr_tokens = [ _alias_replace(t) for t in expr_tokens ]
-        expr = " ".join(expr_tokens)
+        expr = _join_expr_tokens(expr_tokens)
         if not name or not expr:
             _highlight_ms_help()
             _set_help_filter_cmd("ms")
@@ -1574,25 +1900,23 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                     _set_error_message(f"Note: bit-select interpreted as {width} bits")
             except Exception:
                 pass
+        
+        # Clean up expression: remove extra spaces between operators
+        expr_cleaned = re.sub(r'([&|])\s+([&|])', r'\1\2', expr)  # &  & -> &&, |  | -> ||
+        expr_cleaned = re.sub(r'\s+([&|]{2})\s+', r' \1 ', expr_cleaned)  # Normalize spaces around &&, ||
+        
         # Store and refresh UI (show as name (Nbits))
-        state.conditions.append({"name": name, "expr": expr, "bits": width})
+        state.conditions.append({"name": name, "expr": expr_cleaned, "width": width})
         _save_session_snapshot(state)
-        # Append to session Excel Define sheet starting at L8 if available
+        
+        # Update Define sheet in session Excel
         try:
-            if state.session_excel_path and load_workbook:
-                wb = load_workbook(str(state.session_excel_path))
-                ws = wb[wb.sheetnames[0]]  # assume first sheet is Define or compatible
-                # Find first empty row from 8 downward in column L
-                r = 8
-                while ws.cell(row=r, column=12).value not in (None, ""):
-                    r += 1
-                ws.cell(row=r, column=12, value=name)
-                ws.cell(row=r, column=13, value=expr)
-                ws.cell(row=r, column=14, value=width)
-                wb.save(str(state.session_excel_path))
+            if state.session_excel_path and state.session_excel_path.exists():
+                _update_define_sheet(state)
+                return f"✓ Condition added: {name} ({width}bits) - Define sheet updated", False
         except Exception as e:
-            _set_error_message(f"Excel append failed: {e}")
-        _save_session_snapshot(state)
+            return f"✓ Condition added: {name} ({width}bits) - Define sheet update failed: {e}", False
+        
         return f"Condition added: {name} ({width}bits)", False
 
     if cmd == "f" or raw_cmd == "F":
@@ -1841,38 +2165,124 @@ def _sessions_dir() -> Path:
     return d
 
 
+def _find_latest_session_excel(target_module: Optional[str] = None) -> Optional[Path]:
+    """
+    Find the latest session Excel file for the given module.
+    If target_module is None, find the most recent session across all modules.
+    Returns the path to the session Excel, or None if not found.
+    """
+    d = _sessions_dir()
+    session_folders = [p for p in d.iterdir() if p.is_dir() and not p.name.startswith('.')]
+    
+    if not session_folders:
+        return None
+    
+    # Filter by module if specified
+    if target_module:
+        session_folders = [p for p in session_folders if p.name.startswith(f"{target_module}-")]
+    
+    if not session_folders:
+        return None
+    
+    # Sort by modification time (most recent first)
+    session_folders.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    
+    # Find Excel file in the most recent session
+    for session_folder in session_folders:
+        excel_files = list(session_folder.glob("*.xlsx"))
+        if excel_files:
+            return excel_files[0]
+    
+    return None
+
+
 def _load_sessions() -> List[Dict[str, Any]]:
+    """
+    Load all sessions from session folders.
+    Each session has a session.json file inside its folder.
+    """
     d = _sessions_dir()
     sessions: List[Dict[str, Any]] = []
-    for p in sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    
+    # Iterate through all folders in sessions directory
+    for folder in sorted(d.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+        if not folder.is_dir() or folder.name.startswith('.'):
+            continue
+        
+        # Look for session.json in this folder
+        session_json = folder / "session.json"
+        if not session_json.exists():
+            continue
+        
         try:
-            obj = json.loads(p.read_text(encoding="utf-8"))
-            obj["_path"] = str(p)
+            obj = json.loads(session_json.read_text(encoding="utf-8"))
+            obj["_path"] = str(session_json)  # Path to JSON file
+            obj["_folder"] = str(folder)      # Path to folder
             sessions.append(obj)
         except Exception:
             continue
+    
     return sessions
 
 
 def _save_session_snapshot(state: AppState) -> None:
-    d = _sessions_dir()
-    sid = state.session_id or f"session_{os.getpid()}"
-    state.session_id = sid
+    """
+    Save session snapshot to session.json INSIDE the session folder.
+    This keeps JSON and Excel together in the same folder.
+    """
+    if not state.session_excel_path:
+        # No session folder yet, cannot save
+        return
+    
+    # Get session folder from session_excel_path
+    session_folder = Path(state.session_excel_path).parent
+    if not session_folder.exists():
+        return
+    
+    # CRITICAL: Never save reference Excel path - only session Excel path
     data = {
         "rtl_start": str(state.rtl_start) if state.rtl_start else "",
         "target_module": state.target_module or "",
-        "excel_path": str(state.excel_path) if state.excel_path else "",
+        "session_excel_path": str(state.session_excel_path),  # Only session Excel!
         "out_dir": str(state.out_dir),
     }
-    path = d / f"{sid}.json"
+    
+    # Save as session.json inside the session folder
+    session_json = session_folder / "session.json"
     try:
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        session_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
 
 
+def _sanitize_path_for_display(p: str) -> str:
+    """
+    Replace non-ASCII characters (e.g., Korean) with ASCII replacements for terminal display.
+    This prevents display corruption in terminals that don't handle multibyte characters well.
+    Converts Korean characters to [KR] marker for better readability.
+    """
+    result = []
+    in_korean_block = False
+    
+    for char in str(p):
+        # Keep ASCII characters (0-127), backslash, forward slash, colon, dot, etc.
+        if ord(char) < 128:
+            if in_korean_block:
+                in_korean_block = False
+            result.append(char)
+        else:
+            # Mark non-ASCII sections with [*] instead of multiple underscores
+            if not in_korean_block:
+                result.append('[*]')
+                in_korean_block = True
+    
+    return ''.join(result)
+
+
 def _shorten_path_for_display(p: str, max_width: int, keep_segments: int = 2) -> str:
     p = str(p)
+    # First sanitize the path to remove multibyte characters
+    p = _sanitize_path_for_display(p)
     if len(p) <= max_width:
         return p
     parts = p.replace("\\", "/").split("/")
@@ -2039,7 +2449,7 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
         if filter_text:
             ft = filter_text.lower()
             def _m(s: Dict[str, Any]) -> str:
-                return f"{s.get('rtl_start','')} {s.get('target_module','')} {s.get('excel_path','')} {s.get('out_dir','')}".lower()
+                return f"{s.get('rtl_start','')} {s.get('target_module','')} {s.get('session_excel_path','')} {s.get('out_dir','')}".lower()
             filtered = [s for s in sessions if ft in _m(s)]
         list_inner_h = list_h - 3  # rows available for list within window
         page_size = max(1, list_inner_h - 1)
@@ -2055,9 +2465,13 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             num = f"[{idx + 1}]"
             module = s.get('target_module', '') or ''
             rtl_full = s.get('rtl_start', '') or ''
-            xls = os.path.basename(s.get('excel_path', '') or '')
+            # Sanitize RTL path for display (replace Korean characters)
+            rtl_display = _shorten_path_for_display(rtl_full, rtl_w * 3, keep_segments=3)  # Allow more width for wrapping
+            # Only show session_excel_path (never reference Excel)
+            xls_path = s.get('session_excel_path', '') or ''
+            xls = os.path.basename(xls_path) if xls_path else 'N/A'
             outp = _shorten_path_for_display(s.get('out_dir', '') or '', out_w)
-            rtl_lines = _wrap_text(rtl_full, rtl_w)
+            rtl_lines = _wrap_text(rtl_display, rtl_w)
             row_h = max(1, len(rtl_lines))
             if y_ptr + row_h > y_limit:
                 break
@@ -2171,15 +2585,24 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                     curses.noecho()
                     
                     if confirm in (ord('y'), ord('Y')):
+                        import shutil
+                        deleted_count = 0
                         for s in sessions:
-                            path = s.get("_path")
-                            if path and Path(path).exists():
-                                Path(path).unlink()
+                            try:
+                                # Delete entire session folder
+                                session_folder = Path(s.get("_folder", ""))
+                                if session_folder.exists() and session_folder.is_dir():
+                                    shutil.rmtree(session_folder)
+                                    deleted_count += 1
+                            except Exception:
+                                pass
+                        
                         sessions.clear()
                         filtered = []
                         page = 0
                         # Show success message
-                        stdscr.addnstr(5, 2, "All sessions deleted!", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
+                        msg = f"All {deleted_count} session(s) deleted! (folders + contents)"
+                        stdscr.addnstr(5, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
                         stdscr.refresh()
                         import time
                         time.sleep(1)
@@ -2267,17 +2690,21 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                     confirm = stdscr.getch()
                     
                     if confirm in (ord('y'), ord('Y')):
+                        import shutil
                         # Delete in reverse order to maintain indices
                         deleted_count = 0
                         for idx in reversed(indices):
                             try:
                                 s = filtered[idx - 1]
-                                path = s.get("_path")
-                                if path and Path(path).exists():
-                                    Path(path).unlink()
+                                
+                                # Delete entire session folder
+                                session_folder = Path(s.get("_folder", ""))
+                                if session_folder.exists() and session_folder.is_dir():
+                                    shutil.rmtree(session_folder)
+                                    deleted_count += 1
+                                
                                 # Remove from sessions list
                                 sessions.remove(s)
-                                deleted_count += 1
                             except Exception:
                                 pass
                         
@@ -2285,14 +2712,14 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                         if filter_text:
                             ft = filter_text.lower()
                             def _m(s: Dict[str, Any]) -> str:
-                                return f"{s.get('rtl_start','')} {s.get('target_module','')} {s.get('excel_path','')} {s.get('out_dir','')}".lower()
+                                return f"{s.get('rtl_start','')} {s.get('target_module','')} {s.get('session_excel_path','')} {s.get('out_dir','')}".lower()
                             filtered = [s for s in sessions if ft in _m(s)]
                         else:
                             filtered = sessions
                         
                         # Show success message
                         y_pos += 2
-                        msg = f"{deleted_count} session(s) deleted successfully!"
+                        msg = f"{deleted_count} session(s) deleted! (folders + contents)"
                         stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
                         stdscr.refresh()
                         import time
@@ -2402,6 +2829,48 @@ def _tokenize_expr(expr: str) -> List[str]:
         s = s.replace(ch, f" {ch} ")
     # Collapse spaces and split
     return [t for t in s.split() if t]
+
+
+def _join_expr_tokens(tokens: List[str]) -> str:
+    """
+    Join expression tokens back, removing spaces around operators to prevent '& &' issues.
+    Multi-char operators (&&, ||, ==, etc.) should not have spaces within them.
+    """
+    if not tokens:
+        return ""
+    
+    # Operators that should not have spaces before/after
+    no_space_before = {")", "]", "}", ",", ";"}
+    no_space_after = {"(", "[", "{", "~", "!"}
+    
+    # Multi-char operators that need special handling
+    multi_ops = ["<<<", ">>>", "===", "!==", "<<", ">>", "<=", ">=", "==", "!=", "&&", "||", "**"]
+    
+    result = []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        
+        # Add token
+        result.append(tok)
+        
+        # Check if we need space after this token
+        if i < len(tokens) - 1:
+            next_tok = tokens[i + 1]
+            
+            # No space if next is closing bracket/comma/semicolon
+            if next_tok in no_space_before:
+                pass
+            # No space if current is opening bracket or unary operator
+            elif tok in no_space_after:
+                pass
+            # Add space otherwise
+            else:
+                result.append(" ")
+        
+        i += 1
+    
+    return "".join(result)
 
 
 def _is_identifier(tok: str) -> bool:
@@ -2737,8 +3206,15 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
         if y >= top + box_h - 2:
             break
         
+        # Check if plugin file exists
+        plugin_file_path = Path(__file__).parent / "assertions" / f"{plugin['name']}.py"
+        plugin_exists = plugin_file_path.exists()
+        plugin_status = "✓ Available" if plugin_exists else "✗ Missing"
+        plugin_color = "green" if plugin_exists else "red"
+        
         # Check if sheet exists in Excel (use session excel if available)
         sheet_status = ""
+        sheet_color = "yellow"
         excel_to_check = state.session_excel_path or state.excel_path
         if excel_to_check:
             try:
@@ -2748,15 +3224,15 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
                 # Check case-insensitively
                 actual_sheet = BaseAssertionPlugin.find_sheet_case_insensitive(wb.sheetnames, plugin['sheet_name'])
                 if actual_sheet:
-                    sheet_status = f"✓ Sheet found: {actual_sheet}"
-                    status_color = "green"
+                    sheet_status = f"✓ Found: {actual_sheet}"
+                    sheet_color = "green"
                 else:
-                    sheet_status = "✗ Sheet missing"
-                    status_color = "red"
+                    sheet_status = "✗ Missing"
+                    sheet_color = "red"
                 wb.close()
             except Exception as e:
-                sheet_status = f"? Cannot check: {str(e)[:20]}"
-                status_color = "yellow"
+                sheet_status = f"? Error: {str(e)[:15]}"
+                sheet_color = "yellow"
         
         # Display option
         try:
@@ -2768,9 +3244,16 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
             stdscr.addnstr(y, margin_x + 4, _truncate(desc_line, box_w - 6), box_w - 6, curses.A_DIM)
             y += 1
             
+            # Plugin file status
+            plugin_status_line = f"    Plugin: {plugin_status}"
+            color = _PAIR_BY_NAME.get(plugin_color, 0)
+            stdscr.addnstr(y, margin_x + 4, _truncate(plugin_status_line, box_w - 6), box_w - 6, curses.color_pair(color))
+            y += 1
+            
+            # Sheet status
             if sheet_status:
-                status_line = f"    Sheet: {plugin['sheet_name']} - {sheet_status}"
-                color = _PAIR_BY_NAME.get(status_color, 0)
+                status_line = f"    Sheet: '{plugin['sheet_name']}' - {sheet_status}"
+                color = _PAIR_BY_NAME.get(sheet_color, 0)
                 stdscr.addnstr(y, margin_x + 4, _truncate(status_line, box_w - 6), box_w - 6, curses.color_pair(color))
                 y += 1
             
@@ -2781,7 +3264,7 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
     # Instructions
     try:
         y = top + box_h - 3
-        inst_line = "Enter number to select, or 'cancel' to exit"
+        inst_line = "Enter number to select, or 'q' to exit"
         stdscr.addnstr(y, margin_x + 2, inst_line, box_w - 4, curses.A_DIM)
     except curses.error:
         pass
@@ -2885,7 +3368,8 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
     cmd = toks[0].lower()
     args = toks[1:]
     
-    if cmd == 'cancel':
+    # Universal commands (work in any stage)
+    if cmd in ('q', 'quit', 'cancel'):
         # Exit wizard
         state.assertion_wizard_active = False
         state.assertion_wizard_stage = ""
@@ -2906,7 +3390,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 return f"Selected: {selected['name']}. Now enter field values.", False
             else:
                 return f"Invalid selection. Choose 1-{len(plugins)}", False
-        return "Enter a number to select assertion type", False
+        return "Enter a number to select assertion type, or 'q' to quit", False
     
     elif state.assertion_wizard_stage == 'input_data':
         if cmd == 'set' and len(args) >= 2:
@@ -2943,10 +3427,10 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                     return f"Missing required fields: {', '.join(missing)}", False
                 
                 state.assertion_wizard_stage = 'confirm'
-                return "Review your assertion. Type 'confirm' to create.", False
+                return "Review your assertion. Type 'confirm' to create, or 'q' to cancel.", False
             return "Plugin not found", False
         
-        return "Usage: set <field_num> <value> | 'done' to finish", False
+        return "Usage: set <field_num> <value> | 'done' to finish | 'q' to quit", False
     
     elif state.assertion_wizard_stage == 'confirm':
         if cmd == 'confirm':
@@ -2957,7 +3441,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             state.assertion_selected_type = None
             state.assertion_input_data.clear()
             return result, True
-        return "Type 'confirm' to create or 'cancel' to abort", False
+        return "Type 'confirm' to create, 'q' to cancel", False
     
     return "", False
 
@@ -3157,7 +3641,7 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
                 
                 # Show the file path in green
                 if y <= content_bottom:
-                    file_display = f"  {str(found)}"
+                    file_display = f"  {_sanitize_path_for_display(str(found))}"
                     stdscr.addnstr(y, margin_x + 2, _truncate(file_display, box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
                     y += 2  # Extra spacing
                 
@@ -3232,12 +3716,20 @@ def _handle_onboarding_input(stdscr: "curses._CursesWindow", state: AppState, ch
             # Accept excel path; if empty and autofound exists, take autofound
             if not state.excel_path and state.onboarding_excel_autofound:
                 state.excel_path = state.onboarding_excel_autofound
+            
             if state.excel_path and Path(state.excel_path).exists():
-                # Finish onboarding
-                state.onboarding_active = False
-                state.onboarding_stage = None
-                # Persist session snapshot immediately
-                _save_session_snapshot(state)
+                # CRITICAL: Create session before finishing onboarding
+                ok, err = _create_session_excel_and_fill(state)
+                if ok:
+                    # Session created successfully
+                    state.onboarding_active = False
+                    state.onboarding_stage = None
+                    # Save session snapshot
+                    _save_session_snapshot(state)
+                else:
+                    # Session creation failed - show error and stay in Excel stage
+                    state.excel_error = err or "Session creation failed"
+                    _set_error_message(state.excel_error)
             return True
         return False
     return False

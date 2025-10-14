@@ -29,6 +29,78 @@ def setup_logger(log_path: str = "fill_define.log"):
     logger.addHandler(fh)
     return logger
 
+# -------------------- 서식 복사 헬퍼 --------------------
+def copy_cell_format(source_cell, target_cell):
+    """Copy formatting from source cell to target cell (keeps styles intact)"""
+    if source_cell is None or target_cell is None:
+        return
+    
+    try:
+        # Copy font
+        if source_cell.font:
+            target_cell.font = copy(source_cell.font)
+        
+        # Copy border
+        if source_cell.border:
+            target_cell.border = copy(source_cell.border)
+        
+        # Copy fill
+        if source_cell.fill:
+            target_cell.fill = copy(source_cell.fill)
+        
+        # Copy number format
+        if source_cell.number_format:
+            target_cell.number_format = source_cell.number_format
+        
+        # Copy alignment
+        if source_cell.alignment:
+            target_cell.alignment = copy(source_cell.alignment)
+        
+        # Copy protection
+        if source_cell.protection:
+            target_cell.protection = copy(source_cell.protection)
+    except Exception:
+        pass  # Silently ignore format copy errors
+
+def copy_row_format(ws, source_row, target_row, start_col=1, end_col=None, logger=None):
+    """Copy formatting from source row to target row"""
+    if end_col is None:
+        end_col = ws.max_column
+    
+    if logger:
+        logger.debug(f"copy_row_format: source={source_row}, target={target_row}, cols={start_col}-{end_col}")
+    
+    for col in range(start_col, end_col + 1):
+        source_cell = ws.cell(row=source_row, column=col)
+        target_cell = ws.cell(row=target_row, column=col)
+        
+        # Debug: check if source has any formatting
+        if logger and col == start_col:
+            has_border = source_cell.border and any([
+                source_cell.border.left and source_cell.border.left.style,
+                source_cell.border.right and source_cell.border.right.style,
+                source_cell.border.top and source_cell.border.top.style,
+                source_cell.border.bottom and source_cell.border.bottom.style
+            ])
+            logger.debug(f"  Source cell ({source_row},{col}) has_border={has_border}, font={source_cell.font.name if source_cell.font else 'None'}")
+        
+        copy_cell_format(source_cell, target_cell)
+
+def set_cell_value_with_template(ws, row, col, value, template_row=None):
+    """
+    Set cell value while preserving or copying format.
+    If template_row is provided, copy format from that row's same column.
+    """
+    target_cell = ws.cell(row=row, column=col)
+    
+    # Copy format from template if provided
+    if template_row:
+        template_cell = ws.cell(row=template_row, column=col)
+        copy_cell_format(template_cell, target_cell)
+    
+    # Set value
+    target_cell.value = value
+
 # -------------------- 진행 표시 --------------------
 class Progress:
     def __init__(self, total: int, bar_width: int = 28):
@@ -44,13 +116,7 @@ class Progress:
         print(f"[{bar}] {pct:3d}% - {msg}")
 
 # -------------------- 파일 백업 --------------------
-def backup_excel(excel_path: str) -> Path:
-    p = Path(excel_path)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_name = f"{p.stem}_backup_{ts}{p.suffix}"
-    dst = p.with_name(backup_name)
-    shutil.copy2(p, dst)
-    return dst
+# Backup Excel 기능 제거됨 (2025-10-14)
 
 # -------------------- 엑셀 헬퍼 --------------------
 def find_define_sheet(wb):
@@ -99,6 +165,45 @@ def find_io_header(ws):
                 "outputs_col": out_c, "outputs_bits_col": out_c + 1,
                 "params_col": par_c, "params_bits_col": par_c + 1
             }
+    return None
+
+
+def find_signal_assignments_header(ws):
+    """
+    Find 'Signal Assignments' header row with Name, Equation, Bits columns.
+    Returns dict with row and column info, or None.
+    """
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and "signal" in cell.value.strip().casefold() and "assignment" in cell.value.strip().casefold():
+                # Found "Signal Assignments", now find Name/Equation/Bits in next row or same row
+                header_row = cell.row
+                logger.debug(f"Found 'Signal Assignments' at row {header_row}")
+                # Check next row for Name/Equation/Bits
+                next_row = list(ws.iter_rows(min_row=header_row + 1, max_row=header_row + 1))
+                if next_row:
+                    name_col = None
+                    equation_col = None
+                    bits_col = None
+                    for c in next_row[0]:
+                        if isinstance(c.value, str):
+                            val = c.value.strip().casefold()
+                            if val == "name":
+                                name_col = c.column
+                            elif val == "equation":
+                                equation_col = c.column
+                            elif val == "bits":
+                                bits_col = c.column
+                    logger.debug(f"  Found columns: name={name_col}, equation={equation_col}, bits={bits_col}")
+                    if name_col and equation_col:
+                        return {
+                            "header_row": header_row,
+                            "data_row": header_row + 1,
+                            "name_col": name_col,
+                            "equation_col": equation_col,
+                            "bits_col": bits_col or (equation_col + 1)
+                        }
+    logger.warning("Signal Assignments header NOT found in Define sheet")
     return None
 
 def create_io_header(ws):
@@ -246,6 +351,7 @@ def main():
         data = json.load(f)
 
     module = data.get("module") or ""
+    rtl_file_path = data.get("rtl_file_path") or ""  # Read RTL file path
     top_path = data.get("top_path") or ""
     paths = data.get("paths") or []
     clocks = data.get("clocks") or []
@@ -253,9 +359,16 @@ def main():
     params = data.get("parameters") or []
     inputs = data.get("inputs") or []
     outputs = data.get("outputs") or []
+    conditions = data.get("conditions") or []  # Add condition signals
+    
+    logger.info(f"Loaded data: module={module}, inputs={len(inputs)}, outputs={len(outputs)}, conditions={len(conditions)}")
+    if conditions:
+        logger.info(f"Conditions to process: {[c.get('name','?') for c in conditions]}")
 
-    # Target Path: top_path + "." + path(들), top_path 없으면 paths만
-    if top_path:
+    # Target Path: use RTL file path if available, otherwise use top_path + paths
+    if rtl_file_path:
+        target_path_str = rtl_file_path
+    elif top_path:
         target_path_str = ",".join(f"{top_path}.{p}" if p else top_path for p in paths) if paths else top_path
     else:
         target_path_str = ",".join(p for p in paths)
@@ -266,27 +379,21 @@ def main():
 
     tasks = []
 
-    # 1) 백업
-    def run_backup():
-        bak = backup_excel(excel_path)
-        logger.info("백업 생성: %s", bak)
-    tasks.append((run_backup, "백업 생성"))
-
-    # 2) 클리어
+    # 1) 클리어
     def run_clear():
         clear_base(ws)
         clear_io(ws)
         logger.debug("기존 값 클리어(서식 유지)")
     tasks.append((run_clear, "기존 값 클리어"))
 
-    # 3) IO 헤더 없으면 생성
+    # 2) IO 헤더 없으면 생성
     if not find_io_header(ws):
         def run_header():
             create_io_header(ws)
             logger.debug("IO 헤더 생성")
         tasks.append((run_header, "IO 헤더 생성"))
 
-    # 4) Base 재기입(항상 덮어씀)
+    # 3) Base 재기입(항상 덮어씀)
     def run_base_target_name():
         c = ensure_base_label(ws, "Target Name")
         set_cell_value_merged_safe(ws, c.row, c.column + 1, module)
@@ -313,7 +420,7 @@ def main():
         logger.debug("Base 채움: Base Reset -> %s", rst)
     tasks.append((run_base_reset, "Base: Base Reset"))
 
-    # 5) Inputs
+    # 4) Inputs
     for it in inputs:
         name = it.get("name")
         if not name:
@@ -321,13 +428,17 @@ def main():
         bits = bits_text(it.get("width"))
         def run_in(n=name, b=bits):
             hdr = find_io_header(ws) or create_io_header(ws)
+            template_row = hdr["row"] + 1  # Template row for format
             row = next_empty_row(ws, hdr["inputs_col"], hdr["row"] + 1)
+            logger.debug(f"Input: {n} -> writing to row={row}, template_row={template_row}")
+            # Copy template row format to preserve borders/fonts/colors
+            copy_row_format(ws, template_row, row, start_col=hdr["inputs_col"], end_col=hdr["inputs_bits_col"], logger=logger)
             set_cell_value_merged_safe(ws, row, hdr["inputs_col"], n)
             set_cell_value_merged_safe(ws, row, hdr["inputs_bits_col"], b)
             logger.debug("Input 추가: %s (%s)", n, b)
         tasks.append((run_in, f"Inputs: {name}"))
 
-    # 6) Outputs
+    # 5) Outputs
     for it in outputs:
         name = it.get("name")
         if not name:
@@ -335,13 +446,17 @@ def main():
         bits = bits_text(it.get("width"))
         def run_out(n=name, b=bits):
             hdr = find_io_header(ws) or create_io_header(ws)
+            template_row = hdr["row"] + 1  # Template row for format
             row = next_empty_row(ws, hdr["outputs_col"], hdr["row"] + 1)
+            logger.debug(f"Output: {n} -> writing to row={row}, template_row={template_row}")
+            # Copy template row format to preserve borders/fonts/colors
+            copy_row_format(ws, template_row, row, start_col=hdr["outputs_col"], end_col=hdr["outputs_bits_col"], logger=logger)
             set_cell_value_merged_safe(ws, row, hdr["outputs_col"], n)
             set_cell_value_merged_safe(ws, row, hdr["outputs_bits_col"], b)
             logger.debug("Output 추가: %s (%s)", n, b)
         tasks.append((run_out, f"Outputs: {name}"))
 
-    # 7) Parameters
+    # 6) Parameters
     for it in params:
         if isinstance(it, dict):
             pname = it.get("name") or ""
@@ -353,11 +468,44 @@ def main():
             continue
         def run_pa(n=pname, b=pbits):
             hdr = find_io_header(ws) or create_io_header(ws)
+            template_row = hdr["row"] + 1  # Template row for format
             row = next_empty_row(ws, hdr["params_col"], hdr["row"] + 1)
+            logger.debug(f"Parameter: {n} -> writing to row={row}, template_row={template_row}")
+            # Copy template row format to preserve borders/fonts/colors
+            copy_row_format(ws, template_row, row, start_col=hdr["params_col"], end_col=hdr["params_bits_col"], logger=logger)
             set_cell_value_merged_safe(ws, row, hdr["params_col"], n)
             set_cell_value_merged_safe(ws, row, hdr["params_bits_col"], b)
             logger.debug("Parameter 추가: %s (%s)", n, b)
         tasks.append((run_pa, f"Parameters: {pname}"))
+
+    # 7) Condition Signals (Signal Assignments)
+    for cond in conditions:
+        if isinstance(cond, dict):
+            cname = cond.get("name", "")
+            cexpr = cond.get("expr", "")
+            cwidth = cond.get("width") or cond.get("bits") or 1  # Support both 'width' and 'bits'
+        else:
+            continue
+        if not cname or not cexpr:
+            continue
+        cbits = str(cwidth) if cwidth and cwidth > 1 else ""
+        def run_cond(n=cname, e=cexpr, b=cbits):
+            hdr = find_signal_assignments_header(ws)
+            if not hdr:
+                # Signal Assignments header not found, skip
+                logger.warning("Signal Assignments header not found, skipping condition: %s", n)
+                return
+            template_row = hdr["data_row"] + 1  # Template row for format
+            row = next_empty_row(ws, hdr["name_col"], hdr["data_row"] + 1)
+            logger.debug(f"Condition: {n} -> writing to row={row}, template_row={template_row}")
+            # Copy template row format to preserve borders/fonts/colors
+            copy_row_format(ws, template_row, row, start_col=hdr["name_col"], end_col=hdr["bits_col"], logger=logger)
+            set_cell_value_merged_safe(ws, row, hdr["name_col"], n)
+            set_cell_value_merged_safe(ws, row, hdr["equation_col"], e)
+            if b:
+                set_cell_value_merged_safe(ws, row, hdr["bits_col"], b)
+            logger.debug("Condition Signal 추가: %s = %s (%s)", n, e, b or "1")
+        tasks.append((run_cond, f"Condition: {cname}"))
 
     # 8) 저장
     def run_save():

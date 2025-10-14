@@ -136,3 +136,314 @@
 [18:55:44] DEBUG: Output 추가: o_vsync_final (1)
 [10:41:44] INFO: 작업 시작 (총 9 단계)
 [10:41:44] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_104144\sync_signal_backup_20251014_104144.xlsx
+[14:40:16] INFO: 작업 시작 (총 23 단계)
+[14:40:16] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_144015\out_sync_gen_backup_20251014_144016.xlsx
+[14:58:49] INFO: 작업 시작 (총 23 단계)
+[14:58:49] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_145849\out_sync_gen_backup_20251014_145849.xlsx
+[16:17:28] INFO: 작업 시작 (총 7 단계)
+[16:17:28] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\test_module-20251014_161728\test_module_backup_20251014_161728.xlsx
+[16:22:49] INFO: 작업 시작 (총 7 단계)
+[16:22:49] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_162249\out_sync_gen_backup_20251014_162249.xlsx
+[16:38:19] INFO: 작업 시작 (총 23 단계)
+[16:38:19] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_163818\out_sync_gen_backup_20251014_163819.xlsx
+[16:38:47] INFO: 작업 시작 (총 23 단계)
+[16:38:47] INFO: 백업 생성: out\sessions\out_sync_gen-20251014_163818\out_sync_gen_backup_20251014_163847.xlsx
+[16:38:47] DEBUG: 기존 값 클리어(서식 유지)
+[16:38:47] DEBUG: Base 채움: Target Name -> out_sync_gen
+[16:38:47] DEBUG: Base 채움: Target Path -> 
+[16:38:47] DEBUG: Base 채움: Base Clock -> clk
+[16:38:47] DEBUG: Base 채움: Base Reset -> i_resetn
+[16:38:47] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[16:38:47] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[16:38:47] DEBUG: Input 추가: i_VTOT (1)
+[16:38:47] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[16:38:47] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[16:38:47] DEBUG: Input 추가: i_de (1)
+[16:38:47] DEBUG: Input 추가: i_hsw (6)
+[16:38:47] DEBUG: Input 추가: i_hsync (1)
+[16:38:47] DEBUG: Input 추가: i_hsync_cnt (1)
+[16:38:47] DEBUG: Input 추가: i_hsync_edge (1)
+[16:38:47] DEBUG: Input 추가: i_vsw (6)
+[16:38:47] DEBUG: Input 추가: i_vsync (1)
+[16:38:47] DEBUG: Input 추가: i_vsync_cnt (1)
+[16:38:47] DEBUG: Output 추가: o_de_final (1)
+[16:38:47] DEBUG: Output 추가: o_hsync_final (1)
+[16:38:47] DEBUG: Output 추가: o_vsync_final (1)
+[16:38:48] DEBUG: 저장 완료: out\sessions\out_sync_gen-20251014_163818\out_sync_gen.xlsx
+[16:38:48] INFO: 모든 작업 완료
+[16:39:41] INFO: 작업 시작 (총 23 단계)
+[16:39:41] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_163940\out_sync_gen_backup_20251014_163941.xlsx
+[17:08:54] INFO: 작업 시작 (총 23 단계)
+[17:08:54] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_170853\out_sync_gen_backup_20251014_170854.xlsx
+[17:16:34] INFO: 작업 시작 (총 23 단계)
+[17:16:34] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\out_sync_gen_backup_20251014_171634.xlsx
+[17:18:33] INFO: 작업 시작 (총 23 단계)
+[17:18:33] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\out_sync_gen_backup_20251014_171833.xlsx
+[17:29:43] INFO: 작업 시작 (총 23 단계)
+[17:29:43] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\out_sync_gen_backup_20251014_172943.xlsx
+[17:33:21] INFO: 작업 시작 (총 23 단계)
+[17:33:21] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\out_sync_gen_backup_20251014_173321.xlsx
+[17:49:50] INFO: 작업 시작 (총 23 단계)
+[17:49:50] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\out_sync_gen_backup_20251014_174950.xlsx
+[17:57:52] INFO: 작업 시작 (총 23 단계)
+[17:57:52] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\out_sync_gen_backup_20251014_175752.xlsx
+[18:19:33] INFO: 작업 시작 (총 30 단계)
+[18:19:33] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\LINE_CTRL_backup_20251014_181933.xlsx
+[18:32:59] INFO: 작업 시작 (총 9 단계)
+[18:32:59] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal_backup_20251014_183259.xlsx
+[18:32:59] DEBUG: 기존 값 클리어(서식 유지)
+[18:32:59] DEBUG: Base 채움: Target Name -> sync_signal
+[18:32:59] DEBUG: Base 채움: Target Path -> 
+[18:32:59] DEBUG: Base 채움: Base Clock -> I_CLK
+[18:32:59] DEBUG: Base 채움: Base Reset -> I_RSTN
+[18:32:59] DEBUG: Input 추가: i_signal (1)
+[18:32:59] DEBUG: Input 추가: o_signal_sync (1)
+[18:32:59] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal.xlsx
+[18:32:59] INFO: 모든 작업 완료
+[18:39:57] INFO: 작업 시작 (총 31 단계)
+[18:39:57] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler_backup_20251014_183957.xlsx
+[18:39:57] DEBUG: 기존 값 클리어(서식 유지)
+[18:39:57] DEBUG: Base 채움: Target Name -> blur_scaler
+[18:39:57] DEBUG: Base 채움: Target Path -> 
+[18:39:57] DEBUG: Base 채움: Base Clock -> I_CLK
+[18:39:57] DEBUG: Base 채움: Base Reset -> I_RSTN
+[18:39:57] DEBUG: Input 추가: i_blur_mode_cap (1)
+[18:39:57] DEBUG: Input 추가: i_den (1)
+[18:39:57] DEBUG: Input 추가: i_hor_cnt (16)
+[18:39:57] DEBUG: Input 추가: i_hsync (1)
+[18:39:57] DEBUG: Input 추가: i_mirror_mode_cap (1)
+[18:39:57] DEBUG: Input 추가: i_sram_rd1 (8)
+[18:39:57] DEBUG: Input 추가: i_sram_rd2 (8)
+[18:39:57] DEBUG: Input 추가: i_sram_rd3 (8)
+[18:39:57] DEBUG: Input 추가: i_vact_state (16)
+[18:39:57] DEBUG: Input 추가: i_vsync (1)
+[18:39:57] DEBUG: Input 추가: i_w1_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w2_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w3_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w4_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w5_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w6_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w7_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w8_cap (4)
+[18:39:57] DEBUG: Input 추가: i_w9_cap (4)
+[18:39:57] DEBUG: Input 추가: i_weight_wr_mode_cap (1)
+[18:39:57] DEBUG: Output 추가: o_data (8)
+[18:39:57] DEBUG: Output 추가: o_den (1)
+[18:39:57] DEBUG: Output 추가: o_hsync (1)
+[18:39:57] DEBUG: Output 추가: o_vsync (1)
+[18:39:57] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[18:39:57] INFO: 모든 작업 완료
+[18:45:21] INFO: 작업 시작 (총 31 단계)
+[18:45:21] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler_backup_20251014_184521.xlsx
+[18:45:21] DEBUG: 기존 값 클리어(서식 유지)
+[18:45:21] DEBUG: Base 채움: Target Name -> blur_scaler
+[18:45:21] DEBUG: Base 채움: Target Path -> 
+[18:45:21] DEBUG: Base 채움: Base Clock -> I_CLK
+[18:45:21] DEBUG: Base 채움: Base Reset -> I_RSTN
+[18:45:21] DEBUG: Input 추가: i_blur_mode_cap (1)
+[18:45:21] DEBUG: Input 추가: i_den (1)
+[18:45:21] DEBUG: Input 추가: i_hor_cnt (16)
+[18:45:21] DEBUG: Input 추가: i_hsync (1)
+[18:45:21] DEBUG: Input 추가: i_mirror_mode_cap (1)
+[18:45:21] DEBUG: Input 추가: i_sram_rd1 (8)
+[18:45:21] DEBUG: Input 추가: i_sram_rd2 (8)
+[18:45:21] DEBUG: Input 추가: i_sram_rd3 (8)
+[18:45:21] DEBUG: Input 추가: i_vact_state (16)
+[18:45:21] DEBUG: Input 추가: i_vsync (1)
+[18:45:21] DEBUG: Input 추가: i_w1_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w2_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w3_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w4_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w5_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w6_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w7_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w8_cap (4)
+[18:45:21] DEBUG: Input 추가: i_w9_cap (4)
+[18:45:21] DEBUG: Input 추가: i_weight_wr_mode_cap (1)
+[18:45:21] DEBUG: Output 추가: o_data (8)
+[18:45:21] DEBUG: Output 추가: o_den (1)
+[18:45:21] DEBUG: Output 추가: o_hsync (1)
+[18:45:21] DEBUG: Output 추가: o_vsync (1)
+[18:45:21] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[18:45:21] INFO: 모든 작업 완료
+[19:15:34] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[19:15:34] INFO: 작업 시작 (총 49 단계)
+[19:15:34] DEBUG: 기존 값 클리어(서식 유지)
+[19:15:34] DEBUG: Base 채움: Target Name -> sfr_cap
+[19:15:34] DEBUG: Base 채움: Target Path -> 
+[19:15:34] DEBUG: Base 채움: Base Clock -> I_CLK
+[19:15:34] DEBUG: Base 채움: Base Reset -> I_RSTN
+[19:15:34] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_blur_mode (1)
+[19:15:34] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_hact (16)
+[19:15:34] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_hbp (16)
+[19:15:34] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_hfp (16)
+[19:15:34] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_hsw (16)
+[19:15:34] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_mirror_mode (1)
+[19:15:34] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_vact (16)
+[19:15:34] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_vbp (16)
+[19:15:34] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_vfp (16)
+[19:15:34] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_vsw (16)
+[19:15:34] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_vsync_sync (1)
+[19:15:34] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w1 (4)
+[19:15:34] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w2 (4)
+[19:15:34] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w3 (4)
+[19:15:34] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w4 (4)
+[19:15:34] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w5 (4)
+[19:15:34] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w6 (4)
+[19:15:34] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w7 (4)
+[19:15:34] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w8 (4)
+[19:15:34] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_w9 (4)
+[19:15:34] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[19:15:34] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Input 추가: i_weight_wr_mode (1)
+[19:15:34] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_blur_mode_cap (1)
+[19:15:34] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_hact_cap (16)
+[19:15:34] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_hbp_cap (16)
+[19:15:34] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_hfp_cap (16)
+[19:15:34] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_hsw_cap (16)
+[19:15:34] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_htotal (16)
+[19:15:34] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[19:15:34] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_vact_cap (16)
+[19:15:34] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_vbp_cap (16)
+[19:15:34] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_vfp_cap (16)
+[19:15:34] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_vsw_cap (16)
+[19:15:34] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_vtotal (16)
+[19:15:34] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w1_cap (4)
+[19:15:34] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w2_cap (4)
+[19:15:34] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w3_cap (4)
+[19:15:34] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w4_cap (4)
+[19:15:34] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w5_cap (4)
+[19:15:34] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w6_cap (4)
+[19:15:34] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w7_cap (4)
+[19:15:34] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w8_cap (4)
+[19:15:34] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_w9_cap (4)
+[19:15:34] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[19:15:34] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[19:15:34] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[19:15:34] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[19:15:34] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[19:15:34] INFO: 모든 작업 완료

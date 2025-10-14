@@ -1,0 +1,632 @@
+[17:16:34] === _create_session_excel_and_fill() CALLED ===
+[17:16:34] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:16:34] state.target_module = out_sync_gen
+[17:16:34] state.module_info.module = out_sync_gen
+[17:16:34] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634
+[17:16:34] Session directory created successfully
+[17:16:34] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\out_sync_gen.xlsx
+[17:16:34] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\out_sync_gen.xlsx
+[17:16:34] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\out_sync_gen.xlsx
+[17:16:34] Verifying Define sheet...
+[17:16:34] Define sheet verified OK
+[17:16:34] Creating define JSON...
+[17:16:34] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\module_define.json
+[17:16:34] Running fill_define.py...
+[17:16:35] fill_define.py returned: 1
+[17:16:35] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_171634/out_sync_gen_backup_20251014_171634.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:16:35] ERROR: fill_define.py failed
+[17:16:35] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:16:35] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634
+[17:16:35] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171634\out_sync_gen.xlsx
+[17:18:33] === _create_session_excel_and_fill() CALLED ===
+[17:18:33] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:18:33] state.target_module = out_sync_gen
+[17:18:33] state.module_info.module = out_sync_gen
+[17:18:33] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833
+[17:18:33] Session directory created successfully
+[17:18:33] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\out_sync_gen.xlsx
+[17:18:33] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\out_sync_gen.xlsx
+[17:18:33] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\out_sync_gen.xlsx
+[17:18:33] Verifying Define sheet...
+[17:18:33] Define sheet verified OK
+[17:18:33] Creating define JSON...
+[17:18:33] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\module_define.json
+[17:18:33] Running fill_define.py...
+[17:18:33] fill_define.py returned: 1
+[17:18:33] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_171833/out_sync_gen_backup_20251014_171833.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:18:33] ERROR: fill_define.py failed
+[17:18:33] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:18:33] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833
+[17:18:33] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_171833\out_sync_gen.xlsx
+[17:29:43] === _create_session_excel_and_fill() CALLED ===
+[17:29:43] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:29:43] state.target_module = out_sync_gen
+[17:29:43] state.module_info.module = out_sync_gen
+[17:29:43] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943
+[17:29:43] Session directory created successfully
+[17:29:43] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\out_sync_gen.xlsx
+[17:29:43] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\out_sync_gen.xlsx
+[17:29:43] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\out_sync_gen.xlsx
+[17:29:43] Verifying Define sheet...
+[17:29:43] Define sheet verified OK
+[17:29:43] Creating define JSON...
+[17:29:43] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\module_define.json
+[17:29:43] Running fill_define.py...
+[17:29:43] fill_define.py returned: 1
+[17:29:43] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_172943/out_sync_gen_backup_20251014_172943.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:29:43] ERROR: fill_define.py failed
+[17:29:43] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:29:43] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943
+[17:29:43] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_172943\out_sync_gen.xlsx
+[17:33:20] === _create_session_excel_and_fill() CALLED ===
+[17:33:20] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:33:20] state.target_module = out_sync_gen
+[17:33:20] state.module_info.module = out_sync_gen
+[17:33:20] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320
+[17:33:20] Session directory created successfully
+[17:33:20] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\out_sync_gen.xlsx
+[17:33:20] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\out_sync_gen.xlsx
+[17:33:20] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\out_sync_gen.xlsx
+[17:33:20] Verifying Define sheet...
+[17:33:20] Define sheet verified OK
+[17:33:20] Creating define JSON...
+[17:33:20] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\module_define.json
+[17:33:20] Running fill_define.py...
+[17:33:21] fill_define.py returned: 1
+[17:33:21] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_173320/out_sync_gen_backup_20251014_173321.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:33:21] ERROR: fill_define.py failed
+[17:33:21] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:33:21] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320
+[17:33:21] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_173320\out_sync_gen.xlsx
+[17:49:49] === _create_session_excel_and_fill() CALLED ===
+[17:49:49] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:49:49] state.target_module = out_sync_gen
+[17:49:49] state.module_info.module = out_sync_gen
+[17:49:49] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949
+[17:49:49] Session directory created successfully
+[17:49:49] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\out_sync_gen.xlsx
+[17:49:49] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\out_sync_gen.xlsx
+[17:49:49] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\out_sync_gen.xlsx
+[17:49:49] Verifying Define sheet...
+[17:49:49] Define sheet verified OK
+[17:49:49] Creating define JSON...
+[17:49:49] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\module_define.json
+[17:49:49] Running fill_define.py...
+[17:49:50] fill_define.py returned: 1
+[17:49:50] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_174949/out_sync_gen_backup_20251014_174950.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:49:50] ERROR: fill_define.py failed
+[17:49:50] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:49:50] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949
+[17:49:50] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_174949\out_sync_gen.xlsx
+[17:57:51] === _create_session_excel_and_fill() CALLED ===
+[17:57:51] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[17:57:51] state.target_module = out_sync_gen
+[17:57:51] state.module_info.module = out_sync_gen
+[17:57:51] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751
+[17:57:51] Session directory created successfully
+[17:57:51] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\out_sync_gen.xlsx
+[17:57:51] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\out_sync_gen.xlsx
+[17:57:51] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\out_sync_gen.xlsx
+[17:57:51] Verifying Define sheet...
+[17:57:51] Define sheet verified OK
+[17:57:51] Creating define JSON...
+[17:57:51] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\module_define.json
+[17:57:51] Running fill_define.py...
+[17:57:52] fill_define.py returned: 1
+[17:57:52] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (23,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/out_sync_gen-20251014_175751/out_sync_gen_backup_20251014_175752.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[17:57:52] ERROR: fill_define.py failed
+[17:57:52] WARNING: Continuing despite fill_define failure (Excel already created)
+[17:57:52] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751
+[17:57:52] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251014_175751\out_sync_gen.xlsx
+[18:19:33] === _create_session_excel_and_fill() CALLED ===
+[18:19:33] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[18:19:33] state.target_module = LINE_CTRL
+[18:19:33] state.module_info.module = LINE_CTRL
+[18:19:33] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933
+[18:19:33] Session directory created successfully
+[18:19:33] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\assertions
+[18:19:33] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\LINE_CTRL.xlsx
+[18:19:33] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\LINE_CTRL.xlsx
+[18:19:33] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\LINE_CTRL.xlsx
+[18:19:33] Verifying Define sheet...
+[18:19:33] Define sheet verified OK
+[18:19:33] Creating define JSON...
+[18:19:33] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\module_define.json
+[18:19:33] Running fill_define.py...
+[18:19:33] fill_define.py returned: 1
+[18:19:33] fill_define.py stderr: --- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 432, in main
+    logger.info("\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)", len(tasks))
+Message: '\uc791\uc5c5 \uc2dc\uc791 (\ucd1d %d \ub2e8\uacc4)'
+Arguments: (30,)
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 17-18: character maps to <undefined>
+Call stack:
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 434, in main
+    runner()
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 309, in run_backup
+    logger.info("\ubc31\uc5c5 \uc0dd\uc131: %s", bak)
+Message: '\ubc31\uc5c5 \uc0dd\uc131: %s'
+Arguments: (WindowsPath('C:/Users/JunsChoi/OneDrive - HARMAN/\ubb38\uc11c/TF\uc790\ub8cc/Assertion TF/Assertion Script/out/sessions/LINE_CTRL-20251014_181933/LINE_CTRL_backup_20251014_181933.xlsx'),)
+Traceback (most recent call last):
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 439, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 435, in main
+    prog.step(desc)
+    ~~~~~~~~~^^^^^^
+  File "C:\Users\JunsChoi\OneDrive - HARMAN\\ubb38\uc11c\TF\uc790\ub8cc\Assertion TF\Assertion Script\scripts\fill_define.py", line 44, in step
+    print(f"[{bar}] {pct:3d}% - {msg}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\JunsChoi\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: character maps to <undefined>
+
+[18:19:33] ERROR: fill_define.py failed
+[18:19:33] WARNING: Continuing despite fill_define failure (Excel already created)
+[18:19:33] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933
+[18:19:33] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251014_181933\LINE_CTRL.xlsx
+[18:32:59] === _create_session_excel_and_fill() CALLED ===
+[18:32:59] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[18:32:59] state.target_module = sync_signal
+[18:32:59] state.module_info.module = sync_signal
+[18:32:59] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259
+[18:32:59] Session directory created successfully
+[18:32:59] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\assertions
+[18:32:59] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal.xlsx
+[18:32:59] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal.xlsx
+[18:32:59] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal.xlsx
+[18:32:59] Verifying Define sheet...
+[18:32:59] Define sheet verified OK
+[18:32:59] Creating define JSON...
+[18:32:59] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\module_define.json
+[18:32:59] Running fill_define.py...
+[18:32:59] fill_define.py returned: 0
+[18:32:59] fill_define.py stdout: [18:32:59] INFO: 작업 시작 (총 9 단계)
+[18:32:59] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal_backup_20251014_183259.xlsx
+[###-------------------------]  11% - 백업 생성
+[######----------------------]  22% - 기존 값 클리어
+[#########-------------------]  33% - Base: Target Name
+[############----------------]  44% - Base: Target Path
+[###############-------------]  55% - Base: Base Clock
+[##################----------]  66% - Base: Base Reset
+[#####################-------]  77% - Inputs: i_signal
+[########################----]  88% - Inputs: o_signal_sync
+[############################] 100% - 엑셀 저장
+[18:32:59] INFO: 모든 작업 완료
+
+[18:32:59] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259
+[18:32:59] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_183259\sync_signal.xlsx
+[18:39:56] === _create_session_excel_and_fill() CALLED ===
+[18:39:56] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[18:39:56] state.target_module = blur_scaler
+[18:39:56] state.module_info.module = blur_scaler
+[18:39:56] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956
+[18:39:56] Session directory created successfully
+[18:39:56] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\assertions
+[18:39:56] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[18:39:56] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[18:39:56] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[18:39:56] Verifying Define sheet...
+[18:39:56] Define sheet verified OK
+[18:39:56] Creating define JSON...
+[18:39:57] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\module_define.json
+[18:39:57] Running fill_define.py...
+[18:39:57] fill_define.py returned: 0
+[18:39:57] fill_define.py stdout: [18:39:57] INFO: 작업 시작 (총 31 단계)
+[18:39:57] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler_backup_20251014_183957.xlsx
+[----------------------------]   3% - 백업 생성
+[#---------------------------]   6% - 기존 값 클리어
+[##--------------------------]   9% - Base: Target Name
+[###-------------------------]  12% - Base: Target Path
+[####------------------------]  16% - Base: Base Clock
+[#####-----------------------]  19% - Base: Base Reset
+[######----------------------]  22% - Inputs: i_blur_mode_cap
+[#######---------------------]  25% - Inputs: i_den
+[########--------------------]  29% - Inputs: i_hor_cnt
+[########--------------------]  32% - Inputs: i_hsync
+[#########-------------------]  35% - Inputs: i_mirror_mode_cap
+[##########------------------]  38% - Inputs: i_sram_rd1
+[###########-----------------]  41% - Inputs: i_sram_rd2
+[############----------------]  45% - Inputs: i_sram_rd3
+[#############---------------]  48% - Inputs: i_vact_state
+[##############--------------]  51% - Inputs: i_vsync
+[###############-------------]  54% - Inputs: i_w1_cap
+[################------------]  58% - Inputs: i_w2_cap
+[#################-----------]  61% - Inputs: i_w3_cap
+[#################-----------]  64% - Inputs: i_w4_cap
+[##################----------]  67% - Inputs: i_w5_cap
+[###################---------]  70% - Inputs: i_w6_cap
+[####################--------]  74% - Inputs: i_w7_cap
+[#####################-------]  77% - Inputs: i_w8_cap
+[######################------]  80% - Inputs: i_w9_cap
+[#######################-----]  83% - Inputs: i_weight_wr_mode_cap
+[########################----]  87% - Outputs: o_data
+[#########################---]  90% - Outputs: o_den
+[##########################--]  93% - Outputs: o_hsync
+[##########################--]  96% - Outputs: o_vsync
+[############################] 100% - 엑셀 저장
+[18:39:57] INFO: 모든 작업 완료
+
+[18:39:57] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956
+[18:39:57] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251014_183956\blur_scaler.xlsx
+[19:15:34] === _create_session_excel_and_fill() CALLED ===
+[19:15:34] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[19:15:34] state.target_module = sfr_cap
+[19:15:34] state.module_info.module = sfr_cap
+[19:15:34] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534
+[19:15:34] Session directory created successfully
+[19:15:34] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\assertions
+[19:15:34] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[19:15:34] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[19:15:34] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[19:15:34] Verifying Define sheet...
+[19:15:34] Define sheet verified OK
+[19:15:34] Creating define JSON...
+[19:15:34] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\module_define.json
+[19:15:34] Running fill_define.py...
+[19:15:34] fill_define.py returned: 0
+[19:15:34] fill_define.py stdout: [19:15:34] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[19:15:34] INFO: 작업 시작 (총 49 단계)
+[----------------------------]   2% - 기존 값 클리어
+[#---------------------------]   4% - Base: Target Name
+[#---------------------------]   6% - Base: Target Path
+[##--------------------------]   8% - Base: Base Clock
+[##--------------------------]  10% - Base: Base Reset
+[###-------------------------]  12% - Inputs: i_blur_mode
+[###-------------------------]  14% - Inputs: i_hact
+[####------------------------]  16% - Inputs: i_hbp
+[#####-----------------------]  18% - Inputs: i_hfp
+[#####-----------------------]  20% - Inputs: i_hsw
+[######----------------------]  22% - Inputs: i_mirror_mode
+[######----------------------]  24% - Inputs: i_vact
+[#######---------------------]  26% - Inputs: i_vbp
+[#######---------------------]  28% - Inputs: i_vfp
+[########--------------------]  30% - Inputs: i_vsw
+[########--------------------]  32% - Inputs: i_vsync_sync
+[#########-------------------]  34% - Inputs: i_w1
+[##########------------------]  36% - Inputs: i_w2
+[##########------------------]  38% - Inputs: i_w3
+[###########-----------------]  40% - Inputs: i_w4
+[###########-----------------]  42% - Inputs: i_w5
+[############----------------]  44% - Inputs: i_w6
+[############----------------]  46% - Inputs: i_w7
+[#############---------------]  48% - Inputs: i_w8
+[##############--------------]  51% - Inputs: i_w9
+[##############--------------]  53% - Inputs: i_weight_wr_mode
+[###############-------------]  55% - Outputs: o_blur_mode_cap
+[###############-------------]  57% - Outputs: o_hact_cap
+[################------------]  59% - Outputs: o_hbp_cap
+[#################-----------]  61% - Outputs: o_hfp_cap
+[#################-----------]  63% - Outputs: o_hsw_cap
+[##################----------]  65% - Outputs: o_htotal
+[##################----------]  67% - Outputs: o_mirror_mode_cap
+[###################---------]  69% - Outputs: o_vact_cap
+[###################---------]  71% - Outputs: o_vbp_cap
+[####################--------]  73% - Outputs: o_vfp_cap
+[#####################-------]  75% - Outputs: o_vsw_cap
+[#####################-------]  77% - Outputs: o_vtotal
+[######################------]  79% - Outputs: o_w1_cap
+[######################------]  81% - Outputs: o_w2_cap
+[#######################-----]  83% - Outputs: o_w3_cap
+[#######################-----]  85% - Outputs: o_w4_cap
+[########################----]  87% - Outputs: o_w5_cap
+[########################----]  89% - Outputs: o_w6_cap
+[#########################---]  91% - Outputs: o_w7_cap
+[##########################--]  93% - Outputs: o_w8_cap
+[##########################--]  95% - Outputs: o_w9_cap
+[###########################-]  97% - Outputs: o_weight_wr_mode_cap
+[############################] 100% - 엑셀 저장
+[19:15:34] INFO: 모든 작업 완료
+
+[19:15:34] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534
+[19:15:34] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
