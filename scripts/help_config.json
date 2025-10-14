@@ -4,7 +4,7 @@
       "key": "commands",
       "title": "Commands",
       "items": [
-        { "cmd": "new", "example": "new", "desc": "Start a new session (onboarding)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "new", "example": "new", "desc": "Create a new assertion (interactive wizard)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
         { "cmd": "<number>", "example": "2", "desc": "Load previous session by its number", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "help | h", "example": "help", "desc": "Open/close help overlay (this)", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
         { "cmd": "quit | q", "example": "q", "desc": "Exit the TUI", "cmd_color": "white", "example_color": "white", "desc_color": "white" },

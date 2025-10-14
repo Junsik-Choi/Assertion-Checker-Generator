@@ -88,24 +88,35 @@ def _robust_copy(src: Path, dst: Path) -> Path:
 
 
 def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
-    """Create session Excel in Data/, verify Define sheet, run fill_define.py. Returns (ok, err)."""
+    """
+    Create session Excel in out/sessions/<module>-<timestamp>/, 
+    verify Define sheet, run fill_define.py. Returns (ok, err).
+    """
     try:
         if not state.excel_path or not Path(state.excel_path).exists():
             return False, "Reference Excel not set"
-        sess_dir = (_THIS_DIR.parent / "Data").resolve()
-        sess_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 세션 디렉터리를 out/sessions/<module>-<timestamp>/ 형태로 생성
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         mod = state.target_module or (state.module_info.module or "module")
-        new_xlsx = sess_dir / f"{mod}-{ts}.xlsx"
+        session_name = f"{mod}-{ts}"
+        sess_dir = (_THIS_DIR.parent / "out" / "sessions" / session_name).resolve()
+        sess_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 엑셀 파일을 세션 폴더로 복사
+        new_xlsx = sess_dir / f"{mod}.xlsx"
         new_xlsx = _robust_copy(Path(state.excel_path), new_xlsx)
         state.session_excel_path = new_xlsx
+        
         # Verify Define sheet
         if not load_workbook:
             return False, "openpyxl missing"
         wb = load_workbook(str(new_xlsx))
         if "Define" not in wb.sheetnames:
-            return False, "Define sheet missing"
-        # Run fill_define.py and require success
+            return False, "Define sheet missing in reference Excel"
+        wb.close()
+        
+        # Define JSON을 같은 세션 폴더에 생성
         define_json = fill_define_excel_if_needed(new_xlsx, {
             "module": state.module_info.module,
             "clocks": state.module_info.clocks,
@@ -115,15 +126,23 @@ def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
             "inouts": state.module_info.inouts,
             "parameters": state.module_info.parameters,
         }, sess_dir)
+        
+        # Run fill_define.py
         fill_script = _THIS_DIR / "fill_define.py"
         if not fill_script.exists():
             return False, "fill_define.py not found"
-        rc = subprocess.run([sys.executable, str(fill_script), str(new_xlsx), str(define_json)], check=False).returncode
+        rc = subprocess.run(
+            [sys.executable, str(fill_script), str(new_xlsx), str(define_json)], 
+            check=False,
+            capture_output=True,
+            text=True
+        ).returncode
         if rc != 0:
-            return False, "fill_define.py failed"
-        return True, ""
+            return False, "fill_define.py failed to populate Define sheet"
+        
+        return True, f"Session created: {sess_dir}"
     except Exception as e:
-        return False, str(e)
+        return False, f"Session creation error: {str(e)}"
 
 _APP_VERSION = "v1.0"
 
@@ -168,6 +187,13 @@ class AppState:
     # Session Excel generated for this run
     session_excel_path: Optional[Path] = None
     excel_error: Optional[str] = None
+    # Created assertions list
+    assertions: List[Dict[str, Any]] = field(default_factory=list)
+    # Assertion creation wizard state
+    assertion_wizard_active: bool = False
+    assertion_wizard_stage: str = ""  # 'select_type' | 'input_data' | 'confirm'
+    assertion_selected_type: Optional[str] = None
+    assertion_input_data: Dict[str, Any] = field(default_factory=dict)
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -187,6 +213,63 @@ def _safe_str(o: Any) -> str:
         return str(o)
     except Exception:
         return repr(o)
+
+
+def _get_port_width(port: Dict[str, Any]) -> str:
+    """Extract bit width from port and return as string like '[7:0]' or ''."""
+    width = port.get("width") or port.get("msb_lsb") or ""
+    if isinstance(width, dict):
+        msb = width.get('msb', '')
+        lsb = width.get('lsb', '')
+        if msb != '' and lsb != '':
+            return f"[{msb}:{lsb}]"
+    elif isinstance(width, str) and width.strip():
+        return width
+    return ""
+
+
+def _format_port_with_width(port: Dict[str, Any], index: int) -> str:
+    """Format port as '[idx] name [width]'."""
+    name = port.get('name', '?')
+    width = _get_port_width(port)
+    if width:
+        return f"[{index+1}] {name} {width}"
+    return f"[{index+1}] {name}"
+
+
+def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, Any]], start_row: int = 1) -> None:
+    """Draw ports in 2-column layout with bit width information."""
+    max_y, max_x = win.getmaxyx()
+    usable_h = max_y - start_row - 1
+    usable_w = max_x - 2
+    
+    # Split into two columns
+    col_w = usable_w // 2
+    col1_w = col_w - 1  # Space for separator
+    col2_w = usable_w - col_w
+    
+    row = start_row
+    for i in range(0, len(ports), 2):
+        if row >= max_y - 1:
+            break
+        
+        # Left column
+        if i < len(ports):
+            left_text = _format_port_with_width(ports[i], i)
+            try:
+                win.addnstr(row, 1, _truncate(left_text, col1_w), col1_w)
+            except curses.error:
+                pass
+        
+        # Right column
+        if i + 1 < len(ports):
+            right_text = _format_port_with_width(ports[i + 1], i + 1)
+            try:
+                win.addnstr(row, col_w + 1, _truncate(right_text, col2_w - 1), col2_w - 1)
+            except curses.error:
+                pass
+        
+        row += 1
 
 
 def _truncate(text: str, width: int) -> str:
@@ -515,6 +598,79 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             # Any other key: ignore while overlay is open
             continue
 
+        # Assertion wizard rendering
+        if state.assertion_wizard_active:
+            try:
+                stdscr.erase()
+            except Exception:
+                pass
+            _render_assertion_wizard(stdscr, state)
+            max_y, max_x = stdscr.getmaxyx()
+            
+            # Status message
+            if status_msg:
+                try:
+                    stdscr.addnstr(max_y - 4, 2, _truncate(status_msg, max_x - 4), max_x - 4)
+                except curses.error:
+                    pass
+            
+            # Hints
+            hint_line = "Commands: set <num> <value> | done | cancel"
+            try:
+                stdscr.addnstr(max_y - 3, 2, _truncate(hint_line, max_x - 4), max_x - 4, curses.A_DIM)
+            except curses.error:
+                pass
+            
+            # Input prompt
+            prompt = "> "
+            edit_w = max_x - len(prompt) - 1
+            current = "".join(input_buf)
+            try:
+                stdscr.addnstr(max_y - 1, 0, prompt, len(prompt))
+                stdscr.addnstr(max_y - 1, len(prompt), _truncate(current, edit_w), edit_w)
+                curses.curs_set(1)
+                stdscr.move(max_y - 1, len(prompt) + min(cursor_pos, edit_w))
+            except curses.error:
+                pass
+            
+            stdscr.refresh()
+            
+            # Handle input
+            ch = stdscr.getch()
+            if ch in (curses.KEY_RESIZE,):
+                continue
+            if ch in (curses.KEY_BACKSPACE, 127, 8):
+                if cursor_pos > 0:
+                    del input_buf[cursor_pos - 1]
+                    cursor_pos -= 1
+                continue
+            if ch in (curses.KEY_LEFT,):
+                cursor_pos = max(0, cursor_pos - 1)
+                continue
+            if ch in (curses.KEY_RIGHT,):
+                cursor_pos = min(len(input_buf), cursor_pos + 1)
+                continue
+            if ch in (10, 13):  # Enter
+                cmdline = "".join(input_buf).strip()
+                input_buf.clear()
+                cursor_pos = 0
+                if cmdline:
+                    msg, exit_wizard = _handle_assertion_wizard_command(state, cmdline)
+                    status_msg = msg
+                    if exit_wizard:
+                        state.assertion_wizard_active = False
+                continue
+            # Regular char
+            if 0 <= ch <= 255:
+                try:
+                    c = chr(ch)
+                except Exception:
+                    c = ""
+                if c:
+                    input_buf.insert(cursor_pos, c)
+                    cursor_pos += 1
+            continue
+
         # Onboarding wizard rendering
         if state.onboarding_active:
             # Render onboarding UI
@@ -764,25 +920,39 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             continue
 
         # Normal dashboard rendering
-        # Compute fixed-width panels:
-        # - Left: Module/Paths (top) + Clocks/Resets/Params (bottom) stacked
-        # - Remaining width split into 3 columns equally: Inputs | Outputs | Condition Signals
-        left_w = min(48, max(24, max_x // 4))
-        rem_w = max(30, max_x - left_w)
-        col_w = max(10, rem_w // 3)
+        # 레이아웃 구조:
+        # - Left: Module/Paths (top) + Clocks/Resets/Params (bottom) - 20% width, full height
+        # - Right (80%): 상단 60% - Inputs | Outputs | Condition Signals (3등분)
+        #                하단 40% - Created Assertions (전체 너비)
+        
+        left_w = max(24, int(max_x * 0.20))  # Fixed 20% for left panel
+        right_w = max_x - left_w  # 80% for right side
+        
+        # Right side 상단 60%, 하단 40%
+        right_top_h = max(6, int((max_y - 3) * 0.60))  # -3 for prompt area
+        right_bottom_h = max(6, max_y - 3 - right_top_h)
+        
+        # Right top area split into 3 equal columns: Inputs | Outputs | Condition Signals
+        col_w = right_w // 3
         in_w = col_w
         out_w = col_w
-        cond_w = max(10, rem_w - in_w - out_w)
-        top_h = max(3, max_y - 3)  # ensure positive height
-
-        # Create windows: left split vertically, right area split into three columns
-        left_paths_h = max(7, min(12, top_h // 3 + 3))
-        left_crp_h = max(3, top_h - left_paths_h)
-        win_left_top = curses.newwin(left_paths_h, left_w, 0, 0)
-        win_left_bot = curses.newwin(left_crp_h, left_w, left_paths_h, 0)
-        win_in = curses.newwin(top_h, in_w, 0, left_w)
-        win_out = curses.newwin(top_h, out_w, 0, left_w + in_w)
-        win_cond = curses.newwin(top_h, cond_w, 0, left_w + in_w + out_w)
+        cond_w = right_w - in_w - out_w  # Remaining width
+        
+        # Create windows
+        # Left side: Module/Paths (top) + Clocks/Resets/Params (bottom)
+        left_top_h = max(7, min(14, right_top_h // 2))
+        left_bot_h = max(3, max_y - 3 - left_top_h)  # Extend to bottom
+        
+        win_left_top = curses.newwin(left_top_h, left_w, 0, 0)
+        win_left_bot = curses.newwin(left_bot_h, left_w, left_top_h, 0)
+        
+        # Right top: Inputs | Outputs | Condition Signals
+        win_in = curses.newwin(right_top_h, in_w, 0, left_w)
+        win_out = curses.newwin(right_top_h, out_w, 0, left_w + in_w)
+        win_cond = curses.newwin(right_top_h, cond_w, 0, left_w + in_w + out_w)
+        
+        # Right bottom: Created Assertions (spans full right width)
+        win_assertions = curses.newwin(right_bottom_h, right_w, right_top_h, left_w)
 
         # Draw left-top: Module/IP info (two-column KV with wrapping and zebra)
         _draw_box(win_left_top, "Module / Paths")
@@ -826,62 +996,128 @@ def _main(stdscr: "curses._CursesWindow") -> None:
 
         # Draw left-bottom: clocks/resets/params with numbering for clocks/resets
         _draw_box(win_left_bot, "Clocks / Resets / Params")
-        left_h, _ = win_left_bot.getmaxyx()
+        left_bot_h, left_bot_w = win_left_bot.getmaxyx()
+        row_ptr_left_bot = 1  # Start from row 1
         sections = [
             ("Clocks:", [f"  [{i+1}] {c.get('name','?')}" for i, c in enumerate(state.module_info.clocks)]),
             ("Resets:", [f"  [{i+1}] {r.get('name','?')}" for i, r in enumerate(state.module_info.resets)]),
             ("Params:", [f"  {p.get('name','?')}" for p in state.module_info.parameters]),
         ]
         for title, items in sections:
-            if row_ptr_left >= left_h - 1:
+            if row_ptr_left_bot >= left_bot_h - 1:
                 break
             lines = [title] + items + [""]
-            _write_lines_zebra(win_left_bot, lines, row_ptr_left, 1, base_row_index=0)
-            row_ptr_left += len(lines)
+            _write_lines_zebra(win_left_bot, lines, row_ptr_left_bot, 1, base_row_index=0)
+            row_ptr_left_bot += len(lines)
 
-        # Draw Inputs and Outputs columns with numbering, pagination and filter
+        # Draw Inputs and Outputs columns with 2-column layout, numbering, and bit width
         _draw_box(win_in, "Inputs")
         _draw_box(win_out, "Outputs")
-        in_h, in_w2 = win_in.getmaxyx()
-        out_h, out_w2 = win_out.getmaxyx()
-        avail_rows_in = in_h - 2
-        avail_rows_out = out_h - 2
-        global _ports_page
-        try:
-            _ports_page
-        except NameError:
-            _ports_page = 0
+        
         # Apply port filter if set
         def _apply_filter(pl: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             if not state.port_filter:
                 return pl
             key = state.port_filter.lower()
             return [p for p in pl if key in (p.get('name','').lower())]
-        # include inouts into both lists if any
+        
+        # Include inouts into both lists if any
         in_ports = _apply_filter(state.module_info.inputs + state.module_info.inouts)
         out_ports = _apply_filter(state.module_info.outputs + state.module_info.inouts)
-        # Build numbered bodies
-        inp_body_all = [f"  [{i+1}] {p.get('name','?')}" for i, p in enumerate(in_ports)]
-        out_body_all = [f"  [{i+1}] {p.get('name','?')}" for i, p in enumerate(out_ports)]
-        inp_page_items, _ = _paginate_list(inp_body_all, _ports_page, avail_rows_in)
-        out_page_items, _ = _paginate_list(out_body_all, _ports_page, avail_rows_out)
-        _write_lines_zebra(win_in, ["Inputs:"] + inp_page_items, 1, 1, base_row_index=0)
-        _write_lines_zebra(win_out, ["Outputs:"] + out_page_items, 1, 1, base_row_index=0)
-
+        
+        # Pagination support (global _ports_page)
+        global _ports_page
+        try:
+            _ports_page
+        except NameError:
+            _ports_page = 0
+        
+        in_h, in_w2 = win_in.getmaxyx()
+        out_h, out_w2 = win_out.getmaxyx()
+        avail_rows_in = in_h - 2
+        avail_rows_out = out_h - 2
+        
+        # Calculate how many ports fit per page (2 columns)
+        ports_per_page_in = avail_rows_in * 2
+        ports_per_page_out = avail_rows_out * 2
+        
+        # Paginate
+        in_start = _ports_page * ports_per_page_in
+        out_start = _ports_page * ports_per_page_out
+        in_page_ports = in_ports[in_start:in_start + ports_per_page_in]
+        out_page_ports = out_ports[out_start:out_start + ports_per_page_out]
+        
+        # Draw in 2-column layout
+        _draw_ports_two_columns(win_in, in_page_ports, start_row=1)
+        _draw_ports_two_columns(win_out, out_page_ports, start_row=1)
+        
         # Draw rightmost: Condition Signals as 2-column KV (name | expr)
         _draw_box(win_cond, "Condition Signals (ms)")
         cond_h, cond_w2 = win_cond.getmaxyx()
         cond_inner_w = cond_w2 - 2
+        
         def _label_with_bits(c: Dict[str, Any]) -> Tuple[str, str]:
-            nm = c.get('name','')
+            nm = c.get('name', '')
             bits = c.get('bits', 1)
-            label = f"{nm} ({bits}bits)" if bits else nm
-            return label, c.get('expr','')
+            label = f"{nm} ({bits}bits)" if bits and bits > 1 else nm
+            return label, c.get('expr', '')
+        
         cond_items = [_label_with_bits(c) for c in state.conditions]
         max_name = max((len(nm) for nm, _ in cond_items), default=8)
         name_w = min(max(8, max_name), max(8, cond_inner_w // 3))
         cond_lines = _format_kv_wrapped(cond_items, total_width=cond_inner_w, label_width=name_w, add_blank_between=True, value_color=None)
         _write_colored_zebra(win_cond, cond_lines, 1, 1, base_row_index=0)
+
+        # Draw bottom: Assertion List (spans full width)
+        _draw_box(win_assertions, "Created Assertions")
+        assert_h, assert_w = win_assertions.getmaxyx()
+        assert_inner_h = assert_h - 2
+        assert_inner_w = assert_w - 2
+        
+        if not state.assertions:
+            no_assert_msg = "No assertions created yet. Use 'new' command to create assertions."
+            try:
+                win_assertions.addnstr(1, 2, _truncate(no_assert_msg, assert_inner_w), assert_inner_w, curses.A_DIM)
+            except curses.error:
+                pass
+        else:
+            # Display assertions in table format: Type | Signals | Description
+            # Column widths: Type(15%) | Signals(35%) | Description(50%)
+            type_w = max(10, int(assert_inner_w * 0.15))
+            sig_w = max(15, int(assert_inner_w * 0.35))
+            desc_w = max(20, assert_inner_w - type_w - sig_w - 4)  # -4 for separators
+            
+            # Header
+            header = f"{'Type':<{type_w}} | {'Signals':<{sig_w}} | {'Description':<{desc_w}}"
+            try:
+                win_assertions.addnstr(1, 2, _truncate(header, assert_inner_w), assert_inner_w, curses.A_BOLD)
+            except curses.error:
+                pass
+            
+            # Separator
+            sep = "-" * (type_w + sig_w + desc_w + 4)
+            try:
+                win_assertions.addnstr(2, 2, _truncate(sep, assert_inner_w), assert_inner_w)
+            except curses.error:
+                pass
+            
+            # Assertion rows
+            row = 3
+            for i, asrt in enumerate(state.assertions):
+                if row >= assert_h - 1:
+                    break
+                atype = asrt.get('type', 'Unknown')
+                signals = asrt.get('signals', [])
+                sig_str = ', '.join(signals[:3]) + ('...' if len(signals) > 3 else '')
+                desc = asrt.get('description', '')
+                
+                line = f"{_truncate(atype, type_w):<{type_w}} | {_truncate(sig_str, sig_w):<{sig_w}} | {_truncate(desc, desc_w):<{desc_w}}"
+                attr = curses.A_DIM if (i % 2 == 1) else 0
+                try:
+                    win_assertions.addnstr(row, 2, _truncate(line, assert_inner_w), assert_inner_w, attr)
+                except curses.error:
+                    pass
+                row += 1
 
         # Completion popup above status/hints if available
         comp_win = None
@@ -914,7 +1150,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             pass
 
         # Command hints line (second last line)
-        hints = "[help] [scan] [set rtl|module|excel|out] [fill] [json] [sv] [ms] [f/F] [n/N] [quit|q]"
+        hints = "[help] [new] [scan] [set rtl|module|excel|out] [fill] [json] [sv] [ms] [f/F] [n/N] [quit|q]"
         try:
             stdscr.addnstr(max_y - 2, 0, _truncate(hints, max_x - 1), max_x - 1)
         except curses.error:
@@ -940,6 +1176,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         win_in.refresh()
         win_out.refresh()
         win_cond.refresh()
+        win_assertions.refresh()
 
         ch = stdscr.getch()
         if ch in (curses.KEY_RESIZE,):
@@ -1156,6 +1393,27 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
 
     if cmd in ("help", "h"):
         return "Showing help...", True
+    
+    if cmd == "new":
+        # Enter assertion creation wizard
+        if not state.module_info.module:
+            return "Please scan RTL first (use 'scan' command)", False
+        
+        # Create session Excel if not already created
+        if not state.session_excel_path:
+            if not state.excel_path or not Path(state.excel_path).exists():
+                return "Reference Excel not set. Please set Excel path first.", False
+            
+            ok, err = _create_session_excel_and_fill(state)
+            if not ok:
+                return f"Failed to create session Excel: {err}", False
+        
+        state.assertion_wizard_active = True
+        state.assertion_wizard_stage = 'select_type'
+        state.assertion_selected_type = None
+        state.assertion_input_data.clear()
+        return "Entering assertion creator wizard...", False
+    
     if cmd in ("n", "N") and not args:
         # Port paging via command
         global _ports_page
@@ -1661,7 +1919,7 @@ def _draw_ascii_box(stdscr: "curses._CursesWindow", top: int, left: int, height:
 
 
 def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str, Any]]) -> Optional[Union[Dict[str, Any], str]]:
-    # Command-driven chooser: new | <number> | f <substr> | n/N | q
+    # Command-driven chooser: new | <number> | f <substr> | n/N | del <number> | del all | q
     filter_text = ""
     page = 0
     compl_items: List[Tuple[str, bool]] = []  # for optional candidate display (kept empty here)
@@ -1849,6 +2107,8 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             seg("|")
             seg("n/N", "cyan", True); seg("page")
             seg("|")
+            seg("del <numbers | all>", "cyan", True); seg("delete")
+            seg("|")
             seg("q", "white", True); seg("quit")
         except curses.error:
             pass
@@ -1891,6 +2151,171 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             if 1 <= idx <= len(filtered):
                 return filtered[idx - 1]
             continue
+        # del command: del <number(s)> or del all
+        if low.startswith("del "):
+            args = cmdline[4:].strip()
+            if args == "all":
+                # Delete all sessions with confirmation
+                # Show all sessions highlighted and ask for confirmation
+                try:
+                    stdscr.clear()
+                    max_y, max_x = stdscr.getmaxyx()
+                    # Show banner
+                    stdscr.addnstr(0, 2, "DELETE ALL SESSIONS - Confirmation Required", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                    stdscr.addnstr(2, 2, f"You are about to delete {len(sessions)} session(s).", max_x - 4)
+                    stdscr.addnstr(3, 2, "Type 'y' to confirm, any other key to cancel.", max_x - 4, curses.A_BOLD)
+                    stdscr.refresh()
+                    
+                    curses.echo()
+                    confirm = stdscr.getch()
+                    curses.noecho()
+                    
+                    if confirm in (ord('y'), ord('Y')):
+                        for s in sessions:
+                            path = s.get("_path")
+                            if path and Path(path).exists():
+                                Path(path).unlink()
+                        sessions.clear()
+                        filtered = []
+                        page = 0
+                        # Show success message
+                        stdscr.addnstr(5, 2, "All sessions deleted!", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                    else:
+                        # Cancelled
+                        stdscr.addnstr(5, 2, "Delete cancelled.", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                except Exception as e:
+                    # Show error message
+                    try:
+                        stdscr.addnstr(max_y - 4, 2, f"Error: {str(e)}", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                    except curses.error:
+                        pass
+                continue
+            else:
+                # Parse multiple numbers: "del 2 3 4" or "del 2,3,4" or "del 2"
+                # Support both space and comma separators
+                args_normalized = args.replace(',', ' ')
+                tokens = args_normalized.split()
+                indices = []
+                for tok in tokens:
+                    if tok.isdigit():
+                        idx = int(tok)
+                        if 1 <= idx <= len(filtered):
+                            indices.append(idx)
+                
+                if not indices:
+                    # Invalid input
+                    try:
+                        stdscr.addnstr(max_y - 4, 2, "Invalid session number(s)", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                    except curses.error:
+                        pass
+                    continue
+                
+                # Remove duplicates and sort
+                indices = sorted(list(set(indices)))
+                
+                # Show confirmation with highlighted sessions
+                try:
+                    stdscr.clear()
+                    max_y, max_x = stdscr.getmaxyx()
+                    
+                    # Banner
+                    stdscr.addnstr(0, 2, f"DELETE {len(indices)} SESSION(S) - Confirmation Required", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                    
+                    # Show the sessions to be deleted (highlighted)
+                    y_pos = 2
+                    stdscr.addnstr(y_pos, 2, "Sessions to be deleted:", max_x - 4, curses.A_BOLD)
+                    y_pos += 1
+                    
+                    # Limit display to prevent overflow
+                    display_limit = min(len(indices), max_y - 8)
+                    for i, idx in enumerate(indices[:display_limit]):
+                        if y_pos >= max_y - 4:
+                            break
+                        s = filtered[idx - 1]
+                        module = s.get('target_module', '') or 'N/A'
+                        rtl = s.get('rtl_start', '') or 'N/A'
+                        # Shorten paths for display
+                        if len(rtl) > 40:
+                            rtl = "..." + rtl[-37:]
+                        line = f"  [{idx}] {module} - {rtl}"
+                        stdscr.addnstr(y_pos, 2, _truncate(line, max_x - 4), max_x - 4, 
+                                      curses.color_pair(_PAIR_BY_NAME.get("yellow",0)) | curses.A_BOLD)
+                        y_pos += 1
+                    
+                    if len(indices) > display_limit:
+                        stdscr.addnstr(y_pos, 2, f"  ... and {len(indices) - display_limit} more", max_x - 4, curses.A_DIM)
+                        y_pos += 1
+                    
+                    # Confirmation prompt
+                    y_pos += 1
+                    stdscr.addnstr(y_pos, 2, "Type 'y' to confirm deletion, any other key to cancel.", max_x - 4, curses.A_BOLD)
+                    stdscr.refresh()
+                    
+                    # Wait for confirmation
+                    confirm = stdscr.getch()
+                    
+                    if confirm in (ord('y'), ord('Y')):
+                        # Delete in reverse order to maintain indices
+                        deleted_count = 0
+                        for idx in reversed(indices):
+                            try:
+                                s = filtered[idx - 1]
+                                path = s.get("_path")
+                                if path and Path(path).exists():
+                                    Path(path).unlink()
+                                # Remove from sessions list
+                                sessions.remove(s)
+                                deleted_count += 1
+                            except Exception:
+                                pass
+                        
+                        # Update filtered list
+                        if filter_text:
+                            ft = filter_text.lower()
+                            def _m(s: Dict[str, Any]) -> str:
+                                return f"{s.get('rtl_start','')} {s.get('target_module','')} {s.get('excel_path','')} {s.get('out_dir','')}".lower()
+                            filtered = [s for s in sessions if ft in _m(s)]
+                        else:
+                            filtered = sessions
+                        
+                        # Show success message
+                        y_pos += 2
+                        msg = f"{deleted_count} session(s) deleted successfully!"
+                        stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                    else:
+                        # Cancelled
+                        y_pos += 2
+                        stdscr.addnstr(y_pos, 2, "Delete cancelled.", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
+                        stdscr.refresh()
+                        import time
+                        time.sleep(1)
+                        
+                except Exception as e:
+                    # Show error message
+                    try:
+                        stdscr.clear()
+                        stdscr.addnstr(2, 2, f"Error: {str(e)}", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                        stdscr.refresh()
+                        import time
+                        time.sleep(2)
+                    except curses.error:
+                        pass
+                continue
         # Unknown
         continue
 
@@ -1940,12 +2365,20 @@ def _first_time_popup_and_autoscan(stdscr: "curses._CursesWindow", state: AppSta
 
 
 def _auto_find_excel() -> Optional[Path]:
+    """Data 폴더에서 'Assertion_TF.xlsx'를 우선 탐색, 없으면 첫 번째 xlsx 반환"""
     data_dir = _THIS_DIR.parent / "Data"
     if not data_dir.exists():
         return None
     try:
+        # 1순위: Assertion_TF.xlsx (reference 파일)
+        preferred = data_dir / "Assertion_TF.xlsx"
+        if preferred.exists() and not preferred.name.startswith("~$"):
+            return preferred.resolve()
+        
+        # 2순위: 정렬된 첫 번째 xlsx 파일 (세션 파일 제외)
         for x in sorted(data_dir.glob("*.xlsx")):
-            if x.name.startswith("~$"):
+            # 임시 파일과 타임스탬프가 포함된 세션 파일 건너뛰기
+            if x.name.startswith("~$") or "-20" in x.name:
                 continue
             return x.resolve()
     except Exception:
@@ -2210,6 +2643,411 @@ def _common_prefix(names: List[str]) -> str:
     return s1[:i]
 
 
+# ---------------------- Assertion Wizard -----------------------------------
+
+def _get_assertion_plugins_info() -> List[Dict[str, Any]]:
+    """Get information about available assertion plugins."""
+    from assertions import get_registered_plugins  # type: ignore
+    plugins = get_registered_plugins()
+    
+    info_list = []
+    for plugin_cls in plugins:
+        plugin_info = {
+            'name': plugin_cls.plugin_name,
+            'sheet_name': plugin_cls.sheet_name,
+            'description': _get_plugin_description(plugin_cls.plugin_name),
+            'fields': _get_plugin_fields(plugin_cls.plugin_name),
+        }
+        info_list.append(plugin_info)
+    return info_list
+
+
+def _get_plugin_description(plugin_name: str) -> str:
+    """Get description for each plugin type."""
+    descriptions = {
+        'counter': 'Generate counter-based assertions with increment/decrement/reset conditions',
+        'handshake': 'Generate 2-phase or 4-phase handshake protocol assertions',
+        'sequence': 'Generate temporal sequence assertions',
+    }
+    return descriptions.get(plugin_name, 'Custom assertion type')
+
+
+def _get_plugin_fields(plugin_name: str) -> List[Dict[str, str]]:
+    """Get required fields for each plugin type."""
+    fields = {
+        'counter': [
+            {'name': 'counter_name', 'type': 'string', 'prompt': 'Counter name'},
+            {'name': 'clock_edge', 'type': 'select', 'prompt': 'Clock edge', 'options': ['posedge', 'negedge']},
+            {'name': 'clock_signal', 'type': 'port', 'prompt': 'Clock signal'},
+            {'name': 'reset_edge', 'type': 'select', 'prompt': 'Reset edge', 'options': ['posedge', 'negedge', '']},
+            {'name': 'reset_signal', 'type': 'port', 'prompt': 'Reset signal (or leave empty)'},
+            {'name': 'increment_condition', 'type': 'string', 'prompt': 'Increment condition'},
+            {'name': 'reset_condition', 'type': 'string', 'prompt': 'Reset condition'},
+        ],
+        'handshake': [
+            {'name': 'phase_type', 'type': 'select', 'prompt': 'Handshake type', 'options': ['2phase', '4phase']},
+            {'name': 'clock_signal', 'type': 'port', 'prompt': 'Base Clock'},
+            {'name': 'reset_signal', 'type': 'port', 'prompt': 'Reset signal'},
+            {'name': 'sender_signal', 'type': 'port', 'prompt': 'Sender (request) signal'},
+            {'name': 'receiver_signal', 'type': 'port', 'prompt': 'Receiver (acknowledge) signal'},
+        ],
+    }
+    return fields.get(plugin_name, [])
+
+
+def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) -> None:
+    """Render assertion creation wizard."""
+    max_y, max_x = stdscr.getmaxyx()
+    
+    # Title
+    title = "Assertion Creator Wizard"
+    try:
+        stdscr.addnstr(0, 2, title, max_x - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+    except curses.error:
+        pass
+    
+    # Box for content
+    margin_x = 2
+    top = 2
+    reserved_bottom = 5  # For prompt and hints
+    box_h = max(10, max_y - top - reserved_bottom)
+    box_w = max(40, max_x - (margin_x * 2))
+    _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
+    
+    if state.assertion_wizard_stage == 'select_type':
+        _render_type_selection(stdscr, state, top, margin_x, box_h, box_w)
+    elif state.assertion_wizard_stage == 'input_data':
+        _render_data_input(stdscr, state, top, margin_x, box_h, box_w)
+    elif state.assertion_wizard_stage == 'confirm':
+        _render_confirmation(stdscr, state, top, margin_x, box_h, box_w)
+
+
+def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render assertion type selection screen."""
+    plugins = _get_assertion_plugins_info()
+    
+    y = top + 2
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Select Assertion Type:", box_w - 4, curses.A_BOLD)
+        y += 2
+    except curses.error:
+        pass
+    
+    for i, plugin in enumerate(plugins, start=1):
+        if y >= top + box_h - 2:
+            break
+        
+        # Check if sheet exists in Excel (use session excel if available)
+        sheet_status = ""
+        excel_to_check = state.session_excel_path or state.excel_path
+        if excel_to_check:
+            try:
+                from openpyxl import load_workbook  # type: ignore
+                from assertions.base import BaseAssertionPlugin  # type: ignore
+                wb = load_workbook(str(excel_to_check), read_only=True)
+                # Check case-insensitively
+                actual_sheet = BaseAssertionPlugin.find_sheet_case_insensitive(wb.sheetnames, plugin['sheet_name'])
+                if actual_sheet:
+                    sheet_status = f"✓ Sheet found: {actual_sheet}"
+                    status_color = "green"
+                else:
+                    sheet_status = "✗ Sheet missing"
+                    status_color = "red"
+                wb.close()
+            except Exception as e:
+                sheet_status = f"? Cannot check: {str(e)[:20]}"
+                status_color = "yellow"
+        
+        # Display option
+        try:
+            option_line = f"[{i}] {plugin['name'].upper()}"
+            stdscr.addnstr(y, margin_x + 4, option_line, box_w - 6, curses.A_BOLD)
+            y += 1
+            
+            desc_line = f"    {plugin['description']}"
+            stdscr.addnstr(y, margin_x + 4, _truncate(desc_line, box_w - 6), box_w - 6, curses.A_DIM)
+            y += 1
+            
+            if sheet_status:
+                status_line = f"    Sheet: {plugin['sheet_name']} - {sheet_status}"
+                color = _PAIR_BY_NAME.get(status_color, 0)
+                stdscr.addnstr(y, margin_x + 4, _truncate(status_line, box_w - 6), box_w - 6, curses.color_pair(color))
+                y += 1
+            
+            y += 1  # Blank line between options
+        except curses.error:
+            pass
+    
+    # Instructions
+    try:
+        y = top + box_h - 3
+        inst_line = "Enter number to select, or 'cancel' to exit"
+        stdscr.addnstr(y, margin_x + 2, inst_line, box_w - 4, curses.A_DIM)
+    except curses.error:
+        pass
+
+
+def _render_data_input(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render data input screen for selected assertion type."""
+    plugin_name = state.assertion_selected_type
+    if not plugin_name:
+        return
+    
+    plugins = _get_assertion_plugins_info()
+    plugin = next((p for p in plugins if p['name'] == plugin_name), None)
+    if not plugin:
+        return
+    
+    fields = plugin['fields']
+    y = top + 2
+    
+    try:
+        title_line = f"Creating {plugin_name.upper()} Assertion"
+        stdscr.addnstr(y, margin_x + 2, title_line, box_w - 4, curses.A_BOLD)
+        y += 2
+    except curses.error:
+        pass
+    
+    # Show fields and current values
+    for i, field in enumerate(fields):
+        if y >= top + box_h - 4:
+            break
+        
+        field_name = field['name']
+        prompt = field['prompt']
+        current_val = state.assertion_input_data.get(field_name, '')
+        
+        try:
+            # Field prompt
+            field_line = f"{i+1}. {prompt}:"
+            stdscr.addnstr(y, margin_x + 4, field_line, box_w - 6, curses.A_BOLD)
+            y += 1
+            
+            # Current value or options
+            if field['type'] == 'select':
+                options_str = ', '.join(field.get('options', []))
+                opt_line = f"   Options: {options_str}"
+                stdscr.addnstr(y, margin_x + 4, _truncate(opt_line, box_w - 6), box_w - 6, curses.A_DIM)
+                y += 1
+            elif field['type'] == 'port':
+                hint_line = "   (Use port name or number from Input/Output list)"
+                stdscr.addnstr(y, margin_x + 4, _truncate(hint_line, box_w - 6), box_w - 6, curses.A_DIM)
+                y += 1
+            
+            # Current value display
+            val_display = str(current_val) if current_val else "<not set>"
+            val_line = f"   Current: {val_display}"
+            val_color = "green" if current_val else "red"
+            stdscr.addnstr(y, margin_x + 4, _truncate(val_line, box_w - 6), box_w - 6, curses.color_pair(_PAIR_BY_NAME.get(val_color, 0)))
+            y += 1
+            y += 1  # Blank line
+        except curses.error:
+            pass
+    
+    # Instructions
+    try:
+        y = top + box_h - 3
+        inst_line = "Enter: set <field_num> <value> | 'done' to finish | 'cancel' to abort"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst_line, box_w - 4), box_w - 4, curses.A_DIM)
+    except curses.error:
+        pass
+
+
+def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render confirmation screen."""
+    y = top + 2
+    
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Assertion Summary:", box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        y += 2
+        
+        # Show all input data
+        for key, val in state.assertion_input_data.items():
+            if y >= top + box_h - 4:
+                break
+            line = f"  {key}: {val}"
+            stdscr.addnstr(y, margin_x + 4, _truncate(line, box_w - 6), box_w - 6)
+            y += 1
+        
+        y += 2
+        confirm_line = "Type 'confirm' to create assertion or 'cancel' to abort"
+        stdscr.addnstr(y, margin_x + 2, _truncate(confirm_line, box_w - 4), box_w - 4, curses.A_BOLD)
+    except curses.error:
+        pass
+
+
+def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
+    """Handle commands within assertion wizard. Returns (message, exit_wizard)."""
+    toks = cmdline.split()
+    if not toks:
+        return "", False
+    
+    cmd = toks[0].lower()
+    args = toks[1:]
+    
+    if cmd == 'cancel':
+        # Exit wizard
+        state.assertion_wizard_active = False
+        state.assertion_wizard_stage = ""
+        state.assertion_selected_type = None
+        state.assertion_input_data.clear()
+        return "Assertion creation cancelled", True
+    
+    if state.assertion_wizard_stage == 'select_type':
+        # User selects a number
+        if cmd.isdigit():
+            idx = int(cmd) - 1
+            plugins = _get_assertion_plugins_info()
+            if 0 <= idx < len(plugins):
+                selected = plugins[idx]
+                state.assertion_selected_type = selected['name']
+                state.assertion_wizard_stage = 'input_data'
+                state.assertion_input_data.clear()
+                return f"Selected: {selected['name']}. Now enter field values.", False
+            else:
+                return f"Invalid selection. Choose 1-{len(plugins)}", False
+        return "Enter a number to select assertion type", False
+    
+    elif state.assertion_wizard_stage == 'input_data':
+        if cmd == 'set' and len(args) >= 2:
+            field_num_str = args[0]
+            value = ' '.join(args[1:])
+            
+            if field_num_str.isdigit():
+                field_idx = int(field_num_str) - 1
+                plugins = _get_assertion_plugins_info()
+                plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+                if plugin and 0 <= field_idx < len(plugin['fields']):
+                    field = plugin['fields'][field_idx]
+                    state.assertion_input_data[field['name']] = value
+                    return f"Set {field['name']} = {value}", False
+                else:
+                    return f"Invalid field number", False
+            else:
+                return "Usage: set <field_number> <value>", False
+        
+        elif cmd == 'done':
+            # Check if all required fields are filled
+            plugins = _get_assertion_plugins_info()
+            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+            if plugin:
+                missing = []
+                for field in plugin['fields']:
+                    if field['name'] not in state.assertion_input_data or not state.assertion_input_data[field['name']]:
+                        # Allow empty for optional fields (reset_signal, etc.)
+                        if 'reset' in field['name'].lower() or field['prompt'].endswith('(or leave empty)'):
+                            continue
+                        missing.append(field['prompt'])
+                
+                if missing:
+                    return f"Missing required fields: {', '.join(missing)}", False
+                
+                state.assertion_wizard_stage = 'confirm'
+                return "Review your assertion. Type 'confirm' to create.", False
+            return "Plugin not found", False
+        
+        return "Usage: set <field_num> <value> | 'done' to finish", False
+    
+    elif state.assertion_wizard_stage == 'confirm':
+        if cmd == 'confirm':
+            # Create the assertion
+            result = _create_assertion_from_wizard(state)
+            state.assertion_wizard_active = False
+            state.assertion_wizard_stage = ""
+            state.assertion_selected_type = None
+            state.assertion_input_data.clear()
+            return result, True
+        return "Type 'confirm' to create or 'cancel' to abort", False
+    
+    return "", False
+
+
+def _create_assertion_from_wizard(state: AppState) -> str:
+    """Create assertion entry and write to Excel."""
+    plugin_name = state.assertion_selected_type
+    data = state.assertion_input_data
+    
+    # Build assertion description
+    if plugin_name == 'counter':
+        desc = f"Counter {data.get('counter_name', '')} increments on {data.get('increment_condition', '')}"
+    elif plugin_name == 'handshake':
+        desc = f"{data.get('phase_type', '')} handshake between {data.get('sender_signal', '')} and {data.get('receiver_signal', '')}"
+    else:
+        desc = f"{plugin_name} assertion"
+    
+    # Extract signals
+    signals = []
+    for key, val in data.items():
+        if 'signal' in key.lower() or 'clock' in key.lower():
+            if val:
+                signals.append(val)
+    
+    # Add to state
+    assertion_entry = {
+        'type': plugin_name,
+        'signals': signals,
+        'description': desc,
+        'data': dict(data),
+    }
+    state.assertions.append(assertion_entry)
+    
+    # Write to Excel
+    try:
+        excel_path = state.session_excel_path or state.excel_path
+        if not excel_path or not Path(excel_path).exists():
+            return f"✓ Assertion created in memory, but Excel not found for writing"
+        
+        _write_assertion_to_excel(excel_path, plugin_name, data)
+        return f"✓ {plugin_name.upper()} assertion created and written to Excel!"
+    except Exception as e:
+        return f"✓ Assertion created in memory, but failed to write to Excel: {e}"
+
+
+def _write_assertion_to_excel(excel_path: Path, plugin_name: str, data: Dict[str, Any]) -> None:
+    """Write assertion data to corresponding Excel sheet."""
+    try:
+        from openpyxl import load_workbook  # type: ignore
+        wb = load_workbook(str(excel_path))
+        
+        # Get plugin info to find sheet name
+        plugins = _get_assertion_plugins_info()
+        plugin = next((p for p in plugins if p['name'] == plugin_name), None)
+        if not plugin:
+            raise ValueError(f"Plugin {plugin_name} not found")
+        
+        sheet_name = plugin['sheet_name']
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"Sheet '{sheet_name}' not found in Excel")
+        
+        ws = wb[sheet_name]
+        
+        # Find next empty row (simple approach: find first row after header with empty first cell)
+        # This is plugin-specific logic - for now, append at the end
+        max_row = ws.max_row
+        next_row = max_row + 1
+        
+        # Write data based on plugin type
+        if plugin_name == 'counter':
+            # Counter sheet has specific structure - this is simplified
+            # In practice, you'd parse the exact column layout
+            ws.cell(row=next_row, column=1, value=data.get('counter_name', ''))
+            ws.cell(row=next_row, column=2, value=data.get('clock_edge', ''))
+            ws.cell(row=next_row, column=3, value=data.get('clock_signal', ''))
+            ws.cell(row=next_row, column=4, value=data.get('reset_edge', ''))
+            ws.cell(row=next_row, column=5, value=data.get('reset_signal', ''))
+        
+        elif plugin_name == 'handshake':
+            # Handshake sheet structure
+            ws.cell(row=next_row, column=1, value=data.get('phase_type', ''))
+            ws.cell(row=next_row, column=2, value=data.get('sender_signal', ''))
+            ws.cell(row=next_row, column=3, value=data.get('receiver_signal', ''))
+        
+        wb.save(str(excel_path))
+        wb.close()
+    except Exception as e:
+        raise RuntimeError(f"Failed to write to Excel: {e}")
+
+
 # ---------------------- Onboarding Wizard ----------------------------------
 
 def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
@@ -2232,7 +3070,7 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
     elif stage == 'module':
         box_h = min(box_h, 12)
     elif stage == 'excel':
-        box_h = min(box_h, 10)
+        box_h = min(box_h, 13)  # Increased by 3 lines for better readability
     if top + box_h > max_y:
         box_h = max(6, max_y - top - 1)
     _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
@@ -2299,36 +3137,47 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
         found = state.onboarding_excel_autofound or state.excel_path
         try:
             stdscr.addnstr(top + 2, margin_x + 2, _truncate(title, box_w - 4), box_w - 4, curses.A_BOLD)
+            content_bottom = top + box_h - 2
+            y = top + 4
+            
             if found:
-                content_bottom = top + box_h - 2
-                y = min(top + 4, content_bottom)
-                stdscr.addnstr(y, margin_x + 2, _truncate("Specify the path to the reference Excel file.", box_w - 4), box_w - 4, curses.A_DIM)
-                y = min(y + 1, content_bottom)
-                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept autodetected file or type a path.", box_w - 4), box_w - 4, curses.A_DIM)
-                y = min(y + 1, content_bottom)
-                stdscr.addnstr(y, margin_x + 2, _truncate("Use '/' separator. prev/back: previous step.", box_w - 4), box_w - 4, curses.A_DIM)
-                available_w = box_w - 4
-                y = min(y + 2, content_bottom)
-                stdscr.addnstr(y, margin_x + 2, _truncate("Auto-detected:", available_w), available_w, curses.A_DIM)
-                stdscr.addnstr(y, margin_x + 16, _truncate(str(found), max(0, available_w - 14)), max(0, available_w - 14), curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
-                # Emphasized confirmation line (clamped inside box)
-                try:
-                    y = min(y + 1, content_bottom)
-                    x = margin_x + 2
-                    msg_green = "Excel auto-detected!! "
-                    stdscr.addnstr(y, x, _truncate(msg_green, max(0, box_w - 4)), max(0, box_w - 4), curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
-                    x += len(msg_green)
-                    if x < margin_x + 2 + (box_w - 4):
-                        msg_white = "Press Enter to continue"
-                        stdscr.addnstr(y, x, _truncate(msg_white, (margin_x + 2 + (box_w - 4)) - x), (margin_x + 2 + (box_w - 4)) - x, curses.A_BOLD)
-                except curses.error:
-                    pass
-                y = min(y + 1, content_bottom)
-                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept or type a path.", box_w - 4), box_w - 4)
+                # Instruction lines
+                if y <= content_bottom:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("Specify the path to the reference Excel file.", box_w - 4), box_w - 4)
+                    y += 1
+                
+                if y <= content_bottom:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("Use '/' separator. Type 'prev' or 'back' to return to previous step.", box_w - 4), box_w - 4, curses.A_DIM)
+                    y += 2  # Extra spacing before auto-detected section
+                
+                # Auto-detected file display with green highlight
+                if y <= content_bottom:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("✓ Auto-detected:", box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
+                    y += 1
+                
+                # Show the file path in green
+                if y <= content_bottom:
+                    file_display = f"  {str(found)}"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(file_display, box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+                    y += 2  # Extra spacing
+                
+                # Confirmation prompt with color emphasis
+                if y <= content_bottom:
+                    prompt_msg = "Press Enter to accept"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(prompt_msg, box_w - 4), box_w - 4, curses.A_BOLD)
+                    y += 1
+                
+                if y <= content_bottom:
+                    or_msg = "or type a custom path below."
+                    stdscr.addnstr(y, margin_x + 2, _truncate(or_msg, box_w - 4), box_w - 4, curses.A_DIM)
             else:
-                stdscr.addnstr(top + 4, margin_x + 2, _truncate("Type a path and press Enter.", box_w - 4), box_w - 4)
-            if not found and not state.excel_path:
-                stdscr.addnstr(top + 6, margin_x + 2, _truncate("No Excel found in Data/.", box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
+                # No auto-detected file
+                if y <= content_bottom:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("Type the path to your Excel file and press Enter.", box_w - 4), box_w - 4)
+                    y += 2
+                
+                if y <= content_bottom:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("No Excel found in Data/ folder.", box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("red", 0)) | curses.A_BOLD)
         except curses.error:
             pass
 

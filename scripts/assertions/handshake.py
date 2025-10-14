@@ -2,11 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-import sys
 from openpyxl import load_workbook
-
-from .base import BaseAssertionPlugin
-from .registry import register
 
 def find_cell(ws, value):
     """Find the cell in the sheet that matches 'value' and return its position (row, col)"""

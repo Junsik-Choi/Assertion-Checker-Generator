@@ -28,6 +28,18 @@ class BaseAssertionPlugin:
     plugin_name: str = "base"
     sheet_name: str = ""
 
+    @staticmethod
+    def find_sheet_case_insensitive(sheet_names: List[str], target_name: str) -> Optional[str]:
+        """
+        Find a sheet name case-insensitively.
+        Returns the actual sheet name if found, None otherwise.
+        """
+        target_lower = target_name.lower()
+        for name in sheet_names:
+            if name.lower() == target_lower:
+                return name
+        return None
+
     def parse(self, xls_path: Path) -> Dict[str, Any]:  # pragma: no cover
         raise NotImplementedError
 

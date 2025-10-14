@@ -41,6 +41,7 @@ import sys
 from pathlib import Path
 import platform
 import shutil
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 # Make local 'scripts' directory importable no matter the CWD
@@ -197,6 +198,38 @@ def fill_define_excel_if_needed(excel_path: Path, module_info: Dict[str, Any], o
     return define_json_path
 
 
+def _create_session_excel_copy(reference_excel: Path, target_module: str, out_dir: Path) -> Tuple[Path, Path]:
+    """
+    Reference 엑셀을 세션 폴더로 복사하고 구조화된 디렉터리를 생성합니다.
+    
+    Args:
+        reference_excel: 원본 엑셀 파일 경로
+        target_module: 대상 모듈명
+        out_dir: 출력 디렉터리 (일반적으로 out/assertions)
+    
+    Returns:
+        (session_excel_path, session_dir): 복사된 엑셀 경로와 세션 디렉터리 경로
+    """
+    # 세션 디렉터리: out/sessions/<module>-<timestamp>/
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_name = f"{target_module}-{ts}"
+    session_dir = out_dir.parent / "sessions" / session_name
+    session_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 엑셀 파일명: <module>.xlsx
+    dest_excel = session_dir / f"{target_module}.xlsx"
+    
+    try:
+        shutil.copy2(reference_excel, dest_excel)
+        print(f"✓ Session Excel created: {dest_excel}")
+        print(f"✓ Session directory: {session_dir}")
+        return dest_excel, session_dir
+    except Exception as e:
+        print(f"[Warn] Failed to copy Excel: {e}")
+        print(f"[Info] Using reference Excel directly: {reference_excel}")
+        return reference_excel, out_dir
+
+
 def run_builder(
     rtl_start: Path,
     target_module: Optional[str],
@@ -210,16 +243,32 @@ def run_builder(
 
     ctx = build_module_context(rtl_start, target_module)
     module_info = ctx["module_info"]
+    actual_module = module_info["module"]
+    
+    # Reference 엑셀을 세션용으로 복사
+    session_excel, session_dir = _create_session_excel_copy(excel_path, actual_module, out_dir)
 
     # Optionally emit JSON for Define sheet population
     if auto_define_fill:
-        define_json_path = fill_define_excel_if_needed(excel_path, module_info, out_dir)
-        print(f"Define JSON written: {define_json_path}")
+        # JSON을 세션 디렉터리에 생성
+        define_json_path = fill_define_excel_if_needed(session_excel, module_info, session_dir)
+        print(f"✓ Define JSON written: {define_json_path}")
         # Auto-run fill_define.py to populate the Excel Define sheet
         fill_script = _THIS_DIR / "fill_define.py"
         if fill_script.exists():
             try:
-                subprocess.run([sys.executable, str(fill_script), str(excel_path), str(define_json_path)], check=False)
+                result = subprocess.run(
+                    [sys.executable, str(fill_script), str(session_excel), str(define_json_path)], 
+                    check=False,
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    print(f"✓ Define sheet populated successfully")
+                else:
+                    print(f"[Warn] fill_define.py execution failed")
+                    if result.stderr:
+                        print(f"  Error: {result.stderr[:200]}")
             except Exception as e:
                 print(f"[Warn] fill_define.py execution failed: {e}")
         else:
@@ -231,11 +280,11 @@ def run_builder(
         enabled_names = set(enabled_plugins)
         plugin_types = [p for p in plugin_types if p.plugin_name in enabled_names]
 
-    # Parse Excel sheets via plugins
+    # Parse Excel sheets via plugins (세션 엑셀 사용)
     parsed_by_plugin: Dict[str, Dict[str, Any]] = {}
     for pcls in plugin_types:
         try:
-            parsed_by_plugin[pcls.plugin_name] = pcls().parse(Path(excel_path))
+            parsed_by_plugin[pcls.plugin_name] = pcls().parse(session_excel)
         except Exception as e:
             print(f"[Warn] Plugin {pcls.plugin_name} parse failed: {e}")
 
@@ -251,16 +300,18 @@ def run_builder(
             "parameters": module_info["parameters"],
             "sheets": parsed_by_plugin,
         }
-        json_path = out_dir / "assertion_inputs.json"
+        # JSON도 세션 디렉터리에 저장
+        json_path = session_dir / "assertion_inputs.json"
         json_path.write_text(json.dumps(json_blob, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Inputs JSON written: {json_path}")
+        print(f"✓ Inputs JSON written: {json_path}")
 
     # Generate assertion SV sections via plugins
     sv_sections: List[str] = []
     common_context = {
         "module_info": module_info,
-        "define_excel_path": str(excel_path),
-        "output_dir": str(out_dir),
+        "define_excel_path": str(session_excel),
+        "output_dir": str(session_dir),
+        "session_dir": str(session_dir),
         "config": {
             "auto_define_fill": auto_define_fill,
             "enabled_plugins": enabled_plugins,
@@ -276,12 +327,16 @@ def run_builder(
         except Exception as e:
             print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
 
-    # Write unified checker SV
+    # Write unified checker SV (세션 디렉터리에 저장)
     if sv_sections:
-        out_sv = out_dir / "auto_assertion_checker.sv"
+        out_sv = session_dir / "auto_assertion_checker.sv"
         header = "/***** Auto-generated Assertion Checker *****/\n"
         out_sv.write_text(header + "\n\n".join(sv_sections), encoding="utf-8")
-        print(f"SV written: {out_sv}")
+        print(f"✓ SV written: {out_sv}")
+    
+    print(f"\n{'='*60}")
+    print(f"✓ All outputs saved to: {session_dir}")
+    print(f"{'='*60}")
 
 
 def _prompt(msg: str, default: Optional[str] = None) -> str:

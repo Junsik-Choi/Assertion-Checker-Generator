@@ -134,3 +134,5 @@
 [18:55:44] DEBUG: Output 추가: o_de_final (1)
 [18:55:44] DEBUG: Output 추가: o_hsync_final (1)
 [18:55:44] DEBUG: Output 추가: o_vsync_final (1)
+[10:41:44] INFO: 작업 시작 (총 9 단계)
+[10:41:44] INFO: 백업 생성: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sync_signal-20251014_104144\sync_signal_backup_20251014_104144.xlsx

@@ -15,7 +15,16 @@ class CounterPlugin(BaseAssertionPlugin):
     sheet_name = "Counter"
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
-        raw = pd.read_excel(xls_path, sheet_name=self.sheet_name, header=None)
+        # Find sheet case-insensitively
+        import openpyxl
+        wb = openpyxl.load_workbook(xls_path, read_only=True, data_only=True)
+        actual_sheet_name = self.find_sheet_case_insensitive(wb.sheetnames, self.sheet_name)
+        wb.close()
+        
+        if not actual_sheet_name:
+            raise ValueError(f"Sheet '{self.sheet_name}' not found in Excel. Available sheets: {wb.sheetnames}")
+        
+        raw = pd.read_excel(xls_path, sheet_name=actual_sheet_name, header=None)
         cnt_left_header = raw.iloc[0, 0]
         cnt_right_header = raw.iloc[0, 5]
 
