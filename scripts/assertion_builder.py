@@ -180,6 +180,7 @@ def fill_define_excel_if_needed(excel_path: Path, module_info: Dict[str, Any], o
     define_json = {
         "top_path": "",
         "module": module_info["module"],
+        "rtl_file_path": module_info.get("rtl_file_path", ""),  # Add RTL file path
         "paths": [],
         "instances": [],
         "clocks": module_info["clocks"],
@@ -188,6 +189,7 @@ def fill_define_excel_if_needed(excel_path: Path, module_info: Dict[str, Any], o
         "outputs": module_info["outputs"],
         "inouts": module_info["inouts"],
         "parameters": module_info["parameters"],
+        "conditions": module_info.get("conditions", []),  # Add condition signals
     }
     define_json_path.write_text(json.dumps(define_json, ensure_ascii=False, indent=2), encoding="utf-8")
 

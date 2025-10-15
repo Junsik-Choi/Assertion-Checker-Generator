@@ -447,3 +447,1270 @@
 [19:15:34] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
 [19:15:34] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
 [19:15:34] INFO: 모든 작업 완료
+[10:32:29] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:32:29] INFO: 작업 시작 (총 49 단계)
+[10:32:29] DEBUG: 기존 값 클리어(서식 유지)
+[10:32:29] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:32:29] DEBUG: Base 채움: Target Path -> 
+[10:32:29] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:32:29] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:32:29] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_blur_mode (1)
+[10:32:29] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_hact (16)
+[10:32:29] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_hbp (16)
+[10:32:29] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_hfp (16)
+[10:32:29] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_hsw (16)
+[10:32:29] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_mirror_mode (1)
+[10:32:29] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_vact (16)
+[10:32:29] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_vbp (16)
+[10:32:29] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_vfp (16)
+[10:32:29] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_vsw (16)
+[10:32:29] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_vsync_sync (1)
+[10:32:29] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w1 (4)
+[10:32:29] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w2 (4)
+[10:32:29] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w3 (4)
+[10:32:29] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w4 (4)
+[10:32:29] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w5 (4)
+[10:32:29] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w6 (4)
+[10:32:29] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w7 (4)
+[10:32:29] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w8 (4)
+[10:32:29] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_w9 (4)
+[10:32:29] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:32:29] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:32:29] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:32:29] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_hact_cap (16)
+[10:32:29] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_hbp_cap (16)
+[10:32:29] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_hfp_cap (16)
+[10:32:29] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_hsw_cap (16)
+[10:32:29] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_htotal (16)
+[10:32:29] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:32:29] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_vact_cap (16)
+[10:32:29] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_vbp_cap (16)
+[10:32:29] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_vfp_cap (16)
+[10:32:29] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_vsw_cap (16)
+[10:32:29] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_vtotal (16)
+[10:32:29] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w1_cap (4)
+[10:32:29] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w2_cap (4)
+[10:32:29] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w3_cap (4)
+[10:32:29] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w4_cap (4)
+[10:32:29] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w5_cap (4)
+[10:32:29] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w6_cap (4)
+[10:32:29] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w7_cap (4)
+[10:32:29] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w8_cap (4)
+[10:32:29] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_w9_cap (4)
+[10:32:29] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:32:29] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:32:29] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:29] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:32:29] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:32:29] INFO: 모든 작업 완료
+[10:32:52] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:32:52] INFO: 작업 시작 (총 49 단계)
+[10:32:52] DEBUG: 기존 값 클리어(서식 유지)
+[10:32:52] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:32:52] DEBUG: Base 채움: Target Path -> 
+[10:32:52] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:32:52] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:32:52] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_blur_mode (1)
+[10:32:52] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_hact (16)
+[10:32:52] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_hbp (16)
+[10:32:52] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_hfp (16)
+[10:32:52] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_hsw (16)
+[10:32:52] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_mirror_mode (1)
+[10:32:52] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_vact (16)
+[10:32:52] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_vbp (16)
+[10:32:52] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_vfp (16)
+[10:32:52] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_vsw (16)
+[10:32:52] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_vsync_sync (1)
+[10:32:52] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w1 (4)
+[10:32:52] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w2 (4)
+[10:32:52] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w3 (4)
+[10:32:52] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w4 (4)
+[10:32:52] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w5 (4)
+[10:32:52] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w6 (4)
+[10:32:52] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w7 (4)
+[10:32:52] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w8 (4)
+[10:32:52] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_w9 (4)
+[10:32:52] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:32:52] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:32:52] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:32:52] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_hact_cap (16)
+[10:32:52] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_hbp_cap (16)
+[10:32:52] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_hfp_cap (16)
+[10:32:52] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_hsw_cap (16)
+[10:32:52] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_htotal (16)
+[10:32:52] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:32:52] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_vact_cap (16)
+[10:32:52] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_vbp_cap (16)
+[10:32:52] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_vfp_cap (16)
+[10:32:52] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_vsw_cap (16)
+[10:32:52] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_vtotal (16)
+[10:32:52] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w1_cap (4)
+[10:32:52] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w2_cap (4)
+[10:32:52] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w3_cap (4)
+[10:32:52] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w4_cap (4)
+[10:32:52] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w5_cap (4)
+[10:32:52] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w6_cap (4)
+[10:32:52] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w7_cap (4)
+[10:32:52] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w8_cap (4)
+[10:32:52] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_w9_cap (4)
+[10:32:52] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:32:52] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:32:52] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:32:52] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:32:52] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:32:52] INFO: 모든 작업 완료
+[10:33:03] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:33:03] INFO: 작업 시작 (총 49 단계)
+[10:33:03] DEBUG: 기존 값 클리어(서식 유지)
+[10:33:03] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:33:03] DEBUG: Base 채움: Target Path -> 
+[10:33:03] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:33:03] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:33:03] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_blur_mode (1)
+[10:33:03] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_hact (16)
+[10:33:03] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_hbp (16)
+[10:33:03] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_hfp (16)
+[10:33:03] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_hsw (16)
+[10:33:03] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_mirror_mode (1)
+[10:33:03] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_vact (16)
+[10:33:03] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_vbp (16)
+[10:33:03] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:33:03] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:33:03] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:03] DEBUG: Input 추가: i_vfp (16)
+[10:33:04] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_vsw (16)
+[10:33:04] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_vsync_sync (1)
+[10:33:04] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w1 (4)
+[10:33:04] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w2 (4)
+[10:33:04] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w3 (4)
+[10:33:04] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w4 (4)
+[10:33:04] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w5 (4)
+[10:33:04] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w6 (4)
+[10:33:04] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w7 (4)
+[10:33:04] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w8 (4)
+[10:33:04] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_w9 (4)
+[10:33:04] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:33:04] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:33:04] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:33:04] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_hact_cap (16)
+[10:33:04] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_hbp_cap (16)
+[10:33:04] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_hfp_cap (16)
+[10:33:04] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_hsw_cap (16)
+[10:33:04] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_htotal (16)
+[10:33:04] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:33:04] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_vact_cap (16)
+[10:33:04] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_vbp_cap (16)
+[10:33:04] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_vfp_cap (16)
+[10:33:04] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_vsw_cap (16)
+[10:33:04] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_vtotal (16)
+[10:33:04] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w1_cap (4)
+[10:33:04] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w2_cap (4)
+[10:33:04] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w3_cap (4)
+[10:33:04] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w4_cap (4)
+[10:33:04] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w5_cap (4)
+[10:33:04] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w6_cap (4)
+[10:33:04] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w7_cap (4)
+[10:33:04] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w8_cap (4)
+[10:33:04] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_w9_cap (4)
+[10:33:04] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:33:04] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:33:04] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:04] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:33:04] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:33:04] INFO: 모든 작업 완료
+[10:33:07] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:33:07] INFO: 작업 시작 (총 49 단계)
+[10:33:07] DEBUG: 기존 값 클리어(서식 유지)
+[10:33:07] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:33:07] DEBUG: Base 채움: Target Path -> 
+[10:33:07] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:33:07] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:33:07] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_blur_mode (1)
+[10:33:07] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_hact (16)
+[10:33:07] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_hbp (16)
+[10:33:07] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_hfp (16)
+[10:33:07] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_hsw (16)
+[10:33:07] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_mirror_mode (1)
+[10:33:07] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_vact (16)
+[10:33:07] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_vbp (16)
+[10:33:07] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_vfp (16)
+[10:33:07] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_vsw (16)
+[10:33:07] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_vsync_sync (1)
+[10:33:07] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w1 (4)
+[10:33:07] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w2 (4)
+[10:33:07] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w3 (4)
+[10:33:07] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w4 (4)
+[10:33:07] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w5 (4)
+[10:33:07] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w6 (4)
+[10:33:07] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w7 (4)
+[10:33:07] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w8 (4)
+[10:33:07] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_w9 (4)
+[10:33:07] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:33:07] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:33:07] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:33:07] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_hact_cap (16)
+[10:33:07] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_hbp_cap (16)
+[10:33:07] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_hfp_cap (16)
+[10:33:07] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_hsw_cap (16)
+[10:33:07] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_htotal (16)
+[10:33:07] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:33:07] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_vact_cap (16)
+[10:33:07] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_vbp_cap (16)
+[10:33:07] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_vfp_cap (16)
+[10:33:07] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_vsw_cap (16)
+[10:33:07] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_vtotal (16)
+[10:33:07] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w1_cap (4)
+[10:33:07] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w2_cap (4)
+[10:33:07] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w3_cap (4)
+[10:33:07] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w4_cap (4)
+[10:33:07] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w5_cap (4)
+[10:33:07] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w6_cap (4)
+[10:33:07] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w7_cap (4)
+[10:33:07] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w8_cap (4)
+[10:33:07] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_w9_cap (4)
+[10:33:07] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:33:07] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:33:07] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:07] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:33:07] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:33:07] INFO: 모든 작업 완료
+[10:33:10] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:33:10] INFO: 작업 시작 (총 49 단계)
+[10:33:10] DEBUG: 기존 값 클리어(서식 유지)
+[10:33:10] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:33:10] DEBUG: Base 채움: Target Path -> 
+[10:33:10] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:33:10] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:33:10] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_blur_mode (1)
+[10:33:10] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_hact (16)
+[10:33:10] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_hbp (16)
+[10:33:10] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_hfp (16)
+[10:33:10] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_hsw (16)
+[10:33:10] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_mirror_mode (1)
+[10:33:10] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_vact (16)
+[10:33:10] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_vbp (16)
+[10:33:10] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_vfp (16)
+[10:33:10] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_vsw (16)
+[10:33:10] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_vsync_sync (1)
+[10:33:10] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w1 (4)
+[10:33:10] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w2 (4)
+[10:33:10] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w3 (4)
+[10:33:10] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w4 (4)
+[10:33:10] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w5 (4)
+[10:33:10] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w6 (4)
+[10:33:10] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w7 (4)
+[10:33:10] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w8 (4)
+[10:33:10] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_w9 (4)
+[10:33:10] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:33:10] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:33:10] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:33:10] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_hact_cap (16)
+[10:33:10] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_hbp_cap (16)
+[10:33:10] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_hfp_cap (16)
+[10:33:10] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_hsw_cap (16)
+[10:33:10] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_htotal (16)
+[10:33:10] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:33:10] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_vact_cap (16)
+[10:33:10] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_vbp_cap (16)
+[10:33:10] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_vfp_cap (16)
+[10:33:10] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_vsw_cap (16)
+[10:33:10] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_vtotal (16)
+[10:33:10] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w1_cap (4)
+[10:33:10] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w2_cap (4)
+[10:33:10] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w3_cap (4)
+[10:33:10] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w4_cap (4)
+[10:33:10] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w5_cap (4)
+[10:33:10] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w6_cap (4)
+[10:33:10] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w7_cap (4)
+[10:33:10] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w8_cap (4)
+[10:33:10] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_w9_cap (4)
+[10:33:10] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:33:10] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:33:10] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:10] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:33:10] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:33:10] INFO: 모든 작업 완료
+[10:33:14] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:33:14] INFO: 작업 시작 (총 49 단계)
+[10:33:14] DEBUG: 기존 값 클리어(서식 유지)
+[10:33:14] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:33:14] DEBUG: Base 채움: Target Path -> 
+[10:33:14] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:33:14] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:33:14] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_blur_mode (1)
+[10:33:14] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_hact (16)
+[10:33:14] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_hbp (16)
+[10:33:14] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_hfp (16)
+[10:33:14] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_hsw (16)
+[10:33:14] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_mirror_mode (1)
+[10:33:14] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_vact (16)
+[10:33:14] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_vbp (16)
+[10:33:14] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_vfp (16)
+[10:33:14] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_vsw (16)
+[10:33:14] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_vsync_sync (1)
+[10:33:14] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w1 (4)
+[10:33:14] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w2 (4)
+[10:33:14] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w3 (4)
+[10:33:14] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w4 (4)
+[10:33:14] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w5 (4)
+[10:33:14] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w6 (4)
+[10:33:14] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w7 (4)
+[10:33:14] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w8 (4)
+[10:33:14] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_w9 (4)
+[10:33:14] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:33:14] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:33:14] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:33:14] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_hact_cap (16)
+[10:33:14] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_hbp_cap (16)
+[10:33:14] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_hfp_cap (16)
+[10:33:14] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_hsw_cap (16)
+[10:33:14] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_htotal (16)
+[10:33:14] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:33:14] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_vact_cap (16)
+[10:33:14] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_vbp_cap (16)
+[10:33:14] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_vfp_cap (16)
+[10:33:14] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_vsw_cap (16)
+[10:33:14] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_vtotal (16)
+[10:33:14] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w1_cap (4)
+[10:33:14] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w2_cap (4)
+[10:33:14] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w3_cap (4)
+[10:33:14] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w4_cap (4)
+[10:33:14] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w5_cap (4)
+[10:33:14] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w6_cap (4)
+[10:33:14] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w7_cap (4)
+[10:33:14] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w8_cap (4)
+[10:33:14] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_w9_cap (4)
+[10:33:14] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:33:14] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:33:14] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:14] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:33:14] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:33:14] INFO: 모든 작업 완료
+[10:33:18] INFO: Loaded data: module=sfr_cap, inputs=21, outputs=22, conditions=0
+[10:33:18] INFO: 작업 시작 (총 49 단계)
+[10:33:18] DEBUG: 기존 값 클리어(서식 유지)
+[10:33:18] DEBUG: Base 채움: Target Name -> sfr_cap
+[10:33:18] DEBUG: Base 채움: Target Path -> 
+[10:33:18] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:33:18] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:33:18] DEBUG: Input: i_blur_mode -> writing to row=10, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_blur_mode (1)
+[10:33:18] DEBUG: Input: i_hact -> writing to row=11, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_hact (16)
+[10:33:18] DEBUG: Input: i_hbp -> writing to row=12, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_hbp (16)
+[10:33:18] DEBUG: Input: i_hfp -> writing to row=13, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_hfp (16)
+[10:33:18] DEBUG: Input: i_hsw -> writing to row=14, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_hsw (16)
+[10:33:18] DEBUG: Input: i_mirror_mode -> writing to row=15, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_mirror_mode (1)
+[10:33:18] DEBUG: Input: i_vact -> writing to row=16, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_vact (16)
+[10:33:18] DEBUG: Input: i_vbp -> writing to row=17, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_vbp (16)
+[10:33:18] DEBUG: Input: i_vfp -> writing to row=18, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_vfp (16)
+[10:33:18] DEBUG: Input: i_vsw -> writing to row=19, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_vsw (16)
+[10:33:18] DEBUG: Input: i_vsync_sync -> writing to row=20, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_vsync_sync (1)
+[10:33:18] DEBUG: Input: i_w1 -> writing to row=21, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w1 (4)
+[10:33:18] DEBUG: Input: i_w2 -> writing to row=22, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w2 (4)
+[10:33:18] DEBUG: Input: i_w3 -> writing to row=23, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=23, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w3 (4)
+[10:33:18] DEBUG: Input: i_w4 -> writing to row=24, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=24, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w4 (4)
+[10:33:18] DEBUG: Input: i_w5 -> writing to row=25, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=25, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w5 (4)
+[10:33:18] DEBUG: Input: i_w6 -> writing to row=26, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=26, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w6 (4)
+[10:33:18] DEBUG: Input: i_w7 -> writing to row=27, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=27, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w7 (4)
+[10:33:18] DEBUG: Input: i_w8 -> writing to row=28, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=28, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w8 (4)
+[10:33:18] DEBUG: Input: i_w9 -> writing to row=29, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=29, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_w9 (4)
+[10:33:18] DEBUG: Input: i_weight_wr_mode -> writing to row=30, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=30, cols=5-6
+[10:33:18] DEBUG:   Source cell (10,5) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Input 추가: i_weight_wr_mode (1)
+[10:33:18] DEBUG: Output: o_blur_mode_cap -> writing to row=10, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_blur_mode_cap (1)
+[10:33:18] DEBUG: Output: o_hact_cap -> writing to row=11, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_hact_cap (16)
+[10:33:18] DEBUG: Output: o_hbp_cap -> writing to row=12, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_hbp_cap (16)
+[10:33:18] DEBUG: Output: o_hfp_cap -> writing to row=13, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_hfp_cap (16)
+[10:33:18] DEBUG: Output: o_hsw_cap -> writing to row=14, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_hsw_cap (16)
+[10:33:18] DEBUG: Output: o_htotal -> writing to row=15, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_htotal (16)
+[10:33:18] DEBUG: Output: o_mirror_mode_cap -> writing to row=16, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_mirror_mode_cap (1)
+[10:33:18] DEBUG: Output: o_vact_cap -> writing to row=17, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_vact_cap (16)
+[10:33:18] DEBUG: Output: o_vbp_cap -> writing to row=18, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_vbp_cap (16)
+[10:33:18] DEBUG: Output: o_vfp_cap -> writing to row=19, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_vfp_cap (16)
+[10:33:18] DEBUG: Output: o_vsw_cap -> writing to row=20, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_vsw_cap (16)
+[10:33:18] DEBUG: Output: o_vtotal -> writing to row=21, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_vtotal (16)
+[10:33:18] DEBUG: Output: o_w1_cap -> writing to row=22, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w1_cap (4)
+[10:33:18] DEBUG: Output: o_w2_cap -> writing to row=23, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w2_cap (4)
+[10:33:18] DEBUG: Output: o_w3_cap -> writing to row=24, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w3_cap (4)
+[10:33:18] DEBUG: Output: o_w4_cap -> writing to row=25, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w4_cap (4)
+[10:33:18] DEBUG: Output: o_w5_cap -> writing to row=26, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w5_cap (4)
+[10:33:18] DEBUG: Output: o_w6_cap -> writing to row=27, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=27, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w6_cap (4)
+[10:33:18] DEBUG: Output: o_w7_cap -> writing to row=28, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=28, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w7_cap (4)
+[10:33:18] DEBUG: Output: o_w8_cap -> writing to row=29, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=29, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w8_cap (4)
+[10:33:18] DEBUG: Output: o_w9_cap -> writing to row=30, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=30, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_w9_cap (4)
+[10:33:18] DEBUG: Output: o_weight_wr_mode_cap -> writing to row=31, template_row=10
+[10:33:18] DEBUG: copy_row_format: source=10, target=31, cols=7-8
+[10:33:18] DEBUG:   Source cell (10,7) has_border=False, font=Aptos Narrow
+[10:33:18] DEBUG: Output 추가: o_weight_wr_mode_cap (1)
+[10:33:18] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[10:33:18] INFO: 모든 작업 완료

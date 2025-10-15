@@ -10,8 +10,12 @@ from openpyxl import load_workbook
 from copy import copy
 from openpyxl.cell.cell import MergedCell
 
+# -------------------- 전역 로거 --------------------
+logger = None  # Will be initialized in main()
+
 # -------------------- 로거 --------------------
 def setup_logger(log_path: str = "fill_define.log"):
+    global logger
     logger = logging.getLogger("fill_define")
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
@@ -178,7 +182,7 @@ def find_signal_assignments_header(ws):
             if isinstance(cell.value, str) and "signal" in cell.value.strip().casefold() and "assignment" in cell.value.strip().casefold():
                 # Found "Signal Assignments", now find Name/Equation/Bits in next row or same row
                 header_row = cell.row
-                logger.debug(f"Found 'Signal Assignments' at row {header_row}")
+                logger.debug(f"Found 'Signal Assignments' at row {header_row}, col {cell.column}")
                 # Check next row for Name/Equation/Bits
                 next_row = list(ws.iter_rows(min_row=header_row + 1, max_row=header_row + 1))
                 if next_row:
@@ -189,11 +193,16 @@ def find_signal_assignments_header(ws):
                         if isinstance(c.value, str):
                             val = c.value.strip().casefold()
                             if val == "name":
-                                name_col = c.column
+                                # Check if this Name is close to "Signal Assignments"
+                                # Signal Assignments is at cell.column, we want Name in same region
+                                if c.column >= cell.column - 1:
+                                    name_col = c.column
                             elif val == "equation":
                                 equation_col = c.column
                             elif val == "bits":
-                                bits_col = c.column
+                                # Only accept Bits near Equation (avoid IO section Bits)
+                                if equation_col and c.column == equation_col + 1:
+                                    bits_col = c.column
                     logger.debug(f"  Found columns: name={name_col}, equation={equation_col}, bits={bits_col}")
                     if name_col and equation_col:
                         return {
@@ -344,7 +353,7 @@ def main():
 
     excel_path = sys.argv[1]
     json_path = sys.argv[2]
-    logger = setup_logger("fill_define.log")
+    setup_logger("fill_define.log")  # Initialize global logger
 
     # JSON 로드
     with open(json_path, "r", encoding="utf-8") as f:
