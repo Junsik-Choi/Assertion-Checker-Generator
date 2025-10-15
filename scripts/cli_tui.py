@@ -296,6 +296,8 @@ class AppState:
     session_id: Optional[str] = None
     # User-defined condition signals
     conditions: List[Dict[str, Any]] = field(default_factory=list)
+    # Pending ms command awaiting bit width
+    pending_ms_command: Optional[Dict[str, Any]] = None
     # Ports filter substring
     port_filter: Optional[str] = None
     # Onboarding wizard state
@@ -508,6 +510,78 @@ def _write_colored_zebra(win: "curses._CursesWindow", items: List[Tuple[str, Opt
         row += 1
 
 
+def _colorize_expression(expr: str) -> List[Tuple[str, str]]:
+    """
+    Parse expression and return list of (text, color) tuples for syntax highlighting.
+    Colors: operators=cyan, parentheses=yellow/magenta/green (nested), signals=default
+    """
+    if not expr:
+        return [("", "")]
+    
+    result = []
+    i = 0
+    paren_depth = 0
+    paren_colors = ["yellow", "magenta", "green", "cyan"]  # Cycle through colors for nested parens
+    
+    # Operators: &&, ||, &, |, ^, ~, !, ==, !=, <, >, <=, >=
+    operators = ["&&", "||", "==", "!=", "<=", ">=", "&", "|", "^", "~", "!", "<", ">"]
+    
+    while i < len(expr):
+        # Check for operators (longest first)
+        found_op = False
+        for op in operators:
+            if expr[i:i+len(op)] == op:
+                result.append((op, "cyan"))
+                i += len(op)
+                found_op = True
+                break
+        
+        if found_op:
+            continue
+        
+        # Check for parentheses
+        if expr[i] == '(':
+            color = paren_colors[paren_depth % len(paren_colors)]
+            result.append(('(', color))
+            paren_depth += 1
+            i += 1
+        elif expr[i] == ')':
+            paren_depth = max(0, paren_depth - 1)
+            color = paren_colors[paren_depth % len(paren_colors)]
+            result.append((')', color))
+            i += 1
+        else:
+            # Regular character (signal name, whitespace, etc.)
+            result.append((expr[i], ""))
+            i += 1
+    
+    return result
+
+
+def _write_colorized_expression(win: "curses._CursesWindow", y: int, x: int, expr: str, max_width: int, zebra_attr: int = 0) -> None:
+    """Write expression with syntax highlighting"""
+    tokens = _colorize_expression(expr)
+    col = x
+    
+    for text, color_name in tokens:
+        if col - x >= max_width:
+            break
+        
+        if color_name:
+            color_pair = curses.color_pair(_PAIR_BY_NAME.get(color_name, 0))
+            attr = color_pair | zebra_attr
+        else:
+            attr = zebra_attr
+        
+        try:
+            available = max_width - (col - x)
+            display_text = text[:available]
+            win.addstr(y, col, display_text, attr)
+            col += len(display_text)
+        except curses.error:
+            break
+
+
 def _format_kv_wrapped(items: List[Tuple[str, str]], total_width: int, label_width: int, add_blank_between: bool = True, value_color: Optional[str] = None) -> List[Tuple[str, Optional[str]]]:
     lines: List[Tuple[str, Optional[str]]] = []
     pad = " " * 2
@@ -515,7 +589,8 @@ def _format_kv_wrapped(items: List[Tuple[str, str]], total_width: int, label_wid
     value_w = max(1, total_width - value_col)
     for label, value in items:
         lab = _truncate(label, label_width)
-        wrapped = _textwrap(value, width=value_w) if value else [""]
+        # Use break_long_words=True to prevent expression truncation
+        wrapped = _textwrap(value, width=value_w, break_long_words=True, break_on_hyphens=False) if value else [""]
         first = True
         for seg in wrapped:
             if first:
@@ -688,6 +763,10 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                             state.session_excel_path = latest_excel
                 except Exception:
                     pass
+            
+            # Restore condition signals from Excel after session Excel path is set
+            if state.session_excel_path:
+                _restore_conditions_from_excel(state)
         elif chooser_result == "new":
             state.onboarding_active = True
             state.onboarding_stage = 'rtl'
@@ -1214,22 +1293,102 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         _draw_ports_two_columns(win_in, in_page_ports, start_row=1)
         _draw_ports_two_columns(win_out, out_page_ports, start_row=1)
         
-        # Draw rightmost: Condition Signals as 2-column KV (name | expr)
+        # Draw rightmost: Condition Signals with syntax highlighting
         _draw_box(win_cond, "Condition Signals (ms)")
         cond_h, cond_w2 = win_cond.getmaxyx()
         cond_inner_w = cond_w2 - 2
+        cond_usable_h = cond_h - 2
         
-        def _label_with_bits(c: Dict[str, Any]) -> Tuple[str, str]:
-            nm = c.get('name', '')
-            bits = c.get('width', 1)  # Changed from 'bits' to 'width'
+        # Manually render with colorized expressions
+        pad = " " * 2
+        indent = " " * 6  # Indentation for wrapped expression lines
+        row = 1
+        for i, cond in enumerate(state.conditions):
+            if row >= cond_h - 1:
+                break
+            
+            nm = cond.get('name', '')
+            bits = cond.get('width', 1)
+            expr = cond.get('expr', '')
+            
+            # Label with bits
             label = f"{nm} ({bits}bits)" if bits and bits > 1 else nm
-            return label, c.get('expr', '')
-        
-        cond_items = [_label_with_bits(c) for c in state.conditions]
-        max_name = max((len(nm) for nm, _ in cond_items), default=8)
-        name_w = min(max(8, max_name), max(8, cond_inner_w // 3))
-        cond_lines = _format_kv_wrapped(cond_items, total_width=cond_inner_w, label_width=name_w, add_blank_between=True, value_color=None)
-        _write_colored_zebra(win_cond, cond_lines, 1, 1, base_row_index=0)
+            
+            # Calculate layout - if label is too long, put expression on next line
+            max_label_w = min(25, cond_inner_w // 3)
+            
+            # Zebra striping
+            zebra_attr = curses.A_DIM if (i % 2 == 1) else 0
+            
+            # Check if label is too long (> 20 chars) - if so, put expr on next line
+            if len(label) > 20:
+                # Long label: write label on one line, expr on next with indent
+                label_line = f"{pad}{label}:"
+                try:
+                    win_cond.addstr(row, 1, _truncate(label_line, cond_inner_w), zebra_attr)
+                except curses.error:
+                    pass
+                row += 1
+                
+                # Write expression on next line with indent
+                expr_start_x = 1 + len(pad) + len(indent)
+                expr_max_w = cond_inner_w - len(pad) - len(indent)
+                
+                expr_wrapped = _textwrap(expr, width=expr_max_w, break_long_words=True, break_on_hyphens=False) if expr else [""]
+                
+                for j, expr_line in enumerate(expr_wrapped):
+                    if row >= cond_h - 1:
+                        break
+                    
+                    indent_line = f"{pad}{indent}"
+                    try:
+                        win_cond.addstr(row, 1, indent_line, zebra_attr)
+                    except curses.error:
+                        pass
+                    
+                    _write_colorized_expression(win_cond, row, expr_start_x, expr_line, expr_max_w, zebra_attr)
+                    
+                    if j < len(expr_wrapped) - 1:  # More lines to come
+                        row += 1
+            else:
+                # Short label: write label and expr on same line
+                label_truncated = _truncate(label, max_label_w)
+                label_line = f"{pad}{label_truncated:{max_label_w}}: "
+                
+                try:
+                    win_cond.addstr(row, 1, label_line, zebra_attr)
+                except curses.error:
+                    pass
+                
+                # Calculate expression space correctly
+                expr_start_x = len(label_line) + 1
+                expr_max_w = cond_inner_w - len(label_line) + len(pad)
+                
+                # Wrap expression if needed
+                expr_wrapped = _textwrap(expr, width=expr_max_w, break_long_words=True, break_on_hyphens=False) if expr else [""]
+                
+                for j, expr_line in enumerate(expr_wrapped):
+                    if row >= cond_h - 1:
+                        break
+                    
+                    if j == 0:
+                        # First line: write after label
+                        _write_colorized_expression(win_cond, row, expr_start_x, expr_line, expr_max_w, zebra_attr)
+                    else:
+                        # Continuation lines: indent
+                        row += 1
+                        continuation = f"{pad}{'':{max_label_w}}  "
+                        try:
+                            win_cond.addstr(row, 1, continuation, zebra_attr)
+                        except curses.error:
+                            pass
+                        cont_x = len(continuation) + 1
+                        cont_max_w = cond_inner_w - len(continuation) + len(pad)
+                        _write_colorized_expression(win_cond, row, cont_x, expr_line, cont_max_w, zebra_attr)
+            
+            row += 1
+            # Add blank line between items
+            row += 1
 
         # Draw bottom: Assertion List (spans full width)
         _draw_box(win_assertions, "Created Assertions")
@@ -1905,6 +2064,31 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         expr_cleaned = re.sub(r'([&|])\s+([&|])', r'\1\2', expr)  # &  & -> &&, |  | -> ||
         expr_cleaned = re.sub(r'\s+([&|]{2})\s+', r' \1 ', expr_cleaned)  # Normalize spaces around &&, ||
         
+        # Distinguish logical vs bitwise operations
+        # Logical operations (&&, ||, !, ==, !=, <, >, <=, >=) always produce 1-bit result
+        # Bitwise operations (&, |, ^, ~) produce multi-bit result
+        has_logical_only = bool(re.search(r'(&&|\|\||==|!=|<=|>=|<|>|!)', expr_cleaned))
+        has_bitwise = bool(re.search(r'(?<![&|])([&|^~])(?![&|])', expr_cleaned))  # Single &, |, ^, ~
+        
+        # If user didn't specify width with trailing number
+        if not trailing_width:
+            if has_logical_only and not has_bitwise:
+                # Pure logical expression -> 1 bit
+                width = 1
+            elif has_bitwise:
+                # Has bitwise operations -> ask user for bit width
+                # Set a flag to prompt user
+                state.pending_ms_command = {
+                    "name": name,
+                    "expr": expr_cleaned,
+                    "needs_width": True
+                }
+                _set_error_message(f"Bitwise operation detected. Specify bit width: ms {name} {expr} <width>")
+                return f"Please specify bit width: ms {name} {expr} <width>", False
+            else:
+                # No operators or just comparison -> 1 bit
+                width = 1
+        
         # Store and refresh UI (show as name (Nbits))
         state.conditions.append({"name": name, "expr": expr_cleaned, "width": width})
         _save_session_snapshot(state)
@@ -2229,6 +2413,7 @@ def _save_session_snapshot(state: AppState) -> None:
     """
     Save session snapshot to session.json INSIDE the session folder.
     This keeps JSON and Excel together in the same folder.
+    Now also saves conditions and assertions for full state restoration.
     """
     if not state.session_excel_path:
         # No session folder yet, cannot save
@@ -2245,6 +2430,8 @@ def _save_session_snapshot(state: AppState) -> None:
         "target_module": state.target_module or "",
         "session_excel_path": str(state.session_excel_path),  # Only session Excel!
         "out_dir": str(state.out_dir),
+        "conditions": state.conditions,  # Save MS signals
+        "assertions": state.assertions,  # Save created assertions
     }
     
     # Save as session.json inside the session folder
@@ -2253,6 +2440,117 @@ def _save_session_snapshot(state: AppState) -> None:
         session_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         pass
+
+
+def _restore_conditions_from_excel(state: AppState) -> None:
+    """
+    Restore condition signals (MS signals) from Excel Signal Assignments section.
+    Reads Define sheet and populates state.conditions list.
+    If Excel reading fails, falls back to session.json.
+    """
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        return
+    
+    # Try to restore from Excel first (authoritative source)
+    excel_success = False
+    if load_workbook:
+        try:
+            wb = load_workbook(str(state.session_excel_path))
+            if "Define" in wb.sheetnames:
+                ws = wb["Define"]
+                
+                # Find Signal Assignments header using same logic as fill_define.py
+                hdr = None
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if isinstance(cell.value, str) and "signal" in cell.value.strip().casefold() and "assignment" in cell.value.strip().casefold():
+                            header_row = cell.row
+                            # Check next row for Name/Equation/Bits
+                            next_row = list(ws.iter_rows(min_row=header_row + 1, max_row=header_row + 1))
+                            if next_row:
+                                name_col = None
+                                equation_col = None
+                                bits_col = None
+                                for c in next_row[0]:
+                                    if isinstance(c.value, str):
+                                        val = c.value.strip().casefold()
+                                        if val == "name":
+                                            if c.column >= cell.column - 1:
+                                                name_col = c.column
+                                        elif val == "equation":
+                                            equation_col = c.column
+                                        elif val == "bits":
+                                            if equation_col and c.column == equation_col + 1:
+                                                bits_col = c.column
+                                if name_col and equation_col:
+                                    hdr = {
+                                        "header_row": header_row,
+                                        "data_row": header_row + 1,
+                                        "name_col": name_col,
+                                        "equation_col": equation_col,
+                                        "bits_col": bits_col or (equation_col + 1)
+                                    }
+                                    break
+                        if hdr:
+                            break
+                    if hdr:
+                        break
+                
+                if hdr:
+                    # Read condition signals starting from data_row + 1
+                    conditions = []
+                    start_row = hdr["data_row"] + 1
+                    for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row):
+                        name_cell = row[hdr["name_col"] - 1] if len(row) >= hdr["name_col"] else None
+                        equation_cell = row[hdr["equation_col"] - 1] if len(row) >= hdr["equation_col"] else None
+                        bits_cell = row[hdr["bits_col"] - 1] if len(row) >= hdr["bits_col"] else None
+                        
+                        if not name_cell or not name_cell.value:
+                            # Empty row, stop reading
+                            break
+                        
+                        name = str(name_cell.value).strip() if name_cell.value else ""
+                        expr = str(equation_cell.value).strip() if equation_cell and equation_cell.value else ""
+                        bits_str = str(bits_cell.value).strip() if bits_cell and bits_cell.value else "1"
+                        
+                        if not name or not expr:
+                            continue
+                        
+                        # Parse bits
+                        try:
+                            width = int(bits_str)
+                        except (ValueError, TypeError):
+                            width = 1
+                        
+                        conditions.append({
+                            "name": name,
+                            "expr": expr,
+                            "width": width
+                        })
+                    
+                    # Update state
+                    state.conditions = conditions
+                    excel_success = True
+            
+            wb.close()
+            
+        except Exception:
+            # Excel reading failed, will try session.json fallback
+            pass
+    
+    # Fallback: restore from session.json if Excel reading failed
+    if not excel_success:
+        session_folder = Path(state.session_excel_path).parent
+        session_json = session_folder / "session.json"
+        if session_json.exists():
+            try:
+                data = json.loads(session_json.read_text(encoding="utf-8"))
+                if "conditions" in data and isinstance(data["conditions"], list):
+                    state.conditions = data["conditions"]
+                if "assertions" in data and isinstance(data["assertions"], list):
+                    state.assertions = data["assertions"]
+            except Exception:
+                pass
 
 
 def _sanitize_path_for_display(p: str) -> str:

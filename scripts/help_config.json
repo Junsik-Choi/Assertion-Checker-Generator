@@ -31,6 +31,8 @@
         { "cmd": "ms name = expr", "example": "ms valid = (1||2)&&3", "desc": "Create a condition signal. '=' optional.", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
         { "cmd": "aliases", "example": "1,2.. → inputs; o1,o2.. → outputs", "desc": "Numeric refs map to Inputs/Inouts; oN maps to Outputs/Inouts.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
         { "cmd": "width", "example": "I_BUS[7:0]  /  ... 4", "desc": "Width from [msb:lsb] or trailing number; default 1.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+        { "cmd": "logical", "example": "&&, ||, ! → 1-bit result", "desc": "Logical operators always produce 1-bit result.", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "bitwise", "example": "&, |, ^ → multi-bit", "desc": "Bitwise ops require bit width: 'ms name expr <width>'", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
         { "cmd": "refs", "example": "ms combined (valid && eq)", "desc": "You can reference previously defined conditions (cycle not allowed).", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
         { "cmd": "excel", "example": "L/M/N from L8", "desc": "Appends name/expr/bits to session Excel Define sheet.", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
         { "cmd": "errors", "example": "unknown signal / unmatched ']' / cycle", "desc": "Invalid expressions rejected; ms page is highlighted and error shown.", "cmd_color": "red", "example_color": "red", "desc_color": "white" }

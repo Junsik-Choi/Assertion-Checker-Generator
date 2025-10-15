@@ -630,3 +630,167 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: c
 
 [19:15:34] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534
 [19:15:34] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\sfr_cap-20251014_191534\sfr_cap.xlsx
+[11:12:25] === _create_session_excel_and_fill() CALLED ===
+[11:12:25] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[11:12:25] state.target_module = out_sync_gen
+[11:12:25] state.module_info.module = out_sync_gen
+[11:12:25] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225
+[11:12:25] Session directory created successfully
+[11:12:25] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\assertions
+[11:12:25] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\out_sync_gen.xlsx
+[11:12:25] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\out_sync_gen.xlsx
+[11:12:25] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\out_sync_gen.xlsx
+[11:12:25] Verifying Define sheet...
+[11:12:25] Define sheet verified OK
+[11:12:25] Creating define JSON...
+[11:12:25] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\module_define.json
+[11:12:25] Running fill_define.py...
+[11:12:26] fill_define.py returned: 0
+[11:12:26] fill_define.py stdout: [11:12:25] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[11:12:25] INFO: 작업 시작 (총 22 단계)
+[#---------------------------]   4% - 기존 값 클리어
+[##--------------------------]   9% - Base: Target Name
+[###-------------------------]  13% - Base: Target Path
+[#####-----------------------]  18% - Base: Base Clock
+[######----------------------]  22% - Base: Base Reset
+[#######---------------------]  27% - Inputs: i_H_ACTIVE_TH
+[########--------------------]  31% - Inputs: i_H_WAIT_TH
+[##########------------------]  36% - Inputs: i_VTOT
+[###########-----------------]  40% - Inputs: i_V_ACTIVE_TH
+[############----------------]  45% - Inputs: i_V_WAIT_TH
+[##############--------------]  50% - Inputs: i_de
+[###############-------------]  54% - Inputs: i_hsw
+[################------------]  59% - Inputs: i_hsync
+[#################-----------]  63% - Inputs: i_hsync_cnt
+[###################---------]  68% - Inputs: i_hsync_edge
+[####################--------]  72% - Inputs: i_vsw
+[#####################-------]  77% - Inputs: i_vsync
+[######################------]  81% - Inputs: i_vsync_cnt
+[########################----]  86% - Outputs: o_de_final
+[#########################---]  90% - Outputs: o_hsync_final
+[##########################--]  95% - Outputs: o_vsync_final
+[############################] 100% - 엑셀 저장
+[11:12:26] INFO: 모든 작업 완료
+
+[11:12:26] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225
+[11:12:26] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_111225\out_sync_gen.xlsx
+[11:26:53] === _create_session_excel_and_fill() CALLED ===
+[11:26:53] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[11:26:53] state.target_module = out_sync_gen
+[11:26:53] state.module_info.module = out_sync_gen
+[11:26:53] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653
+[11:26:53] Session directory created successfully
+[11:26:53] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\assertions
+[11:26:53] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\out_sync_gen.xlsx
+[11:26:53] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\out_sync_gen.xlsx
+[11:26:53] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\out_sync_gen.xlsx
+[11:26:53] Verifying Define sheet...
+[11:26:53] Define sheet verified OK
+[11:26:53] Creating define JSON...
+[11:26:53] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\module_define.json
+[11:26:53] Running fill_define.py...
+[11:26:53] fill_define.py returned: 0
+[11:26:53] fill_define.py stdout: [11:26:53] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[11:26:53] INFO: 작업 시작 (총 22 단계)
+[#---------------------------]   4% - 기존 값 클리어
+[##--------------------------]   9% - Base: Target Name
+[###-------------------------]  13% - Base: Target Path
+[#####-----------------------]  18% - Base: Base Clock
+[######----------------------]  22% - Base: Base Reset
+[#######---------------------]  27% - Inputs: i_H_ACTIVE_TH
+[########--------------------]  31% - Inputs: i_H_WAIT_TH
+[##########------------------]  36% - Inputs: i_VTOT
+[###########-----------------]  40% - Inputs: i_V_ACTIVE_TH
+[############----------------]  45% - Inputs: i_V_WAIT_TH
+[##############--------------]  50% - Inputs: i_de
+[###############-------------]  54% - Inputs: i_hsw
+[################------------]  59% - Inputs: i_hsync
+[#################-----------]  63% - Inputs: i_hsync_cnt
+[###################---------]  68% - Inputs: i_hsync_edge
+[####################--------]  72% - Inputs: i_vsw
+[#####################-------]  77% - Inputs: i_vsync
+[######################------]  81% - Inputs: i_vsync_cnt
+[########################----]  86% - Outputs: o_de_final
+[#########################---]  90% - Outputs: o_hsync_final
+[##########################--]  95% - Outputs: o_vsync_final
+[############################] 100% - 엑셀 저장
+[11:26:53] INFO: 모든 작업 완료
+
+[11:26:53] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653
+[11:26:53] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251015_112653\out_sync_gen.xlsx
+[14:34:38] === _create_session_excel_and_fill() CALLED ===
+[14:34:38] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[14:34:38] state.target_module = counter
+[14:34:38] state.module_info.module = counter
+[14:34:38] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438
+[14:34:38] Session directory created successfully
+[14:34:38] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\assertions
+[14:34:38] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\counter.xlsx
+[14:34:38] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\counter.xlsx
+[14:34:38] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\counter.xlsx
+[14:34:38] Verifying Define sheet...
+[14:34:38] Define sheet verified OK
+[14:34:38] Creating define JSON...
+[14:34:38] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\module_define.json
+[14:34:38] Running fill_define.py...
+[14:34:39] fill_define.py returned: 0
+[14:34:39] fill_define.py stdout: [14:34:39] INFO: Loaded data: module=counter, inputs=4, outputs=1, conditions=0
+[14:34:39] INFO: 작업 시작 (총 11 단계)
+[##--------------------------]   9% - 기존 값 클리어
+[#####-----------------------]  18% - Base: Target Name
+[#######---------------------]  27% - Base: Target Path
+[##########------------------]  36% - Base: Base Clock
+[############----------------]  45% - Base: Base Reset
+[###############-------------]  54% - Inputs: i_enable
+[#################-----------]  63% - Inputs: i_max_cnt
+[####################--------]  72% - Inputs: i_sync_cnt
+[######################------]  81% - Inputs: o_cnt
+[#########################---]  90% - Outputs: o_done
+[############################] 100% - 엑셀 저장
+[14:34:39] INFO: 모든 작업 완료
+
+[14:34:39] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438
+[14:34:39] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251015_143438\counter.xlsx
+[15:04:28] === _create_session_excel_and_fill() CALLED ===
+[15:04:28] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[15:04:28] state.target_module = video_sync_out_gen
+[15:04:28] state.module_info.module = video_sync_out_gen
+[15:04:28] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428
+[15:04:28] Session directory created successfully
+[15:04:28] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\assertions
+[15:04:28] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\video_sync_out_gen.xlsx
+[15:04:28] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\video_sync_out_gen.xlsx
+[15:04:28] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\video_sync_out_gen.xlsx
+[15:04:28] Verifying Define sheet...
+[15:04:28] Define sheet verified OK
+[15:04:28] Creating define JSON...
+[15:04:28] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\module_define.json
+[15:04:28] Running fill_define.py...
+[15:04:29] fill_define.py returned: 0
+[15:04:29] fill_define.py stdout: [15:04:29] INFO: Loaded data: module=video_sync_out_gen, inputs=13, outputs=2, conditions=0
+[15:04:29] INFO: 작업 시작 (총 21 단계)
+[#---------------------------]   4% - 기존 값 클리어
+[##--------------------------]   9% - Base: Target Name
+[###-------------------------]  14% - Base: Target Path
+[#####-----------------------]  19% - Base: Base Clock
+[######----------------------]  23% - Base: Base Reset
+[#######---------------------]  28% - Inputs: i_blur_mode_cap
+[#########-------------------]  33% - Inputs: i_hact_cap
+[##########------------------]  38% - Inputs: i_hbp_cap
+[###########-----------------]  42% - Inputs: i_hfp_cap
+[#############---------------]  47% - Inputs: i_hsw_cap
+[##############--------------]  52% - Inputs: i_htotal
+[###############-------------]  57% - Inputs: i_mirror_mode_cap
+[#################-----------]  61% - Inputs: i_vact_cap
+[##################----------]  66% - Inputs: i_vbp_cap
+[###################---------]  71% - Inputs: i_vfp_cap
+[#####################-------]  76% - Inputs: i_vsw_cap
+[######################------]  80% - Inputs: i_vsync_sync
+[#######################-----]  85% - Inputs: i_vtotal
+[#########################---]  90% - Outputs: o_hsync
+[##########################--]  95% - Outputs: o_vsync
+[############################] 100% - 엑셀 저장
+[15:04:29] INFO: 모든 작업 완료
+
+[15:04:29] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428
+[15:04:29] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\video_sync_out_gen-20251015_150428\video_sync_out_gen.xlsx

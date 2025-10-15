@@ -332,6 +332,26 @@ def clear_io(ws):
         for c in cols:
             ws.cell(row=r, column=c).value = None  # 값만 지움(서식 유지)
 
+def clear_signal_assignments(ws):
+    """Clear all data in Signal Assignments section (keep formatting)"""
+    hdr = find_signal_assignments_header(ws)
+    if not hdr:
+        logger.debug("Signal Assignments header not found, nothing to clear")
+        return
+    
+    start = hdr["data_row"] + 1  # Start after header row
+    cols = [hdr["name_col"], hdr["equation_col"], hdr["bits_col"]]
+    
+    end = last_used_row_in_cols(ws, cols, start)
+    if end < start:
+        logger.debug("No data to clear in Signal Assignments")
+        return
+    
+    logger.debug(f"Clearing Signal Assignments from row {start} to {end}")
+    for r in range(start, end + 1):
+        for c in cols:
+            ws.cell(row=r, column=c).value = None  # 값만 지움(서식 유지)
+
 def last_used_row_in_cols(ws, cols, start_row):
     """
     주어진 열들 중에서 start_row부터 마지막으로 값이 있는 행 번호를 반환
@@ -392,7 +412,8 @@ def main():
     def run_clear():
         clear_base(ws)
         clear_io(ws)
-        logger.debug("기존 값 클리어(서식 유지)")
+        clear_signal_assignments(ws)  # Also clear Signal Assignments section
+        logger.debug("기존 값 클리어(서식 유지): Base, IO, Signal Assignments")
     tasks.append((run_clear, "기존 값 클리어"))
 
     # 2) IO 헤더 없으면 생성
@@ -497,7 +518,7 @@ def main():
             continue
         if not cname or not cexpr:
             continue
-        cbits = str(cwidth) if cwidth and cwidth > 1 else ""
+        cbits = str(cwidth) if cwidth else "1"  # Always show bits, default to "1"
         def run_cond(n=cname, e=cexpr, b=cbits):
             hdr = find_signal_assignments_header(ws)
             if not hdr:
@@ -511,9 +532,8 @@ def main():
             copy_row_format(ws, template_row, row, start_col=hdr["name_col"], end_col=hdr["bits_col"], logger=logger)
             set_cell_value_merged_safe(ws, row, hdr["name_col"], n)
             set_cell_value_merged_safe(ws, row, hdr["equation_col"], e)
-            if b:
-                set_cell_value_merged_safe(ws, row, hdr["bits_col"], b)
-            logger.debug("Condition Signal 추가: %s = %s (%s)", n, e, b or "1")
+            set_cell_value_merged_safe(ws, row, hdr["bits_col"], b)  # Always write bits (default "1")
+            logger.debug("Condition Signal 추가: %s = %s (%s bits)", n, e, b)
         tasks.append((run_cond, f"Condition: {cname}"))
 
     # 8) 저장
