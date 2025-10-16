@@ -240,6 +240,7 @@ def run_builder(
     auto_define_fill: bool,
     enabled_plugins: Optional[List[str]],
     emit_json: bool,
+    handshake_cfg: Optional[Dict[str, str]] = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -307,8 +308,7 @@ def run_builder(
         json_path.write_text(json.dumps(json_blob, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"✓ Inputs JSON written: {json_path}")
 
-    # Generate assertion SV sections via plugins
-    sv_sections: List[str] = []
+    # Plugins common context
     common_context = {
         "module_info": module_info,
         "define_excel_path": str(session_excel),
@@ -320,6 +320,9 @@ def run_builder(
             "emit_json": emit_json,
         },
     }
+ 
+    # Generate assertion SV sections via plugins
+    sv_sections: List[str] = []
     for pcls in plugin_types:
         parsed = parsed_by_plugin.get(pcls.plugin_name)
         if not parsed:
@@ -329,16 +332,14 @@ def run_builder(
         except Exception as e:
             print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
 
-    # Write unified checker SV (세션 디렉터리에 저장)
-    if sv_sections:
-        out_sv = session_dir / "auto_assertion_checker.sv"
-        header = "/***** Auto-generated Assertion Checker *****/\n"
-        out_sv.write_text(header + "\n\n".join(sv_sections), encoding="utf-8")
-        print(f"✓ SV written: {out_sv}")
-    
-    print(f"\n{'='*60}")
-    print(f"✓ All outputs saved to: {session_dir}")
-    print(f"{'='*60}")
+    # auto_assertion_checker.sv 통합 파일 생성 비활성화
+    # if sv_sections:
+    #     out_sv = session_dir / "auto_assertion_checker.sv"
+    #     header = "/***** Auto-generated Assertion Checker *****/\n"
+    #     out_sv.write_text(header + "\n\n".join(sv_sections), encoding="utf-8")
+    #     print(f"✓ SV written: {out_sv}")
+
+    print(f"\n===== Outputs saved to: {session_dir} =====")
 
 
 def _prompt(msg: str, default: Optional[str] = None) -> str:
@@ -438,9 +439,9 @@ def interactive_wizard():
         excel_path_str = _pick_one("Select Excel file (Data/)", excel_opts, allow_custom=True)
         excel_path = Path(excel_path_str).resolve()
 
-    # Output directory
-    out_default = str((repo_root / "out" / "assertions").resolve())
-    out_dir = Path(_prompt("Output directory", out_default)).resolve()
+    # Remove Output directory prompt; set default silently
+    repo_root = Path(__file__).resolve().parents[1]
+    out_dir = (repo_root / "out" / "assertions").resolve()
 
     # Modes selection
     mode_labels = ["Fill Define sheet", "Emit inputs JSON", "Generate SV"]
