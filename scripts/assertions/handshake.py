@@ -117,24 +117,37 @@ def _auto_pick_clk_rst(mod: Dict[str, Any]) -> Tuple[str, str]:
                 break
     return clk, rst
 
-def _update_handshake_sheet(ws, hs_cfg: Dict[str, str], module_info: Dict[str, Any]) -> None:
+def _update_handshake_sheet(ws, hs_cfg: Dict[str, str], module_info: Dict[str, Any]) -> int:
+    """
+    Handshake 시트에 값을 기록하고, 기록한 '행 번호'를 반환한다.
+    기존 데이터 아래의 첫 빈 행(Type 셀이 비어있는 곳)에 기록.
+    """
     h_row, type_col, data_row = _ensure_handshake_layout(ws)
-    ws.cell(row=data_row, column=type_col, value=hs_cfg.get("phase_type", "2phase"))
-    ws.cell(row=data_row, column=type_col + 1, value=hs_cfg.get("sender", ""))
-    ws.cell(row=data_row, column=type_col + 2, value=hs_cfg.get("receiver", ""))
+    # 아래로 내려가며 Type 셀이 비어있는 첫 행을 찾음
+    write_row = data_row
+    while True:
+        val = ws.cell(row=write_row, column=type_col).value
+        if val is None or str(val).strip() == "":
+            break
+        write_row += 1
+    # 선택 정보 기록
+    ws.cell(row=write_row, column=type_col,     value=hs_cfg.get("phase_type", "2phase"))
+    ws.cell(row=write_row, column=type_col + 1, value=(hs_cfg.get("sender", "") or "").strip())
+    ws.cell(row=write_row, column=type_col + 2, value=(hs_cfg.get("receiver", "") or "").strip())
+
+    # Base Clock / Base Reset 라벨 및 값 정리
     clk_label = find_cell(ws, "Base Clock")
     rst_label = find_cell(ws, "Base Reset")
     if clk_label[0] is None:
-        ws.cell(row=h_row + 3, column=type_col, value="Base Clock")
-        clk_label = (h_row + 3, type_col)
+        ws.cell(row=h_row + 3, column=type_col, value="Base Clock"); clk_label = (h_row + 3, type_col)
     if rst_label[0] is None:
-        ws.cell(row=h_row + 4, column=type_col, value="Base Reset")
-        rst_label = (h_row + 4, type_col)
+        ws.cell(row=h_row + 4, column=type_col, value="Base Reset"); rst_label = (h_row + 4, type_col)
     clk_name, rst_name = _auto_pick_clk_rst(module_info)
     if clk_name:
         ws.cell(row=clk_label[0], column=clk_label[1] + 1, value=clk_name)
     if rst_name:
         ws.cell(row=rst_label[0], column=rst_label[1] + 1, value=rst_name)
+    return write_row
 
 def generate_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
@@ -281,29 +294,21 @@ class HandshakePlugin(BaseAssertionPlugin):
             ws_w = _get_sheet_ci(wb_w, self.sheet_name, create=False)
         except KeyError:
             ws_w = _get_sheet_ci(wb_w, self.sheet_name, create=True)
-        _update_handshake_sheet(ws_w, hs_cfg, mod)
+        write_row = _update_handshake_sheet(ws_w, hs_cfg, mod)
         wb_w.save(xls_path)
 
-        # 3) data_only로 재오픈하여 파싱
+        # 3) data_only로 재오픈하여 '방금 기록한 행'만 파싱
         wb = load_workbook(xls_path, data_only=True)
         try:
             ws = _get_sheet_ci(wb, self.sheet_name, create=False)
         except KeyError:
             return {"blocks": []}
-        h_row, type_col, data_row = _ensure_handshake_layout(ws)
-
+        _, type_col, _ = _ensure_handshake_layout(ws)
+        info = parse_handshake_block_for_row(ws, write_row, type_col)
         blocks: List[Dict[str, Any]] = []
-        max_row = ws.max_row or data_row
-        for r in range(data_row, max_row + 1):
-            tcell = ws.cell(row=r, column=type_col).value
-            if tcell is None or str(tcell).strip() == "":
-                continue
-            info = parse_handshake_block_for_row(ws, r, type_col)
-            pt = (info.get("phase_type", "") or "").lower()
-            if pt not in ALLOWED_TYPES:
-                continue
-            if info.get("Sender") and info.get("Receiver"):
-                blocks.append(info)
+        pt = (info.get("phase_type", "") or "").lower()
+        if pt in ALLOWED_TYPES and info.get("Sender") and info.get("Receiver"):
+            blocks.append(info)
 
         # 선택된 타입만 남기기
         forced = _get_forced_type()
