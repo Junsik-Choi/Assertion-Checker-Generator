@@ -38,11 +38,14 @@ import argparse
 import json
 import subprocess
 import sys
+import re
 from pathlib import Path
 import platform
 import shutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Type
+import os
+import importlib
 
 # Make local 'scripts' directory importable no matter the CWD
 _THIS_DIR = Path(__file__).resolve().parent
@@ -144,6 +147,8 @@ def build_module_context(rtl_start: Path, target_module: Optional[str]) -> Dict[
     rtl_root, found = find_rtl_root_from(rtl_start)
     start_scope_dir = rtl_start if rtl_start.is_dir() else rtl_start.parent
     files = sorted(set(discover_files(rtl_root, exts)) | set(discover_files(start_scope_dir, exts)), key=lambda p: str(p))
+    # tb_top 등 Non-ANSI 전용 파일 제외
+    files = _filter_rtl_ansi(files)
     modules = build_modules_db(files, allow_unknown=False)
     if not modules:
         raise SystemExit("No modules parsed from RTL scope")
@@ -232,6 +237,35 @@ def _create_session_excel_copy(reference_excel: Path, target_module: str, out_di
         return reference_excel, out_dir
 
 
+# ANSI/Non-ANSI 모듈 헤더 정규식 및 필터 유틸 추가
+_ANSI_MOD_RE = re.compile(r"(?ims)^\s*module\s+[A-Za-z_]\w*\s*(?:#\s*\(.*?\)\s*)?\(")
+_NONANSI_MOD_RE = re.compile(r"(?im)^\s*module\s+[A-Za-z_]\w*\s*(?:#\s*\(.*?\)\s*)?;")
+
+def _read_text_safe(p: Path) -> str:
+    try:
+        return p.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+def _filter_rtl_ansi(files: List[Path]) -> List[Path]:
+    """포트 리스트가 있는 ANSI 헤더 포함 파일만 통과. Non-ANSI만 있는 파일은 제외."""
+    out: List[Path] = []
+    skipped = 0
+    for p in files:
+        if p.suffix.lower() not in (".v", ".sv"):
+            continue
+        txt = _read_text_safe(p)
+        if _ANSI_MOD_RE.search(txt):
+            out.append(p)
+            continue
+        if _NONANSI_MOD_RE.search(txt):
+            skipped += 1
+            continue
+    if skipped:
+        print(f"[Info] Skipped {skipped} Non-ANSI module header file(s) during RTL scan")
+    return out
+
+
 def run_builder(
     rtl_start: Path,
     target_module: Optional[str],
@@ -248,6 +282,10 @@ def run_builder(
     module_info = ctx["module_info"]
     actual_module = module_info["module"]
     
+    # Handshake 타입을 플러그인에 전달(환경변수로 기본값 주입)
+    if handshake_cfg and handshake_cfg.get("force_type"):
+        os.environ["ASSERTION_FORCE_TYPE"] = handshake_cfg["force_type"]
+
     # Reference 엑셀을 세션용으로 복사
     session_excel, session_dir = _create_session_excel_copy(excel_path, actual_module, out_dir)
 
@@ -261,17 +299,22 @@ def run_builder(
         if fill_script.exists():
             try:
                 result = subprocess.run(
-                    [sys.executable, str(fill_script), str(session_excel), str(define_json_path)], 
+                    [sys.executable, "-X", "utf8", str(fill_script), str(session_excel), str(define_json_path)],
                     check=False,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1"),
                 )
                 if result.returncode == 0:
-                    print(f"✓ Define sheet populated successfully")
+                    print("✓ Define sheet populated successfully")
                 else:
-                    print(f"[Warn] fill_define.py execution failed")
+                    print("[Warn] fill_define.py execution failed")
+                    if result.stdout:
+                        print(result.stdout.strip()[-500:])
                     if result.stderr:
-                        print(f"  Error: {result.stderr[:200]}")
+                        print(result.stderr.strip()[-500:])
             except Exception as e:
                 print(f"[Warn] fill_define.py execution failed: {e}")
         else:
@@ -308,20 +351,20 @@ def run_builder(
         json_path.write_text(json.dumps(json_blob, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"✓ Inputs JSON written: {json_path}")
 
-    # Plugins common context
+    # 공통 컨텍스트(plugins generate_sv 호출 전에 필요)
     common_context = {
         "module_info": module_info,
         "define_excel_path": str(session_excel),
         "output_dir": str(session_dir),
         "session_dir": str(session_dir),
         "config": {
-            "auto_define_fill": auto_define_fill,
+            "auto_define_fill": True,
             "enabled_plugins": enabled_plugins,
-            "emit_json": emit_json,
+            "emit_json": True,
         },
     }
- 
-    # Generate assertion SV sections via plugins
+
+    # 3) SV 생성 (항상)
     sv_sections: List[str] = []
     for pcls in plugin_types:
         parsed = parsed_by_plugin.get(pcls.plugin_name)
@@ -331,13 +374,6 @@ def run_builder(
             sv_sections.extend(pcls().generate_sv(parsed, common_context))
         except Exception as e:
             print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
-
-    # auto_assertion_checker.sv 통합 파일 생성 비활성화
-    # if sv_sections:
-    #     out_sv = session_dir / "auto_assertion_checker.sv"
-    #     header = "/***** Auto-generated Assertion Checker *****/\n"
-    #     out_sv.write_text(header + "\n\n".join(sv_sections), encoding="utf-8")
-    #     print(f"✓ SV written: {out_sv}")
 
     print(f"\n===== Outputs saved to: {session_dir} =====")
 
@@ -443,16 +479,22 @@ def interactive_wizard():
     repo_root = Path(__file__).resolve().parents[1]
     out_dir = (repo_root / "out" / "assertions").resolve()
 
-    # Modes selection
-    mode_labels = ["Fill Define sheet", "Emit inputs JSON", "Generate SV"]
-    picks = _pick_multi("Select modes", mode_labels)
-    auto_define_fill = ("Fill Define sheet" in picks)
-    emit_json = ("Emit inputs JSON" in picks)
+    # 모드 프롬프트 제거: 항상 1/2/3 모두 수행
+    auto_define_fill = True
+    emit_json = True
 
     # Plugin selection
-    plugin_types: List[Type[BaseAssertionPlugin]] = get_registered_plugins()
+    _import_all_plugins()
+    plugin_types = get_registered_plugins()
     plugin_names = [p.plugin_name for p in plugin_types]
     enabled = _pick_multi("Select plugins (or 'all')", plugin_names)
+
+    # handshake 플러그인이 포함되면 ready_valid까지 포함한 타입을 미리 선택(플러그인 기본값으로 전달)
+    handshake_cfg = {}
+    if "handshake" in enabled:
+        hs_type = _pick_one("Select handshake type (2phase/4phase/ready_valid)",
+                            [("2phase", "2phase"), ("4phase", "4phase"), ("ready_valid", "ready_valid")])
+        handshake_cfg = {"force_type": hs_type}
 
     return {
         "rtl_start": rtl_start,
@@ -462,7 +504,28 @@ def interactive_wizard():
         "auto_define_fill": auto_define_fill,
         "enabled_plugins": enabled,
         "emit_json": emit_json,
+        "handshake_cfg": handshake_cfg,
     }
+
+
+def _import_all_plugins() -> None:
+    """
+    scripts/assertions 폴더 내의 모든 플러그인 모듈을 동적 import하여
+    @register 데코레이터가 실행되도록 보장합니다.
+    """
+    pkg_dir = _THIS_DIR / "assertions"
+    pkg_name = "assertions"
+    if not pkg_dir.exists():
+        return
+    for py in pkg_dir.glob("*.py"):
+        name = py.stem
+        if name in ("__init__", "base", "registry"):
+            continue
+        mod_name = f"{pkg_name}.{name}"
+        try:
+            importlib.import_module(mod_name)
+        except Exception as e:
+            print(f"[Warn] Failed to import plugin {name}: {e}")
 
 
 def main():
@@ -521,6 +584,7 @@ def main():
         auto_define_fill=bool(args.auto_define_fill),
         enabled_plugins=list(args.enable) if args.enable else None,
         emit_json=bool(args.json),
+        handshake_cfg=None,
     )
 
 

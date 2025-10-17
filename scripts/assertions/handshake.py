@@ -2,10 +2,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import json
+import os
 
 from openpyxl import load_workbook
 from .base import BaseAssertionPlugin
 from .registry import register
+
+ALLOWED_TYPES = ("2phase", "4phase", "ready_valid")
 
 def _pick_one(title: str, options: List[Tuple[str, str]], allow_custom: bool = False) -> str:
     print(title, flush=True)
@@ -137,6 +140,25 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
     s = info["Sender"]; r = info["Receiver"]
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
+    # ready_valid
+    if info["phase_type"] == "ready_valid":
+        return header + f"""module assertion_ready_valid
+(
+    input logic {clk},
+    input logic {rst},
+    input logic {s},
+    input logic {r}
+);
+
+property p_ready_valid_check(ready, valid);
+    @(posedge {clk}) disable iff(!{rst})
+    valid && !ready |-> ##[1:$] (ready || (valid && !ready));
+endproperty
+
+assert_rv_0 : assert property (p_ready_valid_check({s}, {r})) else $error("failed at %t", $time);
+
+endmodule
+"""
     if info["phase_type"] == "4phase":
         return header + f"""module assertion_4phase
  (
@@ -210,23 +232,19 @@ def generate_inst_verilog(info: Dict[str, Any]) -> str:
     phase = info["phase_type"] or "2phase"
     mod = f"assertion_{phase}"
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
-    return header + f"""module assertion_{phase}_inst
- (
-     input logic {clk},
-     input logic {rst},
-     input logic {s},
-     input logic {r}
- );
+    # inst 파일은 모듈 래퍼 없이 인스턴스와 assign만 생성
+    return header + (
+        f"{mod}\n"
+        f" u_{mod} ();\n\n"
+        f"assign u_{mod}.{clk} = top.dut.{clk};\n"
+        f"assign u_{mod}.{rst} = top.dut.{rst};\n"
+        f"assign u_{mod}.{s} = top.dut.{s};\n"
+        f"assign u_{mod}.{r} = top.dut.{r};\n"
+    )
 
-{mod} u_{mod} (
-    .{clk}({clk}),
-    .{rst}({rst}),
-    .{s}({s}),
-    .{r}({r})
- );
-
-endmodule
-"""
+def _get_forced_type() -> Optional[str]:
+    t = (os.environ.get("ASSERTION_FORCE_TYPE") or "").strip().lower()
+    return t if t in ALLOWED_TYPES else None
 
 @register
 class HandshakePlugin(BaseAssertionPlugin):
@@ -243,7 +261,8 @@ class HandshakePlugin(BaseAssertionPlugin):
         return {}
 
     def _interactive_collect(self, mod: Dict[str, Any]) -> Dict[str, str]:
-        phase = _pick_one("Select handshake phase", [("2phase", "2phase"), ("4phase", "4phase")])
+        # 빌더에서 이미 타입을 선택했으므로 재질문하지 않음
+        phase = _get_forced_type() or "2phase"
         in_names = [(f"in : {p.get('name')}", p.get("name") or "") for p in (mod.get("inputs") or []) if p.get("name")]
         out_names = [(f"out: {p.get('name')}", p.get("name") or "") for p in (mod.get("outputs") or []) if p.get("name")]
         sig_opts = in_names + out_names or [("manual input", "")]
@@ -256,7 +275,7 @@ class HandshakePlugin(BaseAssertionPlugin):
         mod = self._load_module_define(Path(xls_path))
         hs_cfg = self._interactive_collect(mod)
 
-        # 2) Excel에 기록(Handshake 시트 이름 대소문자 무시)
+        # 2) Excel에 기록
         wb_w = load_workbook(xls_path)
         try:
             ws_w = _get_sheet_ci(wb_w, self.sheet_name, create=False)
@@ -272,17 +291,35 @@ class HandshakePlugin(BaseAssertionPlugin):
         except KeyError:
             return {"blocks": []}
         h_row, type_col, data_row = _ensure_handshake_layout(ws)
-        info = parse_handshake_block_for_row(ws, data_row, type_col)
+
         blocks: List[Dict[str, Any]] = []
-        if info.get("Sender") and info.get("Receiver"):
-            blocks.append(info)
+        max_row = ws.max_row or data_row
+        for r in range(data_row, max_row + 1):
+            tcell = ws.cell(row=r, column=type_col).value
+            if tcell is None or str(tcell).strip() == "":
+                continue
+            info = parse_handshake_block_for_row(ws, r, type_col)
+            pt = (info.get("phase_type", "") or "").lower()
+            if pt not in ALLOWED_TYPES:
+                continue
+            if info.get("Sender") and info.get("Receiver"):
+                blocks.append(info)
+
+        # 선택된 타입만 남기기
+        forced = _get_forced_type()
+        if forced:
+            blocks = [b for b in blocks if (b.get("phase_type", "").lower() == forced)]
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
         out_dir.mkdir(parents=True, exist_ok=True)
         snippets: List[str] = []
+        forced = _get_forced_type()
         for info in parsed.get("blocks", []):
+            # 선택 타입만 생성
+            if forced and (info.get("phase_type", "").lower() != forced):
+                continue
             phase = info.get("phase_type", "2phase")
             sv = generate_verilog(info)
             inst_sv = generate_inst_verilog(info)
