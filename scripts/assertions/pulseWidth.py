@@ -325,6 +325,60 @@ def _build_hpulse_inst_sv(base_clk: str, base_rst: str, target_pulse: str,
     return "\n".join(lines)
 
 
+def _build_vpulse_sv(base_clk: str, base_rst: str, count_trig: str,
+                     target_pulse: str, expected_min: str, expected_max: str) -> str:
+    lines: List[str] = []
+    lines.append(_sv_header())
+    lines.append("module assertion_vpulse")
+    lines.append("(")
+    lines.append(f"    input logic {base_clk},")
+    lines.append(f"    input logic {base_rst},")
+    lines.append(f"    input logic {count_trig},")
+    lines.append(f"    input logic {target_pulse},")
+    lines.append(f"    input logic {expected_min},")
+    lines.append(f"    input logic {expected_max}")
+    lines.append(");")
+    lines.append("")
+    # sequence: Count_Trigger의 네거티브 엣지에서 target_pulse 길이를 카운트
+    lines.append("sequence s_vpulse(value_count);")
+    lines.append(f"    @(negedge {count_trig})")
+    lines.append(f"    ({target_pulse}, value_count = value_count + 1)[*0:$]")
+    lines.append(f"    ##1 (!{target_pulse});")
+    lines.append("endsequence")
+    lines.append("")
+    lines.append("property p_vpulse(count_trigger, target_pulse, expected_min_value, expected_max_value);")
+    lines.append("    int value_count;")
+    lines.append(f"    @(posedge {base_clk}) disable iff(!{base_rst})")
+    lines.append("    $rose(target_pulse) |-> (1, value_count = 0)")
+    lines.append("    ##0 s_vpulse(value_count)")
+    lines.append("    ##1 (expected_min_value <= value_count && value_count <= expected_max_value);")
+    lines.append("endproperty")
+    lines.append("")
+    lines.append(f'assert property (p_vpulse({count_trig}, {target_pulse}, {expected_min}, {expected_max}))')
+    lines.append('    else $error("failed at %t", $time);')
+    lines.append("")
+    lines.append("endmodule")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _build_vpulse_inst_sv(base_clk: str, base_rst: str, count_trig: str,
+                          target_pulse: str, expected_min: str, expected_max: str) -> str:
+    lines: List[str] = []
+    lines.append(_sv_header())
+    lines.append("assertion_vpulse")
+    lines.append(" u_assertion_vpulse ();")
+    lines.append("")
+    lines.append(f"assign u_assertion_vpulse.{base_clk} = top.dut.{base_clk};")
+    lines.append(f"assign u_assertion_vpulse.{base_rst} = top.dut.{base_rst};")
+    lines.append(f"assign u_assertion_vpulse.{count_trig} = top.dut.{count_trig};")
+    lines.append(f"assign u_assertion_vpulse.{target_pulse} = top.dut.{target_pulse};")
+    lines.append(f"assign u_assertion_vpulse.{expected_min} = top.dut.{expected_min};")
+    lines.append(f"assign u_assertion_vpulse.{expected_max} = top.dut.{expected_max};")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def _ensure_define_base_clk_rst(wb, module_info: Dict[str, Any]) -> None:
     """
     Define 탭의 'Base Clock' / 'Base Reset' 라벨 우측 셀에 모듈 파싱 결과를 기록.
@@ -475,25 +529,29 @@ class PulseWidthPlugin(BaseAssertionPlugin):
 
         snippets: List[str] = []
         for b in (parsed.get("blocks") or []):
-            if (b.get("Type") or "").lower() != "hpulse":
-                continue
-
+            t = (b.get("Type") or "").lower()
             base_clk = b.get("Base Clock", "")
             base_rst = b.get("Base Reset", "")
             target_pulse = b.get("Target_Pulse", "")
             exp_min = b.get("Expected_Min_Value", "")
             exp_max = b.get("Expected_Max_Value", "")
-
-            if not base_clk or not base_rst or not target_pulse or not exp_min or not exp_max:
-                continue  # 불완전한 행은 스킵
-
-            sv = _build_hpulse_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
-            inst_sv = _build_hpulse_inst_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
-
-            (out_dir / "assertion_hpulse.sv").write_text(sv, encoding="utf-8")
-            (out_dir / "assertion_hpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
-
-            snippets.append(sv)
+            if t == "hpulse":
+                if not base_clk or not base_rst or not target_pulse or not exp_min or not exp_max:
+                    continue
+                sv = _build_hpulse_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
+                inst_sv = _build_hpulse_inst_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
+                (out_dir / "assertion_hpulse.sv").write_text(sv, encoding="utf-8")
+                (out_dir / "assertion_hpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
+                snippets.append(sv)
+            elif t == "vpulse":
+                count_trig = b.get("Count_Trigger", "")
+                if not base_clk or not base_rst or not count_trig or not target_pulse or not exp_min or not exp_max:
+                    continue
+                sv = _build_vpulse_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max)
+                inst_sv = _build_vpulse_inst_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max)
+                (out_dir / "assertion_vpulse.sv").write_text(sv, encoding="utf-8")
+                (out_dir / "assertion_vpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
+                snippets.append(sv)
 
         return snippets
 
