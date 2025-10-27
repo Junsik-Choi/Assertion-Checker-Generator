@@ -274,22 +274,83 @@ def _collect_available_types(ws) -> List[str]:
     return types or ["hpulse", "vpulse"]
 
 
+# -------- Bit-width helpers (DUT ports) --------
+def _normalize_range_token(token: Any) -> str:
+    """Normalize to [msb:lsb]; default to [0:0] for 1-bit/unknown."""
+    if token is None:
+        return "[0:0]"
+    t = str(token).strip().replace(" ", "")
+    if not t:
+        return "[0:0]"
+    if t.startswith("[") and t.endswith("]"):
+        return t
+    try:
+        n = int(t, 10)
+        return f"[{n-1}:0]" if n >= 1 else "[0:0]"
+    except Exception:
+        return "[0:0]"
+
+def _port_width_token(mod: Dict[str, Any], name: str) -> str:
+    """Find port by name and return width token '[msb:lsb]' (defaults [0:0])."""
+    if not name or not mod:
+        return "[0:0]"
+    want = (name or "").strip()
+    candidates = [
+        mod.get("ports") or [],
+        mod.get("inputs") or [],
+        mod.get("outputs") or [],
+        mod.get("inouts") or [],
+        mod.get("clocks") or [],
+        mod.get("resets") or [],
+    ]
+    for arr in candidates:
+        for it in arr:
+            if (it.get("name") or "") != want:
+                continue
+            # packed forms first
+            for key in ("packed_range", "range", "packed", "decl"):
+                pr = it.get(key)
+                if pr is not None and str(pr).strip():
+                    return _normalize_range_token(pr)
+            # width as integer/string
+            for key in ("width", "bit_width", "width_bits"):
+                w = it.get(key)
+                if w is not None and str(w).strip():
+                    return _normalize_range_token(str(w))
+            # separate ends
+            for lk, rk in (("msb", "lsb"), ("left", "right")):
+                msb = it.get(lk); lsb = it.get(rk)
+                if msb is not None and lsb is not None:
+                    try:
+                        return f"[{int(msb)}:{int(lsb)}]"
+                    except Exception:
+                        return f"[{msb}:{lsb}]"
+            return "[0:0]"
+    return "[0:0]"
+
+def _fmt_input_decl(sig: str, width_tok: str) -> str:
+    """Format 'input logic [msb:lsb] name' (width defaults to [0:0])."""
+    tok = (width_tok or "").strip() or "[0:0]"
+    return f"input logic {tok} {sig}"
+
+
 def _sv_header() -> str:
     return '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
 
 
 def _build_hpulse_sv(base_clk: str, base_rst: str, target_pulse: str,
-                     expected_min: str, expected_max: str) -> str:
+                     expected_min: str, expected_max: str,
+                     w_clk: str, w_rst: str, w_tp: str, w_min: str, w_max: str) -> str:
     # 요청 포맷을 최대한 준수하며 SV 문법 오류는 보정
     lines: List[str] = []
     lines.append(_sv_header())
     lines.append("module assertion_hpulse")
     lines.append("(")
-    lines.append(f"    input logic {base_clk},")
-    lines.append(f"    input logic {base_rst},")
-    lines.append(f"    input logic {target_pulse},")
-    lines.append(f"    input logic {expected_min},")
-    lines.append(f"    input logic {expected_max}")
+    lines.append(f"    {_fmt_input_decl(base_clk,     w_clk)},")
+    lines.append(f"    {_fmt_input_decl(base_rst,     w_rst)},")
+    lines.append(f"    {_fmt_input_decl(target_pulse, w_tp)},")
+    lines.append(f"    {_fmt_input_decl(expected_min, w_min)},")
+    lines.append(f"    {_fmt_input_decl(expected_max, w_max)}")
     lines.append(");")
     lines.append("")
     lines.append("property p_hpulse(target_pulse, expected_min_value, expected_max_value);")
@@ -326,17 +387,18 @@ def _build_hpulse_inst_sv(base_clk: str, base_rst: str, target_pulse: str,
 
 
 def _build_vpulse_sv(base_clk: str, base_rst: str, count_trig: str,
-                     target_pulse: str, expected_min: str, expected_max: str) -> str:
+                     target_pulse: str, expected_min: str, expected_max: str,
+                     w_clk: str, w_rst: str, w_ct: str, w_tp: str, w_min: str, w_max: str) -> str:
     lines: List[str] = []
     lines.append(_sv_header())
     lines.append("module assertion_vpulse")
     lines.append("(")
-    lines.append(f"    input logic {base_clk},")
-    lines.append(f"    input logic {base_rst},")
-    lines.append(f"    input logic {count_trig},")
-    lines.append(f"    input logic {target_pulse},")
-    lines.append(f"    input logic {expected_min},")
-    lines.append(f"    input logic {expected_max}")
+    lines.append(f"    {_fmt_input_decl(base_clk,     w_clk)},")
+    lines.append(f"    {_fmt_input_decl(base_rst,     w_rst)},")
+    lines.append(f"    {_fmt_input_decl(count_trig,   w_ct)},")
+    lines.append(f"    {_fmt_input_decl(target_pulse, w_tp)},")
+    lines.append(f"    {_fmt_input_decl(expected_min, w_min)},")
+    lines.append(f"    {_fmt_input_decl(expected_max, w_max)}")
     lines.append(");")
     lines.append("")
     # sequence: Count_Trigger의 네거티브 엣지에서 target_pulse 길이를 카운트
@@ -512,6 +574,13 @@ class PulseWidthPlugin(BaseAssertionPlugin):
             exp_min = str(row.get("Expected_Min_Value") or "").strip()
             exp_max = str(row.get("Expected_Max_Value") or "").strip()
             count_trig = str(row.get("Count_Trigger") or "").strip()
+            # bit widths from DUT JSON (always default to [0:0])
+            w_clk = _port_width_token(module_info, base_clk)
+            w_rst = _port_width_token(module_info, base_rst)
+            w_ct  = _port_width_token(module_info, count_trig) if t == "vpulse" and count_trig else "[0:0]"
+            w_tp  = _port_width_token(module_info, target_pulse)
+            w_min = _port_width_token(module_info, exp_min)
+            w_max = _port_width_token(module_info, exp_max)
             blocks.append({
                 "Type": t,
                 "Base Clock": base_clk,   # PulseWidth 시트의 라벨 우측 값
@@ -520,6 +589,13 @@ class PulseWidthPlugin(BaseAssertionPlugin):
                 "Expected_Min_Value": exp_min,
                 "Expected_Max_Value": exp_max,
                 "Count_Trigger": count_trig,
+                # widths
+                "Base Clock Width": w_clk,
+                "Base Reset Width": w_rst,
+                "Target_Pulse Width": w_tp,
+                "Expected_Min_Value Width": w_min,
+                "Expected_Max_Value Width": w_max,
+                "Count_Trigger Width": w_ct,
             })
         return {"blocks": blocks}
 
@@ -535,19 +611,28 @@ class PulseWidthPlugin(BaseAssertionPlugin):
             target_pulse = b.get("Target_Pulse", "")
             exp_min = b.get("Expected_Min_Value", "")
             exp_max = b.get("Expected_Max_Value", "")
+            # widths (defaults)
+            w_clk = b.get("Base Clock Width", "[0:0]")
+            w_rst = b.get("Base Reset Width", "[0:0]")
+            w_tp  = b.get("Target_Pulse Width", "[0:0]")
+            w_min = b.get("Expected_Min_Value Width", "[0:0]")
+            w_max = b.get("Expected_Max_Value Width", "[0:0]")
             if t == "hpulse":
                 if not base_clk or not base_rst or not target_pulse or not exp_min or not exp_max:
                     continue
-                sv = _build_hpulse_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
+                sv = _build_hpulse_sv(base_clk, base_rst, target_pulse, exp_min, exp_max,
+                                      w_clk, w_rst, w_tp, w_min, w_max)
                 inst_sv = _build_hpulse_inst_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
                 (out_dir / "assertion_hpulse.sv").write_text(sv, encoding="utf-8")
                 (out_dir / "assertion_hpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
                 snippets.append(sv)
             elif t == "vpulse":
                 count_trig = b.get("Count_Trigger", "")
+                w_ct = b.get("Count_Trigger Width", "[0:0]")
                 if not base_clk or not base_rst or not count_trig or not target_pulse or not exp_min or not exp_max:
                     continue
-                sv = _build_vpulse_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max)
+                sv = _build_vpulse_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max,
+                                      w_clk, w_rst, w_ct, w_tp, w_min, w_max)
                 inst_sv = _build_vpulse_inst_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max)
                 (out_dir / "assertion_vpulse.sv").write_text(sv, encoding="utf-8")
                 (out_dir / "assertion_vpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
