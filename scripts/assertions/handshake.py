@@ -117,6 +117,74 @@ def _auto_pick_clk_rst(mod: Dict[str, Any]) -> Tuple[str, str]:
                 break
     return clk, rst
 
+# -----------------------------
+# Width helpers
+# -----------------------------
+def _normalize_range_token(token: str) -> str:
+    """Return normalized [msb:lsb] token; default to [0:0] for 1-bit/unknown."""
+    if token is None:
+        return "[0:0]"
+    t = str(token).strip().replace(" ", "")
+    if not t:
+        return "[0:0]"
+    if t.startswith("[") and t.endswith("]"):
+        return t
+    # numeric like '32' or '1'
+    try:
+        n = int(t, 10)
+        if n >= 1:
+            return f"[{n-1}:0]"
+        return "[0:0]"
+    except Exception:
+        # unknown format -> treat as 1-bit
+        return "[0:0]"
+
+def _port_width_token(mod: Dict[str, Any], name: str) -> str:
+    """Find port by name and return width token '[msb:lsb]' (defaults to [0:0])."""
+    if not name or not mod:
+        return "[0:0]"
+    want = (name or "").strip()
+    # 1) search a broader 'ports' list first if present
+    candidates = [
+        mod.get("ports") or [],
+        mod.get("inputs") or [],
+        mod.get("outputs") or [],
+        mod.get("inouts") or [],
+        mod.get("clocks") or [],
+        mod.get("resets") or [],
+    ]
+    for arr in candidates:
+        for it in arr:
+            if (it.get("name") or "") != want:
+                continue
+            # Typical fields
+            for key in ("packed_range", "range", "packed", "decl"):
+                pr = it.get(key)
+                if pr is not None and str(pr).strip():
+                    return _normalize_range_token(pr)
+            # Width as integer/string
+            for key in ("width", "bit_width", "width_bits"):
+                w = it.get(key)
+                if w is not None and str(w).strip():
+                    return _normalize_range_token(str(w))
+            # Separate ends
+            for left_key, right_key in (("msb", "lsb"), ("left", "right")):
+                msb = it.get(left_key)
+                lsb = it.get(right_key)
+                if msb is not None and lsb is not None:
+                    try:
+                        return f"[{int(msb)}:{int(lsb)}]"
+                    except Exception:
+                        return f"[{msb}:{lsb}]"
+            # Fallback 1-bit
+            return "[0:0]"
+    return "[0:0]"
+
+def _fmt_input_decl(sig: str, width_tok: str) -> str:
+    """Format input logic with width; defaults to [0:0] if empty."""
+    width_tok = (width_tok or "").strip() or "[0:0]"
+    return f"input logic {width_tok} {sig}"
+
 def _update_handshake_sheet(ws, hs_cfg: Dict[str, str], module_info: Dict[str, Any]) -> int:
     """
     Handshake 시트에 값을 기록하고, 기록한 '행 번호'를 반환한다.
@@ -152,15 +220,20 @@ def _update_handshake_sheet(ws, hs_cfg: Dict[str, str], module_info: Dict[str, A
 def generate_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
     s = info["Sender"]; r = info["Receiver"]
+    # width tokens (always emitted; 1-bit => [0:0])
+    w_clk = info.get("Base Clock Width", "")
+    w_rst = info.get("Reset Width", "")
+    w_s   = info.get("Sender Width", "")
+    w_r   = info.get("Receiver Width", "")
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     # ready_valid
     if info["phase_type"] == "ready_valid":
         return header + f"""module assertion_ready_valid
 (
-    input logic {clk},
-    input logic {rst},
-    input logic {s},
-    input logic {r}
+    {_fmt_input_decl(clk, w_clk)},
+    {_fmt_input_decl(rst, w_rst)},
+    {_fmt_input_decl(s,   w_s)},
+    {_fmt_input_decl(r,   w_r)}
 );
 
 property p_ready_valid_check(ready, valid);
@@ -175,10 +248,10 @@ endmodule
     if info["phase_type"] == "4phase":
         return header + f"""module assertion_4phase
  (
-     input logic {clk},
-     input logic {rst},
-     input logic {s},
-     input logic {r}
+     {_fmt_input_decl(clk, w_clk)},
+     {_fmt_input_decl(rst, w_rst)},
+     {_fmt_input_decl(s,   w_s)},
+     {_fmt_input_decl(r,   w_r)}
  );
 
 property p_4ph_check_0(req,ack);
@@ -205,10 +278,10 @@ endmodule
     else:
         return header + f"""module assertion_2phase
  (
-     input logic {clk},
-     input logic {rst},
-     input logic {s},
-     input logic {r}
+     {_fmt_input_decl(clk, w_clk)},
+     {_fmt_input_decl(rst, w_rst)},
+     {_fmt_input_decl(s,   w_s)},
+     {_fmt_input_decl(r,   w_r)}
  );
 
 property p_2phase_check_0(req, ack);
@@ -269,6 +342,10 @@ class HandshakePlugin(BaseAssertionPlugin):
             md = xls_path.parent / "module_define.json"
             if md.exists():
                 return json.loads(md.read_text(encoding="utf-8"))
+            # fallback: assertion_inputs.json (same schema subset)
+            ai = xls_path.parent / "assertion_inputs.json"
+            if ai.exists():
+                return json.loads(ai.read_text(encoding="utf-8"))
         except Exception:
             pass
         return {}
@@ -287,7 +364,6 @@ class HandshakePlugin(BaseAssertionPlugin):
         # 1) 플러그인 선택 직후: 타입/신호 선택 프롬프트
         mod = self._load_module_define(Path(xls_path))
         hs_cfg = self._interactive_collect(mod)
-
         # 2) Excel에 기록
         wb_w = load_workbook(xls_path)
         try:
@@ -296,7 +372,6 @@ class HandshakePlugin(BaseAssertionPlugin):
             ws_w = _get_sheet_ci(wb_w, self.sheet_name, create=True)
         write_row = _update_handshake_sheet(ws_w, hs_cfg, mod)
         wb_w.save(xls_path)
-
         # 3) data_only로 재오픈하여 '방금 기록한 행'만 파싱
         wb = load_workbook(xls_path, data_only=True)
         try:
@@ -305,6 +380,11 @@ class HandshakePlugin(BaseAssertionPlugin):
             return {"blocks": []}
         _, type_col, _ = _ensure_handshake_layout(ws)
         info = parse_handshake_block_for_row(ws, write_row, type_col)
+        # attach bit widths from module define
+        info["Base Clock Width"] = _port_width_token(mod, info.get("Base Clock", ""))
+        info["Reset Width"] = _port_width_token(mod, info.get("Reset", ""))
+        info["Sender Width"] = _port_width_token(mod, info.get("Sender", ""))
+        info["Receiver Width"] = _port_width_token(mod, info.get("Receiver", ""))
         blocks: List[Dict[str, Any]] = []
         pt = (info.get("phase_type", "") or "").lower()
         if pt in ALLOWED_TYPES and info.get("Sender") and info.get("Receiver"):
