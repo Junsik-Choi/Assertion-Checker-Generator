@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import re
 
 import json
 from openpyxl import load_workbook
@@ -206,7 +207,7 @@ def _read_label_below_resolved(wb, ws, label: str) -> str:
     val = _resolve_ref(wb, raw)
     return val if val != "" else (str(raw).strip() if raw is not None else "")
 
-# 아래/우측 라벨 유틸(누락 보완)
+# 아래/우측 라벨 유틸 + append 지원
 def _read_label_below(ws, label: str) -> str:
     r, c = _find_cell(ws, label)
     if r is None:
@@ -214,20 +215,41 @@ def _read_label_below(ws, label: str) -> str:
     v = ws.cell(row=r + 1, column=c).value
     return str(v).strip() if v is not None else ""
 
-def _write_label_below(ws, label: str, value: str) -> None:
+def _ensure_label(ws, label: str) -> Tuple[int, int]:
+    r, c = _find_cell(ws, label)
+    if r is not None:
+        return r, c
+    # 헤더 기준으로 첫 빈 라벨 슬롯에 생성
+    hdr_r, hdr_c = _find_cell(ws, "DelayCondition")
+    if hdr_r is None:
+        hdr_r, hdr_c = 1, 1
+        ws.cell(row=hdr_r, column=hdr_c, value="DelayCondition")
+    r, c = hdr_r + 1, hdr_c
+    while ws.cell(row=r, column=c).value not in (None, ""):
+        r += 1
+    ws.cell(row=r, column=c, value=label)
+    return r, c
+
+def _append_label_below(ws, label: str, value: str) -> None:
+    r, c = _ensure_label(ws, label)
+    rr = r + 1
+    while ws.cell(row=rr, column=c).value not in (None, ""):
+        rr += 1
+    ws.cell(row=rr, column=c, value=value)
+
+def _read_column_values(ws, label: str) -> List[str]:
+    vals: List[str] = []
     r, c = _find_cell(ws, label)
     if r is None:
-        # 시트 상단의 DelayCondition 헤더 기준으로 라벨 배치
-        hdr_r, hdr_c = _find_cell(ws, "DelayCondition")
-        if hdr_r is None:
-            hdr_r, hdr_c = 1, 1
-            ws.cell(row=hdr_r, column=hdr_c, value="DelayCondition")
-        r, c = hdr_r + 1, hdr_c
-        # 첫 빈 라벨 슬롯 찾기
-        while ws.cell(row=r, column=c).value not in (None, ""):
-            r += 1
-        ws.cell(row=r, column=c, value=label)
-    ws.cell(row=r + 1, column=c, value=value)
+        return vals
+    rr = r + 1
+    while True:
+        v = ws.cell(row=rr, column=c).value
+        if v is None or str(v).strip() == "":
+            break
+        vals.append(str(v).strip())
+        rr += 1
+    return vals
 
 def _ensure_dc_layout(ws) -> Tuple[int, Dict[str, int], int]:
     # Header
@@ -235,7 +257,7 @@ def _ensure_dc_layout(ws) -> Tuple[int, Dict[str, int], int]:
     if h_r is None:
         h_r, h_c = 1, 1
         ws.cell(row=h_r, column=h_c, value="DelayCondition")
-    # Labels
+    # Labels (legacy table layout, kept for compatibility)
     labels = ["Condition", "Target", "Delay_Min", "Delay_Max"]
     lab_row = h_r + 1
     col_map: Dict[str, int] = {}
@@ -276,45 +298,82 @@ def _sv_header() -> str:
 def _nz(s: Optional[str], placeholder: str) -> str:
     return (s or "").strip() or placeholder
 
-# Updated builders to match spec (names: delayCondition, Trigger/Result)
-def _build_delay_sv(clk: str, rst: str, trig: str, res: str,
-                    w_clk: str, w_rst: str, w_trig: str, w_res: str,
-                    dmin: str, dmax: str,
-                    exp_min: str, exp_max: str) -> str:
+def _is_simple_ident(s: str) -> bool:
+    return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_$]*$", (s or "").strip()))
+
+def _is_dut_port(mod: Dict[str, Any], name: str) -> bool:
+    if not _is_simple_ident(name):
+        return False
+    pools = [
+        mod.get("ports") or [],
+        mod.get("inputs") or [],
+        mod.get("outputs") or [],
+        mod.get("inouts") or [],
+        mod.get("clocks") or [],
+        mod.get("resets") or [],
+    ]
+    for arr in pools:
+        for it in arr:
+            if (it.get("name") or "") == name:
+                return True
+    return False
+
+# ---------------- SV builders (multi-sets) ----------------
+
+def _build_delaycondition_sv_multi(base_clk: str, base_rst: str,
+                                   sets: List[Dict[str, str]],
+                                   unique_ports: List[str],
+                                   width_map: Dict[str, str]) -> str:
     lines: List[str] = []
     lines.append(_sv_header())
     lines.append("module assertion_delayCondition")
     lines.append("(")
-    lines.append(f"    {_fmt_input_decl(clk,  w_clk)},")
-    lines.append(f"    {_fmt_input_decl(rst,  w_rst)},")
-    lines.append(f"    {_fmt_input_decl(trig, w_trig)},")
-    lines.append(f"    {_fmt_input_decl(res,  w_res)},")
+    # 포트: Base + 유니크 DUT 포트들
+    ports: List[str] = []
+    if base_clk:
+        ports.append(_fmt_input_decl(base_clk, width_map.get(base_clk, "[0:0]")))
+    if base_rst:
+        ports.append(_fmt_input_decl(base_rst, width_map.get(base_rst, "[0:0]")))
+    for p in unique_ports:
+        if p in (base_clk, base_rst):
+            continue
+        ports.append(_fmt_input_decl(p, width_map.get(p, "[0:0]")))
+    # emit with commas
+    for i, decl in enumerate(ports):
+        comma = "," if i < len(ports) - 1 else ","
+        lines.append(f"    {decl}{comma}")
     lines.append(");")
     lines.append("")
-    # expected values as localparams for validity
-    lines.append(f"localparam int expected_min_value = {exp_min};")
-    lines.append(f"localparam int expected_max_value = {exp_max};")
-    lines.append("")
-    lines.append("property p_delayCondition_check1(trigger, result);")
-    lines.append(f"    @(posedge {clk}) disable iff(!{rst})")
-    lines.append(f"    $rose(trigger) |-> ##[{dmin} : {dmax}] $rose(result);")
-    lines.append("endproperty")
-    lines.append("")
-    lines.append(f'assert property (p_delayCondition_check1({trig}, {res})) else $error("failed at %t", $time);')
-    lines.append("")
+    # 각 세트별 property/assert
+    for idx, st in enumerate(sets, start=1):
+        trig = st.get("Trigger", "")
+        res  = st.get("Result", "")
+        d1   = st.get("Delay1", "1")
+        d2   = st.get("Delay2", d1 or "1")
+        lines.append(f"property p_delayCondition_check{idx}(trigger, result);")
+        lines.append(f"    @(posedge {base_clk}) disable iff(!{base_rst})")
+        lines.append(f"    $rose(trigger) |-> ##[{d1} : {d2}] $rose(result);")
+        lines.append("endproperty")
+        lines.append("")
+        lines.append(f'assert property (p_delayCondition_check{idx}({trig}, {res})) else $error("failed at %t", $time);')
+        lines.append("")
     lines.append("endmodule")
     lines.append("")
     return "\n".join(lines)
 
-def _build_delay_inst_sv(clk: str, rst: str, trig: str, res: str) -> str:
+def _build_delaycondition_inst_sv_multi(base_clk: str, base_rst: str,
+                                        unique_ports: List[str]) -> str:
     lines: List[str] = []
     lines.append(_sv_header())
     lines.append("assertion_delayCondition u_assertion_delayCondition();")
     lines.append("")
-    lines.append(f"assign u_assertion_delayCondition.{clk}  = top.dut.{clk};")
-    lines.append(f"assign u_assertion_delayCondition.{rst}  = top.dut.{rst};")
-    lines.append(f"assign u_assertion_delayCondition.{trig} = top.dut.{trig};")
-    lines.append(f"assign u_assertion_delayCondition.{res}  = top.dut.{res};")
+    # base + unique 포트 assign
+    ports = []
+    if base_clk: ports.append(base_clk)
+    if base_rst: ports.append(base_rst)
+    ports.extend([p for p in unique_ports if p not in (base_clk, base_rst)])
+    for p in ports:
+        lines.append(f"assign u_assertion_delayCondition.{p}  = top.dut.{p};")
     lines.append("")
     return "\n".join(lines)
 
@@ -344,103 +403,123 @@ class DelayConditionPlugin(BaseAssertionPlugin):
         clk = _read_label_right_resolved(wb_w, ws_w, "Base Clock")
         rst = _read_label_right_resolved(wb_w, ws_w, "Base Reset")
 
-        # 3) Trigger: DUT inputs or 0=Custom
-        trig = _pick_one("Select Trigger signal", _signal_options(mod), allow_custom=True)
-        _write_label_below(ws_w, "Trigger", trig)
+        # 3) 세트 입력 루프
+        sets: List[Dict[str, str]] = []
+        while True:
+            # Trigger
+            trig = _pick_one("Select Trigger signal", _signal_options(mod), allow_custom=True)
+            _append_label_below(ws_w, "Trigger", trig)
+            # Delay1/Delay2
+            def _ask_int(prompt: str, default: str) -> str:
+                while True:
+                    s = input(f"{prompt} (integer, default {default}): ").strip() or default
+                    if s.isdigit():
+                        return s
+                    print("Invalid integer. Try again.")
+            d1 = _ask_int("Enter Delay1", "1")
+            d2 = _ask_int("Enter Delay2", d1)
+            _append_label_below(ws_w, "Delay1", d1)
+            _append_label_below(ws_w, "Delay2", d2)
+            # Result
+            res = _pick_one("Select Result signal", _signal_options(mod), allow_custom=True)
+            _append_label_below(ws_w, "Result", res)
 
-        # 4) Delay1/Delay2 (numbers)
-        def _ask_int(prompt: str, default: str) -> str:
+            sets.append({"Trigger": trig, "Delay1": d1, "Delay2": d2, "Result": res})
+
+            # 카운트/추가 여부 프롬프트
+            print(f"\nCurrent number of generated Assertions = {len(sets)}\n")
+            print("Would you like to generate additional Assertions?")
+            print("[1] Yes")
+            print("[2] No")
             while True:
-                s = input(f"{prompt} (integer, default {default}): ").strip() or default
-                if s.isdigit():
-                    return s
-                print("Invalid integer. Try again.")
-        dmin = _ask_int("Enter Delay1", "1")
-        dmax = _ask_int("Enter Delay2", dmin)
-        _write_label_below(ws_w, "Delay1", dmin)
-        _write_label_below(ws_w, "Delay2", dmax)
+                sel = input("> ").strip()
+                if sel == "1":
+                    break
+                if sel == "2":
+                    break
+                print("Invalid selection. Try again.")
+            if sel == "2":
+                break
 
-        # 5) Result: DUT inputs or 0=Custom
-        res = _pick_one("Select Result signal", _signal_options(mod), allow_custom=True)
-        _write_label_below(ws_w, "Result", res)
-
-        # 6) expected min/max: 프롬프트 없이 기본값 사용
-        exp_min = "0"
-        exp_max = "0"
-
+        # 저장
         wb_w.save(xls_path)
 
-        # 7) Reopen and read final values (sheet)
+        # 4) Reopen and read all values (sheet)
         wb = load_workbook(xls_path, data_only=True)
         ws = _get_sheet_ci(wb, self.sheet_name, create=False)
         clk_do, rst_do = _read_base_clk_rst(ws)
-        # data_only가 비어 있으면 수식 역참조로 보완
         if not clk_do:
             clk_do = _read_label_right_resolved(wb_w, ws_w, "Base Clock")
         if not rst_do:
             rst_do = _read_label_right_resolved(wb_w, ws_w, "Base Reset")
         clk = clk_do or clk
         rst = rst_do or rst
-        trig = _read_label_below(ws, "Trigger") or trig
-        dmin = _read_label_below(ws, "Delay1") or dmin
-        dmax = _read_label_below(ws, "Delay2") or dmax
-        res = _read_label_below(ws, "Result") or res
 
-        # 8) widths
-        w_clk  = _port_width_token(mod, clk)
-        w_rst  = _port_width_token(mod, rst)
-        w_trig = _port_width_token(mod, trig)
-        w_res  = _port_width_token(mod, res)
+        # 시트에서 누적 입력 다시 수집(보정)
+        trig_list = _read_column_values(ws, "Trigger")
+        d1_list   = _read_column_values(ws, "Delay1")
+        d2_list   = _read_column_values(ws, "Delay2")
+        res_list  = _read_column_values(ws, "Result")
+        n = max(len(trig_list), len(d1_list), len(d2_list), len(res_list))
+        sets_final: List[Dict[str, str]] = []
+        for i in range(n):
+            trig_i = trig_list[i] if i < len(trig_list) else ""
+            d1_i   = d1_list[i] if i < len(d1_list) else "1"
+            d2_i   = d2_list[i] if i < len(d2_list) else (d1_i or "1")
+            res_i  = res_list[i] if i < len(res_list) else ""
+            sets_final.append({"Trigger": trig_i, "Delay1": d1_i, "Delay2": d2_i, "Result": res_i})
 
-        # 9) blocks (always create)
-        blocks: List[Dict[str, Any]] = [{
+        # 유니크 DUT 포트 수집(모듈 포트 선언용)
+        unique_ports: List[str] = []
+        def _add_port(name: str):
+            nm = (name or "").strip()
+            if not nm:
+                return
+            if not _is_dut_port(mod, nm):
+                return
+            if nm not in unique_ports:
+                unique_ports.append(nm)
+        _add_port(clk)
+        _add_port(rst)
+        for st in sets_final:
+            _add_port(st["Trigger"])
+            _add_port(st["Result"])
+
+        # width map
+        width_map: Dict[str, str] = {}
+        for nm in unique_ports:
+            width_map[nm] = _port_width_token(mod, nm)
+
+        # parsed 구조
+        parsed: Dict[str, Any] = {
             "Base Clock": clk or "",
             "Base Reset": rst or "",
-            "Trigger": trig or "",
-            "Delay1": dmin or "1",
-            "Delay2": dmax or (dmin or "1"),
-            "Result": res or "",
-            "Expected_Min_Value": exp_min or "0",
-            "Expected_Max_Value": exp_max or "0",
-            "Base Clock Width": w_clk or "[0:0]",
-            "Base Reset Width": w_rst or "[0:0]",
-            "Trigger Width": w_trig or "[0:0]",
-            "Result Width": w_res or "[0:0]",
-        }]
-        return {"blocks": blocks}
+            "sets": sets,  # 이번 실행에서 입력한 세트만 사용
+            "unique_ports": unique_ports,
+            "width_map": width_map,
+        }
+        return parsed
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        snippets: List[str] = []
-        for b in (parsed.get("blocks") or []):
-            clk = b.get("Base Clock", ""); rst = b.get("Base Reset", "")
-            trig = b.get("Trigger", "");   res = b.get("Result", "")
-            dmin = b.get("Delay1", "1");   dmax = b.get("Delay2", "1")
-            exp_min = b.get("Expected_Min_Value", "0")
-            exp_max = b.get("Expected_Max_Value", "0")
-            w_clk  = b.get("Base Clock Width", "[0:0]")
-            w_rst  = b.get("Base Reset Width", "[0:0]")
-            w_trig = b.get("Trigger Width", "[0:0]")
-            w_res  = b.get("Result Width", "[0:0]")
+        base_clk = parsed.get("Base Clock", "")
+        base_rst = parsed.get("Base Reset", "")
+        sets: List[Dict[str, str]] = parsed.get("sets", []) or []
+        unique_ports: List[str] = parsed.get("unique_ports", []) or []
+        width_map: Dict[str, str] = parsed.get("width_map", {}) or {}
 
-            clk_p  = _nz(clk,  "UNDEF_CLK")
-            rst_p  = _nz(rst,  "UNDEF_RST")
-            trig_p = _nz(trig, "UNDEF_TRIGGER")
-            res_p  = _nz(res,  "UNDEF_RESULT")
-            dmin_p = (str(dmin).strip() or "1")
-            dmax_p = (str(dmax).strip() or dmin_p)
-            exp_min_p = str(exp_min).strip() or "0"
-            exp_max_p = str(exp_max).strip() or "0"
+        # 플레이스홀더 보정(비어 있을 때)
+        base_clk_p = _nz(base_clk, "UNDEF_CLK")
+        base_rst_p = _nz(base_rst, "UNDEF_RST")
 
-            sv = _build_delay_sv(clk_p, rst_p, trig_p, res_p, w_clk, w_rst, w_trig, w_res, dmin_p, dmax_p, exp_min_p, exp_max_p)
-            inst_sv = _build_delay_inst_sv(clk_p, rst_p, trig_p, res_p)
+        sv = _build_delaycondition_sv_multi(base_clk_p, base_rst_p, sets, unique_ports, width_map)
+        inst_sv = _build_delaycondition_inst_sv_multi(base_clk_p, base_rst_p, unique_ports)
 
-            (out_dir / "assertion_delayCondition.sv").write_text(sv, encoding="utf-8")
-            (out_dir / "assertion_delayCondition_inst.sv").write_text(inst_sv, encoding="utf-8")
-            snippets.append(sv)
-        return snippets
+        (out_dir / "assertion_delayCondition.sv").write_text(sv, encoding="utf-8")
+        (out_dir / "assertion_delayCondition_inst.sv").write_text(inst_sv, encoding="utf-8")
+        return [sv]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
