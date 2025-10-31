@@ -1,0 +1,121 @@
+{
+  "module": "IP_BLUR_SCALER_TOP",
+  "clocks": [
+    {
+      "name": "I_CLK",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "I_RSTN",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "I_DATA",
+      "width": "[7:0]"
+    },
+    {
+      "name": "I_DEN",
+      "width": ""
+    },
+    {
+      "name": "I_HSYNC",
+      "width": ""
+    },
+    {
+      "name": "I_VSYNC",
+      "width": ""
+    },
+    {
+      "name": "PCLK",
+      "width": ""
+    },
+    {
+      "name": "PRSTN",
+      "width": ""
+    },
+    {
+      "name": "i_PADDR",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "i_PEN",
+      "width": ""
+    },
+    {
+      "name": "i_PSEL",
+      "width": ""
+    },
+    {
+      "name": "i_PWDATA",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "i_PWRITE",
+      "width": ""
+    }
+  ],
+  "outputs": [
+    {
+      "name": "O_DATA",
+      "width": "[7:0]"
+    },
+    {
+      "name": "O_DEN",
+      "width": ""
+    },
+    {
+      "name": "O_HSYNC",
+      "width": ""
+    },
+    {
+      "name": "O_VSYNC",
+      "width": ""
+    },
+    {
+      "name": "o_PRDATA",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    }
+  ],
+  "inouts": [],
+  "parameters": [],
+  "sheets": {
+    "delayCondition": {
+      "Base Clock": "I_CLK",
+      "Base Reset": "I_RSTN",
+      "sets": [
+        {
+          "Trigger": "I_DATA",
+          "Delay1": "1",
+          "Delay2": "2",
+          "Result": "I_DEN"
+        },
+        {
+          "Trigger": "I_HSYNC",
+          "Delay1": "2",
+          "Delay2": "2",
+          "Result": "I_VSYNC"
+        }
+      ],
+      "unique_ports": [
+        "I_CLK",
+        "I_RSTN",
+        "I_DATA",
+        "I_DEN",
+        "I_HSYNC",
+        "I_VSYNC"
+      ],
+      "width_map": {
+        "I_CLK": "[0:0]",
+        "I_RSTN": "[0:0]",
+        "I_DATA": "[7:0]",
+        "I_DEN": "[0:0]",
+        "I_HSYNC": "[0:0]",
+        "I_VSYNC": "[0:0]"
+      }
+    }
+  }
+}

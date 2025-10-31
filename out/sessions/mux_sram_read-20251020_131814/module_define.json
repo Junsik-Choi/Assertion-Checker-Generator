@@ -1,0 +1,58 @@
+{
+  "top_path": "",
+  "module": "mux_sram_read",
+  "rtl_file_path": "",
+  "paths": [],
+  "instances": [],
+  "clocks": [
+    {
+      "name": "I_CLK",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "I_RSTN",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "i_read_din1",
+      "width": "[7:0]"
+    },
+    {
+      "name": "i_read_din2",
+      "width": "[7:0]"
+    },
+    {
+      "name": "i_read_din3",
+      "width": "[7:0]"
+    },
+    {
+      "name": "i_read_din4",
+      "width": "[7:0]"
+    },
+    {
+      "name": "i_sel",
+      "width": "[3:0]"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "o_read_dout1",
+      "width": "[7:0]"
+    },
+    {
+      "name": "o_read_dout2",
+      "width": "[7:0]"
+    },
+    {
+      "name": "o_read_dout3",
+      "width": "[7:0]"
+    }
+  ],
+  "inouts": [],
+  "parameters": [],
+  "conditions": []
+}

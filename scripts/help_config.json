@@ -39,6 +39,25 @@
       ]
     },
     {
+      "key": "assertion_wizard",
+      "title": "Assertion Wizard (new)",
+      "items": [
+        { "cmd": "new", "example": "new", "desc": "Step 1: Select Type - Enter number to choose Assertion type (e.g., 1)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Type Selection", "example": "1", "desc": "[Plugin_missing] / [Excel_missing] - Only fully ready types can be created", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
+        
+        { "cmd": "Step 2: Field Input", "example": "", "desc": "Enter fields in order. Left: form, Right: real-time preview", "cmd_color": "green", "example_color": "white", "desc_color": "white" },
+        { "cmd": "Enter field#", "example": "1", "desc": "Show selection options for current field (Ports/Params/MS Signals)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "set field# value", "example": "set 1 clk", "desc": "Set value directly (e.g., port name, option name)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "b", "example": "b", "desc": "Go back to previous field", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
+        { "cmd": "done", "example": "done", "desc": "Validate required fields, then proceed to Step 3", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        
+        { "cmd": "Step 3: Review & Create", "example": "", "desc": "Final check - all inputs and preview displayed", "cmd_color": "green", "example_color": "white", "desc_color": "white" },
+        { "cmd": "confirm", "example": "confirm", "desc": "Create assertion (auto-saved to Excel sheet)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        
+        { "cmd": "q", "example": "q", "desc": "Always press 'q' to exit and cancel wizard", "cmd_color": "red", "example_color": "red", "desc_color": "white" }
+      ]
+    },
+    {
       "key": "credits",
       "title": "Credits",
       "center": true,

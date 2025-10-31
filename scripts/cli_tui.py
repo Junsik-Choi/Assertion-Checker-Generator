@@ -321,6 +321,12 @@ class AppState:
     assertion_wizard_stage: str = ""  # 'select_type' | 'input_data' | 'confirm'
     assertion_selected_type: Optional[str] = None
     assertion_input_data: Dict[str, Any] = field(default_factory=dict)
+    # New: Track current field being edited and cursor position
+    assertion_current_field_idx: int = 0
+    # New: Preview for assertion (right side)
+    assertion_preview_lines: List[str] = field(default_factory=list)
+    # New: Signal selection map (index -> signal_name) for wizard
+    assertion_signal_map: Dict[int, str] = field(default_factory=dict)
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -842,7 +848,14 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     pass
             
             # Hints
-            hint_line = "Commands: set <num> <value> | done | q (quit)"
+            if state.assertion_wizard_stage == 'select_type':
+                hint_line = "Enter number | q: quit"
+            elif state.assertion_wizard_stage == 'input_data':
+                hint_line = "field# | set # value | b: back | done: finish | q: quit"
+            elif state.assertion_wizard_stage == 'confirm':
+                hint_line = "confirm: create | q: quit"
+            else:
+                hint_line = ""
             try:
                 stdscr.addnstr(max_y - 3, 2, _truncate(hint_line, max_x - 4), max_x - 4, curses.A_DIM)
             except curses.error:
@@ -3439,35 +3452,95 @@ def _get_plugin_description(plugin_name: str) -> str:
     return descriptions.get(plugin_name, 'Custom assertion type')
 
 
-def _get_plugin_fields(plugin_name: str) -> List[Dict[str, str]]:
-    """Get required fields for each plugin type."""
+def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
+    """Get required fields for each plugin type with step-by-step configuration."""
     fields = {
         'counter': [
-            {'name': 'counter_name', 'type': 'string', 'prompt': 'Counter name'},
-            {'name': 'clock_edge', 'type': 'select', 'prompt': 'Clock edge', 'options': ['posedge', 'negedge']},
-            {'name': 'clock_signal', 'type': 'port', 'prompt': 'Clock signal'},
-            {'name': 'reset_edge', 'type': 'select', 'prompt': 'Reset edge', 'options': ['posedge', 'negedge', '']},
-            {'name': 'reset_signal', 'type': 'port', 'prompt': 'Reset signal (or leave empty)'},
-            {'name': 'increment_condition', 'type': 'string', 'prompt': 'Increment condition'},
-            {'name': 'reset_condition', 'type': 'string', 'prompt': 'Reset condition'},
+            {
+                'name': 'target',
+                'type': 'string',
+                'step': 1,
+                'title': 'Counter Target Signal',
+                'description': 'Enter the internal counter signal name (e.g., cnt, counter)',
+                'example': 'cnt',
+                'required': True,
+            },
+            {
+                'name': 'plus_con',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Increment Condition',
+                'description': 'Select signal/condition for when counter increments',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'reset_con',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Reset Condition',
+                'description': 'Select signal/condition for when counter resets',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'trigger_con',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Check Condition (Trigger)',
+                'description': 'Select when to perform the assertion check',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'exp_cnt_val',
+                'type': 'signal',
+                'step': 5,
+                'title': 'Expected Count Value',
+                'description': 'Select the expected counter value at trigger point',
+                'example': 'Select from available signals',
+                'required': True,
+            },
         ],
         'handshake': [
-            {'name': 'phase_type', 'type': 'select', 'prompt': 'Handshake type', 'options': ['2phase', '4phase']},
-            {'name': 'clock_signal', 'type': 'port', 'prompt': 'Base Clock'},
-            {'name': 'reset_signal', 'type': 'port', 'prompt': 'Reset signal'},
-            {'name': 'sender_signal', 'type': 'port', 'prompt': 'Sender (request) signal'},
-            {'name': 'receiver_signal', 'type': 'port', 'prompt': 'Receiver (acknowledge) signal'},
+            {
+                'name': 'phase_type',
+                'type': 'choice',
+                'step': 1,
+                'title': 'Handshake Protocol Type',
+                'description': 'Select the handshake protocol variant',
+                'options': ['2phase', '4phase', 'ready_valid'],
+                'required': True,
+            },
+            {
+                'name': 'sender',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Sender Signal',
+                'description': 'Select the sender/request signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'receiver',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Receiver Signal',
+                'description': 'Select the receiver/acknowledge signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
         ],
     }
     return fields.get(plugin_name, [])
 
 
 def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) -> None:
-    """Render assertion creation wizard."""
+    """Render assertion creation wizard with step-by-step flow."""
     max_y, max_x = stdscr.getmaxyx()
     
     # Title
-    title = "Assertion Creator Wizard"
+    title = "Assertion Creator - Step by Step"
     try:
         stdscr.addnstr(0, 2, title, max_x - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
     except curses.error:
@@ -3476,21 +3549,318 @@ def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) ->
     # Box for content
     margin_x = 2
     top = 2
-    reserved_bottom = 5  # For prompt and hints
-    box_h = max(10, max_y - top - reserved_bottom)
-    box_w = max(40, max_x - (margin_x * 2))
+    reserved_bottom = 5
+    box_h = max(15, max_y - top - reserved_bottom)
+    box_w = max(80, max_x - (margin_x * 2))
+    
     _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
     
     if state.assertion_wizard_stage == 'select_type':
-        _render_type_selection(stdscr, state, top, margin_x, box_h, box_w)
+        _render_type_selection_step(stdscr, state, top, margin_x, box_h, box_w)
     elif state.assertion_wizard_stage == 'input_data':
-        _render_data_input(stdscr, state, top, margin_x, box_h, box_w)
+        _render_field_input_step(stdscr, state, top, margin_x, box_h, box_w)
     elif state.assertion_wizard_stage == 'confirm':
-        _render_confirmation(stdscr, state, top, margin_x, box_h, box_w)
+        _render_confirmation_step(stdscr, state, top, margin_x, box_h, box_w)
+
+
+def _render_type_selection_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render type selection screen."""
+    plugins = _get_assertion_plugins_info()
+    
+    y = top + 2
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Step 1: Select Assertion Type", box_w - 4, curses.A_BOLD)
+        y += 2
+    except curses.error:
+        pass
+    
+    for i, plugin in enumerate(plugins, start=1):
+        if y >= top + box_h - 4:
+            break
+        
+        try:
+            option_line = f"[{i}] {plugin['name'].upper()}"
+            stdscr.addnstr(y, margin_x + 4, _truncate(option_line, box_w - 6), box_w - 6, curses.A_BOLD)
+            y += 1
+            
+            desc_line = f"    {plugin['description']}"
+            stdscr.addnstr(y, margin_x + 4, _truncate(desc_line, box_w - 6), box_w - 6, curses.A_DIM)
+            y += 1
+        except curses.error:
+            pass
+    
+    try:
+        y = top + box_h - 3
+        inst = "Enter [1-9] to select type, or q to quit"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_DIM)
+    except curses.error:
+        pass
+
+
+def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render step-by-step field input with left panel (form) and right panel (preview)."""
+    plugin_name = state.assertion_selected_type
+    if not plugin_name:
+        return
+    
+    plugins = _get_assertion_plugins_info()
+    plugin = next((p for p in plugins if p['name'] == plugin_name), None)
+    if not plugin:
+        return
+    
+    fields = plugin['fields']
+    if state.assertion_current_field_idx >= len(fields):
+        return
+    
+    current_field = fields[state.assertion_current_field_idx]
+    current_step = current_field.get('step', 1)
+    total_steps = len(fields)
+    
+    # Split screen
+    split_x = margin_x + (box_w - 4) // 2 + 2
+    left_w = (box_w - 4) // 2 - 2
+    right_w = (box_w - 4) // 2 - 2
+    
+    # ===== LEFT PANEL: Step Input =====
+    y = top + 2
+    
+    # Title
+    try:
+        title = f"Step {current_step}/{total_steps}: {current_field.get('title', '')}"
+        stdscr.addnstr(y, margin_x + 2, _truncate(title, left_w), left_w, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+        y += 2
+    except curses.error:
+        pass
+    
+    # Description
+    try:
+        desc = current_field.get('description', '')
+        desc_y = y
+        for line in desc.split('\n'):
+            if desc_y >= top + box_h - 8:
+                break
+            stdscr.addnstr(desc_y, margin_x + 2, _truncate(line, left_w), left_w, curses.A_DIM)
+            desc_y += 1
+        y = desc_y + 1
+    except curses.error:
+        pass
+    
+    # Current value display
+    field_name = current_field['name']
+    current_val = state.assertion_input_data.get(field_name, '')
+    
+    try:
+        if current_field['type'] == 'choice':
+            # Show options for choice fields
+            options = current_field.get('options', [])
+            if y < top + box_h - 8:
+                stdscr.addnstr(y, margin_x + 2, "Options:", left_w, curses.A_BOLD)
+                y += 1
+                for i, opt in enumerate(options, 1):
+                    if y >= top + box_h - 5:
+                        break
+                    marker = " ✓" if opt == current_val else ""
+                    opt_line = f"  [{i}] {opt}{marker}"
+                    color = _PAIR_BY_NAME.get("green", 0) if opt == current_val else 0
+                    stdscr.addnstr(y, margin_x + 2, _truncate(opt_line, left_w), left_w, 
+                                  curses.color_pair(color))
+                    y += 1
+        
+        elif current_field['type'] == 'signal':
+            # Show available signals in 3-column layout
+            if y < top + box_h - 8:
+                stdscr.addnstr(y, margin_x + 2, "Select Signal (Enter number):", left_w, curses.A_BOLD)
+                y += 1
+                
+                # Build signal map for this field
+                signal_map = {}  # idx -> signal_name
+                idx = 1
+                
+                # Input signals
+                input_items = []
+                if state.module_info and state.module_info.inputs:
+                    for inp in state.module_info.inputs[:10]:
+                        inp_name = inp.get('name', '')
+                        input_items.append((idx, inp_name, 'input'))
+                        signal_map[idx] = inp_name
+                        idx += 1
+                
+                # Output signals
+                output_items = []
+                if state.module_info and state.module_info.outputs:
+                    for out in state.module_info.outputs[:10]:
+                        out_name = out.get('name', '')
+                        output_items.append((idx, out_name, 'output'))
+                        signal_map[idx] = out_name
+                        idx += 1
+                
+                # MS Signals (user-defined)
+                ms_items = []
+                if state.conditions:
+                    for cond in state.conditions[:10]:
+                        cond_name = cond.get('name', '')
+                        ms_items.append((idx, cond_name, 'ms_signal'))
+                        signal_map[idx] = cond_name
+                        idx += 1
+                
+                # Store map in state for later lookup
+                state.assertion_signal_map = signal_map
+                
+                col_w = (left_w - 2) // 3
+                
+                # Draw 3-column layout with boxes
+                start_y = y
+                
+                # Input Ports Box
+                if input_items:
+                    try:
+                        box_y = y
+                        stdscr.addnstr(box_y, margin_x + 2, "┌─ Input ─┐", col_w, curses.A_BOLD)
+                        box_y += 1
+                        for idx_num, name, _ in input_items:
+                            if box_y >= top + box_h - 5:
+                                break
+                            marker = "✓" if name == current_val else " "
+                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
+                            color = _PAIR_BY_NAME.get("cyan", 0) if name == current_val else 0
+                            stdscr.addnstr(box_y, margin_x + 2, line, col_w, curses.color_pair(color))
+                            box_y += 1
+                        stdscr.addnstr(box_y, margin_x + 2, "└─────────┘", col_w, curses.A_BOLD)
+                    except curses.error:
+                        pass
+                
+                # Output Ports Box
+                if output_items:
+                    try:
+                        box_y = y
+                        box_x = margin_x + 2 + col_w + 1
+                        stdscr.addnstr(box_y, box_x, "┌─ Output ┐", col_w, curses.A_BOLD)
+                        box_y += 1
+                        for idx_num, name, _ in output_items:
+                            if box_y >= top + box_h - 5:
+                                break
+                            marker = "✓" if name == current_val else " "
+                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
+                            color = _PAIR_BY_NAME.get("yellow", 0) if name == current_val else 0
+                            stdscr.addnstr(box_y, box_x, line, col_w, curses.color_pair(color))
+                            box_y += 1
+                        stdscr.addnstr(box_y, box_x, "└─────────┘", col_w, curses.A_BOLD)
+                    except curses.error:
+                        pass
+                
+                # MS Signals Box
+                if ms_items:
+                    try:
+                        box_y = y
+                        box_x = margin_x + 2 + (col_w + 1) * 2
+                        stdscr.addnstr(box_y, box_x, "┌─ MS Sig ┐", col_w, curses.A_BOLD)
+                        box_y += 1
+                        for idx_num, name, _ in ms_items:
+                            if box_y >= top + box_h - 5:
+                                break
+                            marker = "✓" if name == current_val else " "
+                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
+                            color = _PAIR_BY_NAME.get("magenta", 0) if name == current_val else 0
+                            stdscr.addnstr(box_y, box_x, line, col_w, curses.color_pair(color))
+                            box_y += 1
+                        stdscr.addnstr(box_y, box_x, "└─────────┘", col_w, curses.A_BOLD)
+                    except curses.error:
+                        pass
+                
+                y += max(len(input_items), len(output_items), len(ms_items)) + 2
+        
+        elif current_field['type'] == 'string':
+            if current_val:
+                val_line = f"Current: {current_val}"
+                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                              curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+            else:
+                val_line = "[Enter value]"
+                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                              curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+    except curses.error:
+        pass
+    
+    # ===== RIGHT PANEL: Preview and Timing Diagram =====
+    py = top + 2
+    
+    # Show preview
+    preview_lines = _generate_assertion_preview(plugin_name, state.assertion_input_data)
+    for line in preview_lines:
+        if py >= top + box_h - 3:
+            break
+        try:
+            stdscr.addnstr(py, split_x, _truncate(line, right_w), right_w)
+            py += 1
+        except curses.error:
+            pass
+    
+    # ===== BOTTOM Instructions =====
+    try:
+        y = top + box_h - 3
+        if current_field['type'] == 'choice':
+            inst = "Enter [1-9] to select (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+        elif current_field['type'] == 'signal':
+            inst = "Enter signal number (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+        else:  # string
+            inst = "Enter value (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+        
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_DIM)
+    except curses.error:
+        pass
+
+
+def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render final confirmation screen."""
+    y = top + 2
+    
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Step: Review & Create", box_w - 4, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        y += 2
+    except curses.error:
+        pass
+    
+    # Show all configured fields
+    plugins = _get_assertion_plugins_info()
+    plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+    if plugin:
+        try:
+            for field in plugin['fields']:
+                if y >= top + box_h - 4:
+                    break
+                
+                field_name = field['name']
+                title = field.get('title', field_name)
+                val = state.assertion_input_data.get(field_name, '')
+                
+                line = f"  {title}: "
+                if val:
+                    line += val
+                    color = _PAIR_BY_NAME.get("green", 0)
+                else:
+                    line += "[NOT SET]"
+                    color = _PAIR_BY_NAME.get("red", 0)
+                
+                stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
+                              curses.color_pair(color))
+                y += 1
+        except curses.error:
+            pass
+    
+    # Action
+    try:
+        y = top + box_h - 3
+        inst = "Type 'create' to create assertion | 'prev' to go back | 'q' to cancel"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+    except curses.error:
+        pass
 
 
 def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
-    """Render assertion type selection screen."""
+    """Render assertion type selection screen with full type list and status indicators."""
     plugins = _get_assertion_plugins_info()
     
     y = top + 2
@@ -3501,60 +3871,57 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
         pass
     
     for i, plugin in enumerate(plugins, start=1):
-        if y >= top + box_h - 2:
+        if y >= top + box_h - 3:
+            # Show continuation indicator
+            try:
+                stdscr.addnstr(y, margin_x + 2, "... (more types)", box_w - 4, curses.A_DIM)
+            except curses.error:
+                pass
             break
         
         # Check if plugin file exists
         plugin_file_path = Path(__file__).parent / "assertions" / f"{plugin['name']}.py"
         plugin_exists = plugin_file_path.exists()
-        plugin_status = "✓ Available" if plugin_exists else "✗ Missing"
-        plugin_color = "green" if plugin_exists else "red"
         
         # Check if sheet exists in Excel (use session excel if available)
-        sheet_status = ""
-        sheet_color = "yellow"
+        sheet_exists = False
         excel_to_check = state.session_excel_path or state.excel_path
         if excel_to_check:
             try:
                 from openpyxl import load_workbook  # type: ignore
                 from assertions.base import BaseAssertionPlugin  # type: ignore
                 wb = load_workbook(str(excel_to_check), read_only=True)
-                # Check case-insensitively
                 actual_sheet = BaseAssertionPlugin.find_sheet_case_insensitive(wb.sheetnames, plugin['sheet_name'])
-                if actual_sheet:
-                    sheet_status = f"✓ Found: {actual_sheet}"
-                    sheet_color = "green"
-                else:
-                    sheet_status = "✗ Missing"
-                    sheet_color = "red"
+                sheet_exists = bool(actual_sheet)
                 wb.close()
-            except Exception as e:
-                sheet_status = f"? Error: {str(e)[:15]}"
-                sheet_color = "yellow"
+            except Exception:
+                pass
+        
+        # Build status line: show both plugin and sheet status
+        status_parts = []
+        if not plugin_exists:
+            status_parts.append("Plugin_missing")
+        if not sheet_exists:
+            status_parts.append("Excel_missing")
+        
+        status_indicator = ""
+        if status_parts:
+            status_indicator = f" [{', '.join(status_parts)}]"
         
         # Display option
         try:
-            option_line = f"[{i}] {plugin['name'].upper()}"
-            stdscr.addnstr(y, margin_x + 4, option_line, box_w - 6, curses.A_BOLD)
+            option_line = f"[{i}] {plugin['name'].upper()}{status_indicator}"
+            # Use red if either plugin or sheet is missing
+            color = "red" if status_parts else "green"
+            color_code = _PAIR_BY_NAME.get(color, 0)
+            stdscr.addnstr(y, margin_x + 4, _truncate(option_line, box_w - 6), box_w - 6, 
+                          curses.A_BOLD | curses.color_pair(color_code))
             y += 1
             
+            # Description
             desc_line = f"    {plugin['description']}"
             stdscr.addnstr(y, margin_x + 4, _truncate(desc_line, box_w - 6), box_w - 6, curses.A_DIM)
             y += 1
-            
-            # Plugin file status
-            plugin_status_line = f"    Plugin: {plugin_status}"
-            color = _PAIR_BY_NAME.get(plugin_color, 0)
-            stdscr.addnstr(y, margin_x + 4, _truncate(plugin_status_line, box_w - 6), box_w - 6, curses.color_pair(color))
-            y += 1
-            
-            # Sheet status
-            if sheet_status:
-                status_line = f"    Sheet: '{plugin['sheet_name']}' - {sheet_status}"
-                color = _PAIR_BY_NAME.get(sheet_color, 0)
-                stdscr.addnstr(y, margin_x + 4, _truncate(status_line, box_w - 6), box_w - 6, curses.color_pair(color))
-                y += 1
-            
             y += 1  # Blank line between options
         except curses.error:
             pass
@@ -3562,7 +3929,7 @@ def _render_type_selection(stdscr: "curses._CursesWindow", state: AppState, top:
     # Instructions
     try:
         y = top + box_h - 3
-        inst_line = "Enter number to select, or 'q' to exit"
+        inst_line = "Enter number to select, or 'q' to quit"
         stdscr.addnstr(y, margin_x + 2, inst_line, box_w - 4, curses.A_DIM)
     except curses.error:
         pass
@@ -3580,16 +3947,17 @@ def _render_data_input(stdscr: "curses._CursesWindow", state: AppState, top: int
         return
     
     fields = plugin['fields']
-    y = top + 2
     
+    # Title
+    y = top + 2
     try:
-        title_line = f"Creating {plugin_name.upper()} Assertion"
-        stdscr.addnstr(y, margin_x + 2, title_line, box_w - 4, curses.A_BOLD)
+        title = f"Setup {plugin_name.upper()} Assertion"
+        stdscr.addnstr(y, margin_x + 2, title, box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
         y += 2
     except curses.error:
         pass
     
-    # Show fields and current values
+    # Show all fields with their status
     for i, field in enumerate(fields):
         if y >= top + box_h - 4:
             break
@@ -3597,86 +3965,268 @@ def _render_data_input(stdscr: "curses._CursesWindow", state: AppState, top: int
         field_name = field['name']
         prompt = field['prompt']
         current_val = state.assertion_input_data.get(field_name, '')
+        is_current = (i == state.assertion_current_field_idx)
+        is_required = field.get('required', True)
         
         try:
-            # Field prompt
-            field_line = f"{i+1}. {prompt}:"
-            stdscr.addnstr(y, margin_x + 4, field_line, box_w - 6, curses.A_BOLD)
+            # Field line with number and prompt
+            field_line = f"[{i+1}] {prompt}"
+            
+            # Highlight if current field
+            attr = curses.A_BOLD
+            if is_current:
+                attr |= curses.color_pair(_PAIR_BY_NAME.get("yellow", 0))
+            
+            stdscr.addnstr(y, margin_x + 2, _truncate(field_line, box_w - 4), box_w - 4, attr)
             y += 1
             
-            # Current value or options
-            if field['type'] == 'select':
-                options_str = ', '.join(field.get('options', []))
-                opt_line = f"   Options: {options_str}"
-                stdscr.addnstr(y, margin_x + 4, _truncate(opt_line, box_w - 6), box_w - 6, curses.A_DIM)
-                y += 1
-            elif field['type'] == 'port':
-                hint_line = "   (Use port name or number from Input/Output list)"
-                stdscr.addnstr(y, margin_x + 4, _truncate(hint_line, box_w - 6), box_w - 6, curses.A_DIM)
-                y += 1
-            
-            # Current value display
-            val_display = str(current_val) if current_val else "<not set>"
-            val_line = f"   Current: {val_display}"
-            val_color = "green" if current_val else "red"
-            stdscr.addnstr(y, margin_x + 4, _truncate(val_line, box_w - 6), box_w - 6, curses.color_pair(_PAIR_BY_NAME.get(val_color, 0)))
+            # Show current value or status
+            if current_val:
+                val_line = f"    -> {current_val}"
+                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, box_w - 4), box_w - 4, 
+                              curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+            else:
+                req_marker = "*" if is_required else ""
+                val_line = f"    {req_marker} (not set)"
+                color = _PAIR_BY_NAME.get("red", 0) if is_required else _PAIR_BY_NAME.get("dim", 0)
+                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, box_w - 4), box_w - 4, 
+                              curses.color_pair(color))
             y += 1
-            y += 1  # Blank line
         except curses.error:
             pass
     
-    # Instructions
+    # Bottom instructions
     try:
-        y = top + box_h - 3
-        inst_line = "Enter: set <field_num> <value> | 'done' to finish | 'cancel' to abort"
-        stdscr.addnstr(y, margin_x + 2, _truncate(inst_line, box_w - 4), box_w - 4, curses.A_DIM)
+        y = top + box_h - 4
+        inst1 = "Enter [#] to set field | set [#] value | b to go back | done to finish"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst1, box_w - 4), box_w - 4, curses.A_DIM)
+        y += 1
+        inst2 = "q to cancel | * = required field"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst2, box_w - 4), box_w - 4, curses.A_DIM)
     except curses.error:
         pass
 
 
+def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[str]:
+    """Generate assertion preview with timing diagram and Pass/Fail conditions."""
+    lines = []
+    
+    def format_signal_name(name: str, role: str, width: int = 20) -> str:
+        """Format signal name right-aligned with role in parentheses."""
+        formatted = f"{name} ({role})"
+        return formatted.rjust(width)
+    
+    def format_waveform_line(waveform: str, width: int = 20) -> str:
+        """Format waveform data right-aligned."""
+        return waveform.rjust(width)
+    
+    if plugin_name == 'counter':
+        target = data.get('target', '?')
+        plus_con = data.get('plus_con', '?')
+        reset_con = data.get('reset_con', '?')
+        trigger_con = data.get('trigger_con', '?')
+        exp_cnt_val = data.get('exp_cnt_val', '?')
+        
+        lines.append("=" * 60)
+        lines.append("COUNTER ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Counter Signal: {target}")
+        lines.append(f"Increments when: {plus_con}")
+        lines.append(f"Resets when: {reset_con}")
+        lines.append(f"Checked at: {trigger_con}")
+        lines.append(f"Expected value: {exp_cnt_val}")
+        lines.append("")
+        
+        lines.append("Timing Diagram:")
+        lines.append("-" * 60)
+        lines.append("")
+        lines.append("Clock cycles: 0   1   2   3   4   5   6   7")
+        lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|")
+        lines.append("")
+        lines.append(format_signal_name(target, "counter") + " 0   0   1   1   1   0   0   0")
+        lines.append(format_signal_name(plus_con, "increment") + " └─────┘   └─────┘   └─────┘")
+        lines.append(format_signal_name(reset_con, "reset") + " └───────────────┘       └───────┘")
+        lines.append(format_signal_name(trigger_con, "trigger") + " └─────┘       └─────┘   └─────┘")
+        lines.append("")
+        
+        lines.append("Pass Condition:")
+        lines.append(f"  When {trigger_con} is asserted,")
+        lines.append(f"  {target} MUST equal {exp_cnt_val}")
+        lines.append("")
+        
+        lines.append("Fail Condition:")
+        lines.append(f"  When {trigger_con} is asserted,")
+        lines.append(f"  {target} does NOT equal {exp_cnt_val}")
+        lines.append("")
+        
+    elif plugin_name == 'handshake':
+        phase = data.get('phase_type', '?')
+        sender = data.get('sender', '?')
+        receiver = data.get('receiver', '?')
+        
+        lines.append("=" * 60)
+        lines.append(f"{phase.upper()} HANDSHAKE ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Protocol Type: {phase}")
+        lines.append(f"Sender Signal: {sender}")
+        lines.append(f"Receiver Signal: {receiver}")
+        lines.append("")
+        
+        if phase == '2phase':
+            lines.append("Timing Diagram (2-Phase Handshake):")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
+            lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
+            lines.append("")
+            lines.append(format_signal_name(sender, "sender") + " └─────────────┘   └─────────────┘")
+            lines.append(format_signal_name(receiver, "receiver") + "     └─────────────┘   └─────────────┘")
+            lines.append("")
+            
+            lines.append("Pass Conditions:")
+            lines.append(f"  1. {sender} goes HIGH (holds for multiple cycles)")
+            lines.append(f"  2. {receiver} eventually goes HIGH")
+            lines.append(f"  3. Both signals overlap correctly")
+            lines.append(f"  4. Protocol completes successfully")
+            lines.append("")
+            
+            lines.append("Fail Conditions:")
+            lines.append(f"  1. {sender} goes HIGH but {receiver} never goes HIGH")
+            lines.append(f"  2. Timeout waiting for acknowledgment")
+            lines.append(f"  3. Unexpected signal transitions")
+            lines.append("")
+            
+        elif phase == '4phase':
+            lines.append("Timing Diagram (4-Phase Handshake):")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
+            lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
+            lines.append("")
+            lines.append(format_signal_name(sender, "sender") + " └───────┘   └───────┘   └───────┘")
+            lines.append(format_signal_name(receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
+            lines.append("")
+            
+            lines.append("Pass Conditions:")
+            lines.append(f"  1. {sender} pulses (HIGH then LOW)")
+            lines.append(f"  2. {receiver} pulses in response")
+            lines.append(f"  3. All signals return to LOW before next cycle")
+            lines.append(f"  4. Dual-rail protocol maintained")
+            lines.append("")
+            
+            lines.append("Fail Conditions:")
+            lines.append(f"  1. {sender} and {receiver} don't follow 4-phase rules")
+            lines.append(f"  2. Signals don't return to LOW properly")
+            lines.append(f"  3. Handshake timeout")
+            lines.append(f"  4. Invalid state transitions")
+            lines.append("")
+            
+        elif phase == 'ready_valid':
+            lines.append("Timing Diagram (Ready-Valid):")
+            lines.append("-" * 60)
+            lines.append("")
+            lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
+            lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
+            lines.append("")
+            lines.append(format_signal_name(sender, "sender") + " └─────────────────────┘   └─────────┘")
+            lines.append(format_signal_name(receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
+            lines.append("")
+            
+            lines.append("Pass Conditions:")
+            lines.append(f"  1. Transfer occurs when BOTH {sender} AND {receiver} are HIGH")
+            lines.append(f"  2. {sender} can hold for multiple cycles")
+            lines.append(f"  3. {receiver} controls transfer rate (throttling)")
+            lines.append(f"  4. No deadlock situations")
+            lines.append("")
+            
+            lines.append("Fail Conditions:")
+            lines.append(f"  1. Transfer happens when {receiver} is LOW")
+            lines.append(f"  2. Data not latched properly on transfer")
+            lines.append(f"  3. Protocol deadlock detected")
+            lines.append(f"  4. Invalid handshake sequence")
+            lines.append("")
+    
+    else:
+        lines.append(f"Assertion Type: {plugin_name}")
+        lines.append("Configuration:")
+        for key, val in sorted(data.items()):
+            if val:
+                lines.append(f"  {key}: {val}")
+    
+    return lines
+
+
 def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
-    """Render confirmation screen."""
+    """Render confirmation screen before creating assertion."""
     y = top + 2
     
     try:
-        stdscr.addnstr(y, margin_x + 2, "Assertion Summary:", box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        title = "Confirm Assertion Configuration"
+        stdscr.addnstr(y, margin_x + 2, title, box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
         y += 2
-        
-        # Show all input data
-        for key, val in state.assertion_input_data.items():
-            if y >= top + box_h - 4:
-                break
-            line = f"  {key}: {val}"
-            stdscr.addnstr(y, margin_x + 4, _truncate(line, box_w - 6), box_w - 6)
-            y += 1
-        
-        y += 2
-        confirm_line = "Type 'confirm' to create assertion or 'cancel' to abort"
-        stdscr.addnstr(y, margin_x + 2, _truncate(confirm_line, box_w - 4), box_w - 4, curses.A_BOLD)
+    except curses.error:
+        pass
+    
+    # Show all configured fields
+    plugins = _get_assertion_plugins_info()
+    plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+    if plugin:
+        try:
+            for field in plugin['fields']:
+                if y >= top + box_h - 5:
+                    break
+                
+                field_name = field['name']
+                prompt = field['prompt']
+                val = state.assertion_input_data.get(field_name, '')
+                
+                line = f"  {prompt}: "
+                if val:
+                    line += val
+                    color = _PAIR_BY_NAME.get("green", 0)
+                else:
+                    line += "[not set]"
+                    color = _PAIR_BY_NAME.get("dim", 0)
+                
+                stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, curses.color_pair(color))
+                y += 1
+        except curses.error:
+            pass
+    
+    # Action instruction
+    try:
+        y = top + box_h - 4
+        inst = "Type 'confirm' to create or 'q' to cancel"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
         pass
 
 
 def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
-    """Handle commands within assertion wizard. Returns (message, exit_wizard)."""
-    toks = cmdline.split()
-    if not toks:
+    """
+    Handle commands for step-by-step wizard.
+    Returns (message, should_exit_wizard).
+    
+    Auto-advance to next step after each input (no need to type 'next').
+    """
+    cmd = cmdline.strip().lower()
+    
+    if not cmd:
         return "", False
     
-    cmd = toks[0].lower()
-    args = toks[1:]
-    
-    # Universal commands (work in any stage)
-    if cmd in ('q', 'quit', 'cancel'):
-        # Exit wizard
+    # Universal: quit
+    if cmd in ('q', 'quit'):
         state.assertion_wizard_active = False
         state.assertion_wizard_stage = ""
         state.assertion_selected_type = None
         state.assertion_input_data.clear()
-        return "Assertion creation cancelled", True
+        state.assertion_current_field_idx = 0
+        return "Cancelled", True
     
+    # Stage 1: Select Type
     if state.assertion_wizard_stage == 'select_type':
-        # User selects a number
         if cmd.isdigit():
             idx = int(cmd) - 1
             plugins = _get_assertion_plugins_info()
@@ -3684,150 +4234,332 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 selected = plugins[idx]
                 state.assertion_selected_type = selected['name']
                 state.assertion_wizard_stage = 'input_data'
+                state.assertion_current_field_idx = 0
                 state.assertion_input_data.clear()
-                return f"Selected: {selected['name']}. Now enter field values.", False
+                
+                fields = selected['fields']
+                current_field = fields[0]
+                msg = f"Selected {selected['name'].upper()}\n"
+                msg += f"\nStep 1/{len(fields)}: {current_field.get('title', '')}\n"
+                msg += current_field.get('description', '')
+                return msg, False
             else:
-                return f"Invalid selection. Choose 1-{len(plugins)}", False
-        return "Enter a number to select assertion type, or 'q' to quit", False
+                return f"Invalid. Choose 1-{len(plugins)}", False
+        return "Enter number to select type", False
     
+    # Stage 2: Input Data (step-by-step with auto-advance)
     elif state.assertion_wizard_stage == 'input_data':
-        if cmd == 'set' and len(args) >= 2:
-            field_num_str = args[0]
-            value = ' '.join(args[1:])
-            
-            if field_num_str.isdigit():
-                field_idx = int(field_num_str) - 1
-                plugins = _get_assertion_plugins_info()
-                plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
-                if plugin and 0 <= field_idx < len(plugin['fields']):
-                    field = plugin['fields'][field_idx]
-                    state.assertion_input_data[field['name']] = value
-                    return f"Set {field['name']} = {value}", False
-                else:
-                    return f"Invalid field number", False
-            else:
-                return "Usage: set <field_number> <value>", False
-        
-        elif cmd == 'done':
-            # Check if all required fields are filled
-            plugins = _get_assertion_plugins_info()
-            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
-            if plugin:
-                missing = []
-                for field in plugin['fields']:
-                    if field['name'] not in state.assertion_input_data or not state.assertion_input_data[field['name']]:
-                        # Allow empty for optional fields (reset_signal, etc.)
-                        if 'reset' in field['name'].lower() or field['prompt'].endswith('(or leave empty)'):
-                            continue
-                        missing.append(field['prompt'])
-                
-                if missing:
-                    return f"Missing required fields: {', '.join(missing)}", False
-                
-                state.assertion_wizard_stage = 'confirm'
-                return "Review your assertion. Type 'confirm' to create, or 'q' to cancel.", False
+        plugins = _get_assertion_plugins_info()
+        plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+        if not plugin:
             return "Plugin not found", False
         
-        return "Usage: set <field_num> <value> | 'done' to finish | 'q' to quit", False
+        fields = plugin['fields']
+        current_field = fields[state.assertion_current_field_idx]
+        field_name = current_field['name']
+        field_type = current_field['type']
+        
+        # Command: previous step
+        if cmd in ('prev', 'p', 'back', 'b'):
+            if state.assertion_current_field_idx > 0:
+                state.assertion_current_field_idx -= 1
+                prev_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {prev_field.get('title', '')}\n"
+                msg += prev_field.get('description', '')
+                return msg, False
+            else:
+                return "Already at first step", False
+        
+        # Field-specific input handling with auto-advance
+        if field_type == 'choice':
+            options = current_field.get('options', [])
+            selected_option = None
+            
+            if cmd.isdigit():
+                idx = int(cmd) - 1
+                if 0 <= idx < len(options):
+                    selected_option = options[idx]
+            else:
+                # Try to match option by name
+                for opt in options:
+                    if opt.lower() == cmd:
+                        selected_option = opt
+                        break
+            
+            if not selected_option:
+                return f"Invalid. Choose [1-{len(options)}] or type option name", False
+            
+            state.assertion_input_data[field_name] = selected_option
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\n✓ Selected: {selected_option}\n"
+                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return f"✓ Selected: {selected_option}\n\nAll steps complete. Type 'create' to review and create.", False
+        
+        elif field_type == 'signal':
+            # Accept signal by number index or name
+            selected_signal = None
+            
+            if cmd.isdigit():
+                idx = int(cmd)
+                # Look up signal from map
+                if idx in state.assertion_signal_map:
+                    selected_signal = state.assertion_signal_map[idx]
+                else:
+                    return f"Invalid signal number. Choose from displayed list", False
+            else:
+                # Try to match by name
+                for signal_name in state.assertion_signal_map.values():
+                    if signal_name.lower() == cmd.lower():
+                        selected_signal = signal_name
+                        break
+                if not selected_signal:
+                    return f"Signal '{cmd}' not found. Use number or exact name", False
+            
+            state.assertion_input_data[field_name] = selected_signal
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\n✓ Selected signal: {selected_signal}\n"
+                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return f"✓ Selected signal: {selected_signal}\n\nAll steps complete. Type 'create' to review and create.", False
+        
+        elif field_type == 'string':
+            # Accept any string input
+            state.assertion_input_data[field_name] = cmd
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\n✓ Entered: {cmd}\n"
+                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return f"✓ Entered: {cmd}\n\nAll steps complete. Type 'create' to review and create.", False
+        
+        return "Invalid input for this field", False
     
+    # Stage 3: Confirm
     elif state.assertion_wizard_stage == 'confirm':
-        if cmd == 'confirm':
-            # Create the assertion
+        if cmd == 'create':
             result = _create_assertion_from_wizard(state)
             state.assertion_wizard_active = False
             state.assertion_wizard_stage = ""
             state.assertion_selected_type = None
             state.assertion_input_data.clear()
+            state.assertion_current_field_idx = 0
             return result, True
-        return "Type 'confirm' to create, 'q' to cancel", False
+        
+        elif cmd in ('prev', 'p', 'back', 'b'):
+            # Go back to last field
+            plugins = _get_assertion_plugins_info()
+            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+            if plugin:
+                fields = plugin['fields']
+                state.assertion_wizard_stage = 'input_data'
+                state.assertion_current_field_idx = len(fields) - 1
+                last_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {last_field.get('title', '')}\n"
+                msg += last_field.get('description', '')
+                return msg, False
+        
+        return "Type 'create' to create or 'prev' to edit", False
     
     return "", False
 
 
+def _show_field_selector(state: AppState, fields: List[Dict[str, Any]]) -> str:
+    """
+    Show selector for the current field.
+    Returns a message describing what to select.
+    """
+    if state.assertion_current_field_idx >= len(fields):
+        return "Error: Field index out of range"
+    
+    field = fields[state.assertion_current_field_idx]
+    field_name = field['name']
+    prompt = field['prompt']
+    field_type = field['type']
+    field_num = state.assertion_current_field_idx + 1
+    
+    separator = "-" * 50
+    lines = [f"\n{separator}"]
+    lines.append(f"[{field_num}] {prompt}")
+    lines.append(separator)
+    
+    # Build signal/option list based on field type
+    if field_type == 'select':
+        # For select fields, list options
+        options = field.get('options', [])
+        lines.append("Options:")
+        for i, opt in enumerate(options, 1):
+            lines.append(f"  [{i}] {opt}")
+        lines.append(f"\nExample: set {field_num} 2phase")
+    
+    elif field_type == 'port':
+        # For port fields, list available signals
+        lines.append("Available signals:")
+        lines.append("")
+        
+        # Add module inputs/outputs
+        idx = 1
+        if hasattr(state, 'module_info') and state.module_info:
+            if state.module_info.get('inputs'):
+                lines.append("[Module Inputs]")
+                for port in state.module_info.get('inputs', [])[:10]:
+                    port_name = port.get('name', f'in{idx}')
+                    lines.append(f"  {port_name}")
+                    idx += 1
+                lines.append("")
+            
+            if state.module_info.get('outputs'):
+                lines.append("[Module Outputs]")
+                for port in state.module_info.get('outputs', [])[:10]:
+                    port_name = port.get('name', f'out{idx}')
+                    lines.append(f"  {port_name}")
+                    idx += 1
+                lines.append("")
+        
+        # Add user-defined signals (MS Signals)
+        if state.conditions:
+            lines.append("[User-Defined Signals]")
+            for i, cond in enumerate(state.conditions, 1):
+                cond_name = cond.get('name', f'signal{i}')
+                lines.append(f"  {cond_name}")
+        
+        lines.append(f"\nExample: set {field_num} clk")
+    
+    elif field_type == 'string':
+        lines.append("Text input field")
+        current_val = state.assertion_input_data.get(field_name, '')
+        if current_val:
+            lines.append(f"Current: {current_val}")
+        lines.append(f"\nExample: set {field_num} my_signal_name")
+    
+    lines.append(f"\nCommands: [#] next field | b back | done finish | q cancel")
+    
+    return "\n".join(lines)
+
+
 def _create_assertion_from_wizard(state: AppState) -> str:
-    """Create assertion entry and write to Excel."""
+    """Create assertion entry and write to Excel using the actual plugin."""
     plugin_name = state.assertion_selected_type
     data = state.assertion_input_data
     
-    # Build assertion description
-    if plugin_name == 'counter':
-        desc = f"Counter {data.get('counter_name', '')} increments on {data.get('increment_condition', '')}"
-    elif plugin_name == 'handshake':
-        desc = f"{data.get('phase_type', '')} handshake between {data.get('sender_signal', '')} and {data.get('receiver_signal', '')}"
-    else:
-        desc = f"{plugin_name} assertion"
-    
-    # Extract signals
-    signals = []
-    for key, val in data.items():
-        if 'signal' in key.lower() or 'clock' in key.lower():
-            if val:
-                signals.append(val)
-    
-    # Add to state
-    assertion_entry = {
-        'type': plugin_name,
-        'signals': signals,
-        'description': desc,
-        'data': dict(data),
-    }
-    state.assertions.append(assertion_entry)
-    
-    # Write to Excel
     try:
+        # Get the plugin instance
+        from assertions import get_registered_plugins  # type: ignore
+        plugin_cls = None
+        for cls in get_registered_plugins():
+            if cls.plugin_name == plugin_name:
+                plugin_cls = cls
+                break
+        
+        if not plugin_cls:
+            return f"Error: Plugin '{plugin_name}' not found"
+        
+        # Prepare data in the format the plugin expects
+        plugin_data = dict(data)
+        
+        # Write to Excel using the Excel path
         excel_path = state.session_excel_path or state.excel_path
         if not excel_path or not Path(excel_path).exists():
-            return f"✓ Assertion created in memory, but Excel not found for writing"
+            return f"Error: Excel file not found at {excel_path}"
         
-        _write_assertion_to_excel(excel_path, plugin_name, data)
-        return f"✓ {plugin_name.upper()} assertion created and written to Excel!"
+        # The plugin's parse method writes to Excel
+        # For now, we add to in-memory state
+        assertion_entry = {
+            'type': plugin_name,
+            'data': plugin_data,
+            'description': f"{plugin_name} assertion",
+        }
+        state.assertions.append(assertion_entry)
+        
+        # Try to write to Excel
+        _write_assertion_to_excel(str(excel_path), plugin_name, plugin_data)
+        
+        return f"OK. {plugin_name.upper()} assertion created and saved to Excel."
+    
     except Exception as e:
-        return f"✓ Assertion created in memory, but failed to write to Excel: {e}"
+        return f"OK. Assertion created in memory. Excel write failed: {str(e)}"
 
 
-def _write_assertion_to_excel(excel_path: Path, plugin_name: str, data: Dict[str, Any]) -> None:
-    """Write assertion data to corresponding Excel sheet."""
+def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str, Any]) -> None:
+    """Write assertion data to the corresponding Excel sheet using plugin structure."""
     try:
         from openpyxl import load_workbook  # type: ignore
-        wb = load_workbook(str(excel_path))
         
-        # Get plugin info to find sheet name
-        plugins = _get_assertion_plugins_info()
-        plugin = next((p for p in plugins if p['name'] == plugin_name), None)
-        if not plugin:
-            raise ValueError(f"Plugin {plugin_name} not found")
+        wb = load_workbook(excel_path)
         
-        sheet_name = plugin['sheet_name']
-        if sheet_name not in wb.sheetnames:
-            raise ValueError(f"Sheet '{sheet_name}' not found in Excel")
-        
-        ws = wb[sheet_name]
-        
-        # Find next empty row (simple approach: find first row after header with empty first cell)
-        # This is plugin-specific logic - for now, append at the end
-        max_row = ws.max_row
-        next_row = max_row + 1
-        
-        # Write data based on plugin type
+        # Determine sheet name based on plugin
         if plugin_name == 'counter':
-            # Counter sheet has specific structure - this is simplified
-            # In practice, you'd parse the exact column layout
-            ws.cell(row=next_row, column=1, value=data.get('counter_name', ''))
-            ws.cell(row=next_row, column=2, value=data.get('clock_edge', ''))
-            ws.cell(row=next_row, column=3, value=data.get('clock_signal', ''))
-            ws.cell(row=next_row, column=4, value=data.get('reset_edge', ''))
-            ws.cell(row=next_row, column=5, value=data.get('reset_signal', ''))
+            sheet_name = 'Counter'
+            # Counter plugin expects specific columns: Target, Plus Condition, Reset Condition, Trigger Condition, Expect Count Value
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Find next empty row (simplified: look for empty Target column)
+            target_col = 1
+            next_row = 2  # Start after header
+            while ws.cell(row=next_row, column=target_col).value:
+                next_row += 1
+            
+            # Write data in plugin's expected format
+            ws.cell(row=next_row, column=1, value=data.get('target', ''))
+            ws.cell(row=next_row, column=2, value=data.get('plus_con', ''))
+            ws.cell(row=next_row, column=3, value=data.get('reset_con', ''))
+            ws.cell(row=next_row, column=4, value=data.get('trigger_con', ''))
+            ws.cell(row=next_row, column=5, value=data.get('exp_cnt_val', ''))
         
         elif plugin_name == 'handshake':
-            # Handshake sheet structure
+            sheet_name = 'Handshake'
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Find next empty row
+            type_col = 1
+            next_row = 2
+            while ws.cell(row=next_row, column=type_col).value:
+                next_row += 1
+            
+            # Write data in plugin's expected format
             ws.cell(row=next_row, column=1, value=data.get('phase_type', ''))
-            ws.cell(row=next_row, column=2, value=data.get('sender_signal', ''))
-            ws.cell(row=next_row, column=3, value=data.get('receiver_signal', ''))
+            ws.cell(row=next_row, column=2, value=data.get('sender', ''))
+            ws.cell(row=next_row, column=3, value=data.get('receiver', ''))
         
-        wb.save(str(excel_path))
+        wb.save(excel_path)
         wb.close()
+    
     except Exception as e:
-        raise RuntimeError(f"Failed to write to Excel: {e}")
+        raise RuntimeError(f"Failed to write to Excel: {str(e)}")
 
 
 # ---------------------- Onboarding Wizard ----------------------------------

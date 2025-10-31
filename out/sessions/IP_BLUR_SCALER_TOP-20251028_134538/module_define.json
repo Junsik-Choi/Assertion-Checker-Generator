@@ -1,0 +1,90 @@
+{
+  "top_path": "",
+  "module": "IP_BLUR_SCALER_TOP",
+  "rtl_file_path": "",
+  "paths": [],
+  "instances": [],
+  "clocks": [
+    {
+      "name": "I_CLK",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "I_RSTN",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "I_DATA",
+      "width": "[7:0]"
+    },
+    {
+      "name": "I_DEN",
+      "width": ""
+    },
+    {
+      "name": "I_HSYNC",
+      "width": ""
+    },
+    {
+      "name": "I_VSYNC",
+      "width": ""
+    },
+    {
+      "name": "PCLK",
+      "width": ""
+    },
+    {
+      "name": "PRSTN",
+      "width": ""
+    },
+    {
+      "name": "i_PADDR",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "i_PEN",
+      "width": ""
+    },
+    {
+      "name": "i_PSEL",
+      "width": ""
+    },
+    {
+      "name": "i_PWDATA",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "i_PWRITE",
+      "width": ""
+    }
+  ],
+  "outputs": [
+    {
+      "name": "O_DATA",
+      "width": "[7:0]"
+    },
+    {
+      "name": "O_DEN",
+      "width": ""
+    },
+    {
+      "name": "O_HSYNC",
+      "width": ""
+    },
+    {
+      "name": "O_VSYNC",
+      "width": ""
+    },
+    {
+      "name": "o_PRDATA",
+      "width": "[`BASE_APB_MAX_DATA_WIDTH-1:0]"
+    }
+  ],
+  "inouts": [],
+  "parameters": [],
+  "conditions": []
+}

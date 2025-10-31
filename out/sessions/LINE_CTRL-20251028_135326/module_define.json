@@ -1,0 +1,118 @@
+{
+  "top_path": "",
+  "module": "LINE_CTRL",
+  "rtl_file_path": "",
+  "paths": [],
+  "instances": [],
+  "clocks": [
+    {
+      "name": "clk",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "resetn",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "i_HSW",
+      "width": "[5:0]"
+    },
+    {
+      "name": "i_VSW",
+      "width": "[5:0]"
+    },
+    {
+      "name": "i_de",
+      "width": ""
+    },
+    {
+      "name": "i_hsync",
+      "width": ""
+    },
+    {
+      "name": "i_r",
+      "width": "[9:0]"
+    },
+    {
+      "name": "i_vsync",
+      "width": ""
+    }
+  ],
+  "outputs": [
+    {
+      "name": "o_H_ACTIVE_TH",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_H_WAIT_TH",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_VTOT",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_V_ACTIVE_TH",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_V_WAIT_TH",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_addr1",
+      "width": "[5:0]"
+    },
+    {
+      "name": "o_addr2",
+      "width": "[5:0]"
+    },
+    {
+      "name": "o_cs1",
+      "width": ""
+    },
+    {
+      "name": "o_de",
+      "width": ""
+    },
+    {
+      "name": "o_hsync",
+      "width": ""
+    },
+    {
+      "name": "o_hsync_cnt",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_hsync_edge",
+      "width": ""
+    },
+    {
+      "name": "o_mem_sel",
+      "width": ""
+    },
+    {
+      "name": "o_rgb",
+      "width": "[29:0]"
+    },
+    {
+      "name": "o_vsync",
+      "width": ""
+    },
+    {
+      "name": "o_vsync_cnt",
+      "width": "[8:0]"
+    },
+    {
+      "name": "o_we1",
+      "width": ""
+    }
+  ],
+  "inouts": [],
+  "parameters": [],
+  "conditions": []
+}
