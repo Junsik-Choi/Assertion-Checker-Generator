@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 from .base import BaseAssertionPlugin
 from .registry import register
 
-ALLOWED_TYPES = ("basic_counter")
+ALLOWED_TYPES = ("counter",)
 
 def _pick_one(title: str, options: List[Tuple[str, str]], allow_custom: bool = False) -> str:
     print(title, flush=True)
@@ -23,7 +23,7 @@ def _pick_one(title: str, options: List[Tuple[str, str]], allow_custom: bool = F
             return options[0][1] if options else ""
         if allow_custom and s == "0":
             try:
-                return input("Enter value > ").strip()
+                return input("Enter > ").strip()
             except EOFError:
                 return ""
         if s.isdigit():
@@ -137,6 +137,88 @@ def _auto_pick_clk_rst(mod: Dict[str, Any]) -> Tuple[str, str]:
                 break
     return clk, rst
 
+# -----------------------------
+# Is Port helpers
+# -----------------------------
+def _is_module_port(mod: Dict[str, Any], name: str) -> bool:
+    """Return True if 'name' exists in the module's declared ports."""
+    if not name or not mod:
+        return False
+    want = (name or "").strip()
+    for key in ("inputs", "outputs", "inouts", "clocks", "resets", "ports"):
+        for port in mod.get(key, []) or []:
+            if (port.get("name") or "") == want:
+                return True
+    return False
+
+# -----------------------------
+# Width helpers
+# -----------------------------
+def _normalize_range_token(token: str) -> str:
+    """Return normalized [msb:lsb] token; default to [0:0] for 1-bit/unknown."""
+    if token is None:
+        return "[0:0]"
+    t = str(token).strip().replace(" ", "")
+    if not t:
+        return "[0:0]"
+    if t.startswith("[") and t.endswith("]"):
+        return t
+    # numeric like '32' or '1'
+    try:
+        n = int(t, 10)
+        if n >= 1:
+            return f"[{n-1}:0]"
+        return "[0:0]"
+    except Exception:
+        # unknown format -> treat as 1-bit
+        return "[0:0]"
+
+def _port_width_token(mod: Dict[str, Any], name: str) -> str:
+    """Find port by name and return width token '[msb:lsb]' (defaults to [0:0])."""
+    if not name or not mod:
+        return "[0:0]"
+    want = (name or "").strip()
+    # 1) search a broader 'ports' list first if present
+    candidates = [
+        mod.get("ports") or [],
+        mod.get("inputs") or [],
+        mod.get("outputs") or [],
+        mod.get("inouts") or [],
+        mod.get("clocks") or [],
+        mod.get("resets") or [],
+    ]
+    for arr in candidates:
+        for it in arr:
+            if (it.get("name") or "") != want:
+                continue
+            # Typical fields
+            for key in ("packed_range", "range", "packed", "decl"):
+                pr = it.get(key)
+                if pr is not None and str(pr).strip():
+                    return _normalize_range_token(pr)
+            # Width as integer/string
+            for key in ("width", "bit_width", "width_bits"):
+                w = it.get(key)
+                if w is not None and str(w).strip():
+                    return _normalize_range_token(str(w))
+            # Separate ends
+            for left_key, right_key in (("msb", "lsb"), ("left", "right")):
+                msb = it.get(left_key)
+                lsb = it.get(right_key)
+                if msb is not None and lsb is not None:
+                    try:
+                        return f"[{int(msb)}:{int(lsb)}]"
+                    except Exception:
+                        return f"[{msb}:{lsb}]"
+            # Fallback 1-bit
+            return "[0:0]"
+    return "[0:0]"
+
+def _fmt_input_decl(sig: str, width_tok: str) -> str:
+    """Format input logic with width; defaults to [0:0] if empty."""
+    width_tok = (width_tok or "").strip() or "[0:0]"
+    return f"input logic {width_tok} {sig}"
+
 def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, Any]) -> int:
     """
     Counter 시트에 값을 기록하고, 기록한 '행 번호'를 반환한다.
@@ -172,22 +254,37 @@ def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, An
     return write_row
 
 def generate_verilog(info: Dict[str, Any]) -> str:
-    clk = info["Base Clock"]; rst = info["Reset"]
-    cnt = info["Target"]
-    plus_con = info["Plus Condition"]; reset_con = info["Reset Condition"]
-    trigger_con = info["Trigger Condition"]; exp_cnt_val = info["Expect Count Value"]
+    clk         = info["Base Clock"]
+    rst         = info["Reset"]
+    plus_con    = info["Plus Condition"]
+    reset_con   = info["Reset Condition"]
+    trigger_con = info["Trigger Condition"]
+    exp_cnt_val = info["Expect Count Value"]
+    cnt         = info["Target"]
+
+    w_clk           = info.get("Base Clock Width", "")
+    w_rst           = info.get("Reset Width", "")
+    w_plus_con      = info.get("Plus Condition Width", "")
+    w_reset_con     = info.get("Reset Condition Width", "")
+    w_trigger_con   = info.get("Trigger Condition Width", "")
+    w_exp_cnt_val   = info.get("Expect Count Value Width", "")
+
+    port_list = []
+    port_list.append(_fmt_input_decl(clk, w_clk))
+    port_list.append(_fmt_input_decl(rst, w_rst))
+    if info["Plus Condition Is Port"]    : port_list.append(_fmt_input_decl(plus_con, w_plus_con))
+    if info["Reset Condition Is Port"]   : port_list.append(_fmt_input_decl(reset_con, w_reset_con))
+    if info["Trigger Condition Is Port"] : port_list.append(_fmt_input_decl(trigger_con, w_trigger_con))
+    if info["Expect Count Value Is Port"]: port_list.append(_fmt_input_decl(exp_cnt_val, w_exp_cnt_val))
+    ports = ",\n    ".join(port_list)
+
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
-    return header + f"""module assertion_basic_counter
+    return header + f"""module assertion_counter
 (
-    input logic     {clk},
-    input logic     {rst},
-    input logic     {plus_con},
-    input logic     {reset_con},
-    input logic     {trigger_con},
-    input logic     {exp_cnt_val} 
+    {ports} 
 );
 
-reg [31:0] {cnt};
+    reg [31:0] {cnt};
 
     always @(posedge {clk} or negedge {rst}) begin
         if(!{rst}) begin
@@ -215,22 +312,31 @@ endmodule
 """
 
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
-    clk = info["Base Clock"]; rst = info["Reset"]
-    #cnt = info["Target"]
-    plus_con = info["Plus Condition"]; reset_con = info["Reset Condition"]
-    trigger_con = info["Trigger Condition"]; exp_cnt_val = info["Expect Count Value"]
-    mod = f"assertion_basic_counter"
+    clk         = info["Base Clock"]
+    rst         = info["Reset"]
+    plus_con    = info["Plus Condition"]
+    reset_con   = info["Reset Condition"]
+    trigger_con = info["Trigger Condition"]
+    exp_cnt_val = info["Expect Count Value"]
+
+    mod = f"assertion_counter"
+
+    assign_list = []
+    assign_list.append(f"assign u_{mod}.{clk} = top.dut.{clk};")
+    assign_list.append(f"assign u_{mod}.{rst} = top.dut.{rst};")
+    if info["Plus Condition Is Port"]    : assign_list.append(f"assign u_{mod}.{plus_con} = top.dut.{plus_con};")
+    if info["Reset Condition Is Port"]   : assign_list.append(f"assign u_{mod}.{reset_con} = top.dut.{reset_con};")
+    if info["Trigger Condition Is Port"] : assign_list.append(f"assign u_{mod}.{trigger_con} = top.dut.{trigger_con};")
+    if info["Expect Count Value Is Port"]: assign_list.append(f"assign u_{mod}.{exp_cnt_val} = top.dut.{exp_cnt_val};")
+    assigns = "\n".join(assign_list)
+
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
+
     # inst 파일은 모듈 래퍼 없이 인스턴스와 assign만 생성
     return header + (
         f"{mod}\n"
         f" u_{mod} ();\n\n"
-        f"assign u_{mod}.{clk} = top.dut.{clk};\n"
-        f"assign u_{mod}.{rst} = top.dut.{rst};\n"
-        f"assign u_{mod}.{plus_con} = top.dut.{plus_con};\n"
-        f"assign u_{mod}.{reset_con} = top.dut.{reset_con};\n"
-        f"assign u_{mod}.{trigger_con} = top.dut.{trigger_con};\n"
-        f"assign u_{mod}.{exp_cnt_val} = top.dut.{exp_cnt_val};\n"
+        f"{assigns}\n"
     )
 
 def _get_forced_type() -> Optional[str]:
@@ -247,6 +353,10 @@ class CounterPlugin(BaseAssertionPlugin):
             md = xls_path.parent / "module_define.json"
             if md.exists():
                 return json.loads(md.read_text(encoding="utf-8"))
+            # fallback: assertion_inputs.json (same schema subset)
+            ai = xls_path.parent / "assertion_inputs.json"
+            if ai.exists():
+                return json.loads(ai.read_text(encoding="utf-8"))
         except Exception:
             pass
         return {}
@@ -255,15 +365,45 @@ class CounterPlugin(BaseAssertionPlugin):
         in_names = [(f"in : {p.get('name')}", p.get("name") or "") for p in (mod.get("inputs") or []) if p.get("name")]
         out_names = [(f"out: {p.get('name')}", p.get("name") or "") for p in (mod.get("outputs") or []) if p.get("name")]
         sig_opts = in_names + out_names or [("manual input", "")]
-        target = _scan("Enter Target Signal (ex. cnt)")
-        #plus_con = _scan("Enter Plus Condition (ex. cnt_en == 1)")
-        plus_con = _pick_one("Select Plus Condition signal", sig_opts, allow_custom=True)
-        #reset_con = _scan("Enter Reset Condition (ex. cnt == max_cnt_val)")
-        reset_con = _pick_one("Select Reset Condition signal", sig_opts, allow_custom=True)
-        #trigger_con = _scan("Enter Trigger Condition (ex. $rose(check_cnt))")
-        trigger_con = _pick_one("Select Trigger Condition signal", sig_opts, allow_custom=True)
-        #exp_cnt_val = _scan("Enter Expect Counter Value (ex. 1024, exp_cnt_val)")
-        exp_cnt_val = _pick_one("Select Expect Counter Value signal", sig_opts, allow_custom=True)
+        target = _scan("\nEnter A New Counter Name (e.g., cnt)")
+        plus_con = _pick_one("""
+
+Choose a signal for <plus_con> in the following code:
+
+    else if( <plus_con> ) begin
+        cnt <= cnt+1;
+    end
+
+Available signals:""", sig_opts, allow_custom=True)
+        reset_con = _pick_one("""
+
+Choose a signal for <reset_con> in the following code:
+
+    else if( <reset_con> ) begin
+        cnt <= 0;
+    end
+
+Available signals:""", sig_opts, allow_custom=True)
+        trigger_con = _pick_one("""
+
+Choose a signal for <trigger_con> in the following code:
+
+    property p_counter_check
+        @(posedge I_CLK) disable iff(!I_RSTN)
+        <trigger_con> |-> (cnt == <exp_cnt_val>);
+    endproperty
+
+Available signals:""", sig_opts, allow_custom=True)
+        exp_cnt_val = _pick_one("""
+
+Choose a signal for <exp_cnt_val> in the following code:
+
+    property p_counter_check
+        @(posedge I_CLK) disable iff(!I_RSTN)
+        <trigger_con> |-> (cnt == <exp_cnt_val>);
+    endproperty
+
+Available signals:""", sig_opts, allow_custom=True)
         return {"target": target, "plus_con": plus_con, "reset_con": reset_con, "trigger_con": trigger_con, "exp_cnt_val": exp_cnt_val}
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
@@ -288,15 +428,27 @@ class CounterPlugin(BaseAssertionPlugin):
             return {"blocks": []}
         _, target_col, _ = _ensure_counter_layout(ws)
         info = parse_counter_block_for_row(ws, write_row, target_col)
+        # attach bit widths from module define
+        info["Base Clock Width"] = _port_width_token(mod, info.get("Base Clock", ""))
+        info["Reset Width"] = _port_width_token(mod, info.get("Reset", ""))
+        info["Plus Condition Width"] = _port_width_token(mod, info.get("Plus Condition", ""))
+        info["Reset Condition Width"] = _port_width_token(mod, info.get("Reset Condition", ""))
+        info["Trigger Condition Width"] = _port_width_token(mod, info.get("Trigger Condition", ""))
+        info["Expect Count Value Width"] = _port_width_token(mod, info.get("Expect Count Value", ""))
+        # attach 'is custom' from module define
+        info["Plus Condition Is Port"] = _is_module_port(mod, info.get("Plus Condition", ""))
+        info["Reset Condition Is Port"] = _is_module_port(mod, info.get("Reset Condition", ""))
+        info["Trigger Condition Is Port"] = _is_module_port(mod, info.get("Trigger Condition", ""))
+        info["Expect Count Value Is Port"] = _is_module_port(mod, info.get("Expect Count Value", ""))
         blocks: List[Dict[str, Any]] = []
-        ct = "basic_counter"
+        ct = "counter"
         if ct in ALLOWED_TYPES and info.get("Target") and info.get("Plus Condition") and info.get("Trigger Condition") and info.get("Expect Count Value"):
             blocks.append(info)
 
         # 선택된 타입만 남기기
         forced = _get_forced_type()
         if forced:
-            blocks = [b for b in blocks if "basic_counter" == forced]
+            blocks = [b for b in blocks if "counter" == forced]
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
@@ -306,12 +458,12 @@ class CounterPlugin(BaseAssertionPlugin):
         forced = _get_forced_type()
         for info in parsed.get("blocks", []):
             # 선택 타입만 생성
-            if forced and ("basic_counter" != forced):
+            if forced and ("counter" != forced):
                 continue
             sv = generate_verilog(info)
             inst_sv = generate_inst_verilog(info)
-            (out_dir / f"assertion_basic_counter.sv").write_text(sv, encoding="utf-8")
-            (out_dir / f"assertion_basic_counter_inst.sv").write_text(inst_sv, encoding="utf-8")
+            (out_dir / f"assertion_counter.sv").write_text(sv, encoding="utf-8")
+            (out_dir / f"assertion_counter_inst.sv").write_text(inst_sv, encoding="utf-8")
             snippets.append(sv)
         return snippets
 
