@@ -59,71 +59,6 @@ except Exception:
     load_workbook = None  # type: ignore
 
 
-def _remove_readonly(func, path, excinfo):
-    """Error handler for Windows readonly files"""
-    import stat
-    import os
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
-
-
-def _force_delete_folder(folder_path: Path) -> Tuple[bool, str]:
-    """
-    Force delete folder with 3-tier strategy for Windows.
-    Returns (success, error_message)
-    """
-    import time
-    import subprocess
-    
-    if not folder_path.exists():
-        return True, ""
-    
-    # Tier 1: Try normal deletion with readonly handler
-    try:
-        shutil.rmtree(folder_path, onerror=_remove_readonly)
-        if not folder_path.exists():
-            return True, ""
-    except Exception as e:
-        pass
-    
-    # Tier 2: Wait and retry
-    try:
-        time.sleep(0.1)
-        shutil.rmtree(folder_path, onerror=_remove_readonly)
-        if not folder_path.exists():
-            return True, ""
-    except Exception as e:
-        pass
-    
-    # Tier 3: System command (Windows: rd /s /q, Unix: rm -rf)
-    try:
-        import platform
-        if platform.system() == "Windows":
-            result = subprocess.run(
-                ['cmd', '/c', 'rd', '/s', '/q', str(folder_path)],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if not folder_path.exists():
-                return True, ""
-            else:
-                return False, f"System command failed: {result.stderr or 'Unknown error'}"
-        else:
-            result = subprocess.run(
-                ['rm', '-rf', str(folder_path)],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if not folder_path.exists():
-                return True, ""
-            else:
-                return False, f"System command failed: {result.stderr or 'Unknown error'}"
-    except Exception as e:
-        return False, f"Force delete failed: {str(e)}"
-
-
 def _robust_copy(src: Path, dst: Path) -> Path:
     """Copy file src->dst robustly. If dst exists or copy fails, try a unique name and raw copy."""
     target = dst
@@ -229,8 +164,7 @@ def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
         log_debug("Creating define JSON...")
         define_json = fill_define_excel_if_needed(new_xlsx, {
             "module": state.module_info.module,
-            "rtl_file_path": state.module_info.rtl_file_path,  # Internal use only
-            "rtl_hierarchy": state.module_info.module_hierarchy,  # Display path
+            "rtl_file_path": state.module_info.rtl_file_path,  # Add RTL file path
             "clocks": state.module_info.clocks,
             "resets": state.module_info.resets,
             "inputs": state.module_info.inputs,
@@ -301,8 +235,7 @@ def _update_define_sheet(state: AppState) -> None:
     sess_dir = state.session_excel_path.parent
     define_json = fill_define_excel_if_needed(state.session_excel_path, {
         "module": state.module_info.module,
-        "rtl_file_path": state.module_info.rtl_file_path,  # Internal use only
-        "rtl_hierarchy": state.module_info.module_hierarchy,  # Display path
+        "rtl_file_path": state.module_info.rtl_file_path,  # Add RTL file path
         "clocks": state.module_info.clocks,
         "resets": state.module_info.resets,
         "inputs": state.module_info.inputs,
@@ -340,8 +273,7 @@ _APP_VERSION = "v1.0"
 @dataclass
 class ModuleInfo:
     module: str = ""
-    rtl_file_path: str = ""  # Full path to .v file containing the module (internal use)
-    module_hierarchy: str = ""  # User-provided module hierarchy (e.g., top.dut.abc.u_abc)
+    rtl_file_path: str = ""  # Full path to .v file containing the module
     inputs: List[Dict[str, Any]] = field(default_factory=list)
     outputs: List[Dict[str, Any]] = field(default_factory=list)
     inouts: List[Dict[str, Any]] = field(default_factory=list)
@@ -370,12 +302,10 @@ class AppState:
     port_filter: Optional[str] = None
     # Onboarding wizard state
     onboarding_active: bool = False
-    onboarding_stage: Optional[str] = None  # 'rtl' | 'module' | 'hierarchy' | 'excel' | None
+    onboarding_stage: Optional[str] = None  # 'rtl' | 'module' | 'excel' | None
     onboarding_filter: str = ""
     onboarding_page: int = 0
-    onboarding_modules: List[str] = field(default_factory=list)  # Now stores "inst_name (module_type)" format
-    onboarding_instances: List[Dict[str, Any]] = field(default_factory=list)  # Stores full instance info
-    selected_instance: Optional[Dict[str, Any]] = None  # Selected instance metadata for hierarchy building
+    onboarding_modules: List[str] = field(default_factory=list)
     onboarding_excel_autofound: Optional[Path] = None
     onboarding_compl_index: int = 0
     onboarding_cand_page: int = 0
@@ -490,16 +420,11 @@ def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tup
     # If a single file was provided, parse only that file; else use root + scope dir
     if rtl_start.is_file():
         files = [rtl_start]
-        # Single file mode: allow unknown module types since we don't have all definitions
-        allow_unknown = True
     else:
         rtl_root, _found = find_rtl_root_from(rtl_start)
         start_scope_dir = rtl_start if rtl_start.is_dir() else rtl_start.parent
         files = sorted(set(discover_files(rtl_root, exts)) | set(discover_files(start_scope_dir, exts)), key=lambda p: str(p))
-        # Directory mode: we have all files, so enforce known types only
-        allow_unknown = False
-    
-    modules = build_modules_db(files, allow_unknown=allow_unknown)
+    modules = build_modules_db(files, allow_unknown=False)
     if not modules:
         raise RuntimeError("No modules parsed from RTL scope")
 
@@ -804,61 +729,62 @@ def _main(stdscr: "curses._CursesWindow") -> None:
 
     # Session load and first-run flow
     sessions = _load_sessions()
-    # Always show session chooser (even if empty)
-    chooser_result = _run_session_chooser(stdscr, sessions)
-    if isinstance(chooser_result, dict):
-        # Restore state from chosen session
-        chosen = chooser_result
-        try:
-            state.rtl_start = Path(chosen.get("rtl_start", "")) if chosen.get("rtl_start") else None
-        except Exception:
-            state.rtl_start = None
-        state.target_module = chosen.get("target_module") or None
-        
-        # Restore module hierarchy from session
-        if "module_hierarchy" in chosen:
-            state.module_info.module_hierarchy = chosen.get("module_hierarchy", "")
-        
-        # CRITICAL: Never restore excel_path (reference Excel)
-        # Only restore session_excel_path
-        state.excel_path = None  # Always None - we don't use reference paths
-        
-        try:
-            state.session_excel_path = Path(chosen.get("session_excel_path", "")) if chosen.get("session_excel_path") else None
-        except Exception:
-            state.session_excel_path = None
-        try:
-            if chosen.get("out_dir"):
-                state.out_dir = Path(chosen.get("out_dir")).resolve()
-        except Exception:
-            pass
-        # Best-effort immediate scan if RTL is available
-        if state.rtl_start:
+    if sessions:
+        chooser_result = _run_session_chooser(stdscr, sessions)
+        if isinstance(chooser_result, dict):
+            # Restore state from chosen session
+            chosen = chooser_result
             try:
-                modules, mi, occs = build_context_from_rtl(state.rtl_start, state.target_module)
-                state.modules_db = modules
-                state.module_info = mi
-                state.target_module = mi.module
-                state.occs = occs
-                
-                # Try to find latest session Excel for this module if not already set
-                if not state.session_excel_path:
-                    latest_excel = _find_latest_session_excel(mi.module)
-                    if latest_excel:
-                        state.session_excel_path = latest_excel
+                state.rtl_start = Path(chosen.get("rtl_start", "")) if chosen.get("rtl_start") else None
+            except Exception:
+                state.rtl_start = None
+            state.target_module = chosen.get("target_module") or None
+            
+            # CRITICAL: Never restore excel_path (reference Excel)
+            # Only restore session_excel_path
+            state.excel_path = None  # Always None - we don't use reference paths
+            
+            try:
+                state.session_excel_path = Path(chosen.get("session_excel_path", "")) if chosen.get("session_excel_path") else None
+            except Exception:
+                state.session_excel_path = None
+            try:
+                if chosen.get("out_dir"):
+                    state.out_dir = Path(chosen.get("out_dir")).resolve()
             except Exception:
                 pass
-        
-        # Restore condition signals from Excel after session Excel path is set
-        if state.session_excel_path:
-            _restore_conditions_from_excel(state)
-    elif chooser_result == "new":
+            # Best-effort immediate scan if RTL is available
+            if state.rtl_start:
+                try:
+                    modules, mi, occs = build_context_from_rtl(state.rtl_start, state.target_module)
+                    state.modules_db = modules
+                    state.module_info = mi
+                    state.target_module = mi.module
+                    state.occs = occs
+                    
+                    # Try to find latest session Excel for this module if not already set
+                    if not state.session_excel_path:
+                        latest_excel = _find_latest_session_excel(mi.module)
+                        if latest_excel:
+                            state.session_excel_path = latest_excel
+                except Exception:
+                    pass
+            
+            # Restore condition signals from Excel after session Excel path is set
+            if state.session_excel_path:
+                _restore_conditions_from_excel(state)
+        elif chooser_result == "new":
+            state.onboarding_active = True
+            state.onboarding_stage = 'rtl'
+            state.onboarding_excel_autofound = _auto_find_excel()
+        else:
+            # quit or None → continue to normal UI
+            pass
+    else:
+        # First run wizard instead of auto-scan
         state.onboarding_active = True
         state.onboarding_stage = 'rtl'
         state.onboarding_excel_autofound = _auto_find_excel()
-    else:
-        # quit or None → exit program
-        return
 
     while True:
         max_y, max_x = stdscr.getmaxyx()
@@ -1037,8 +963,6 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     hint_text = "Enter path and press Enter. Tab: complete. Esc: cancel."
                 elif stage == 'module':
                     hint_text = "Type number. f <text>: filter, F: clear, n/N: page, prev/back: previous"
-                elif stage == 'hierarchy':
-                    hint_text = "Enter module hierarchy (e.g., top.dut.abc.u_abc). prev/back: previous"
                 else:
                     hint_text = "Type path and Enter (or accept autodetected). prev/back: previous"
                 stdscr.addnstr(hint_y, 2, _truncate(hint_text, max_x - 4), max_x - 4, curses.A_DIM)
@@ -1202,48 +1126,6 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     else:
                         status_msg = "Invalid RTL path (not found)."
                         # keep input so user can edit
-                elif stage == 'hierarchy':
-                    # Handle hierarchy input: empty (use default), number (select from list), or custom string
-                    if not cmdline.strip():
-                        # Empty input - use already selected hierarchy (first one)
-                        if state.module_info.module_hierarchy:
-                            state.onboarding_stage = 'excel'
-                            status_msg = f"Using hierarchy: {state.module_info.module_hierarchy}"
-                            input_buf.clear(); cursor_pos = 0
-                            try:
-                                stdscr.clear(); stdscr.refresh()
-                            except Exception:
-                                pass
-                        else:
-                            status_msg = "No hierarchy detected. Please enter manually."
-                    elif cmdline.strip().isdigit():
-                        # Number - select from detected hierarchies
-                        idx = int(cmdline.strip()) - 1
-                        if state.occs and 0 <= idx < len(state.occs):
-                            selected_hierarchy = state.occs[idx].get("path", "")
-                            if selected_hierarchy:
-                                state.module_info.module_hierarchy = selected_hierarchy
-                                state.onboarding_stage = 'excel'
-                                status_msg = f"Hierarchy set: {selected_hierarchy}"
-                                input_buf.clear(); cursor_pos = 0
-                                try:
-                                    stdscr.clear(); stdscr.refresh()
-                                except Exception:
-                                    pass
-                            else:
-                                status_msg = f"Invalid selection: no path for index {idx + 1}"
-                        else:
-                            status_msg = f"Invalid number. Choose 1-{len(state.occs) if state.occs else 0}"
-                    else:
-                        # Custom string
-                        state.module_info.module_hierarchy = cmdline.strip()
-                        state.onboarding_stage = 'excel'
-                        status_msg = f"Hierarchy set: {cmdline.strip()}"
-                        input_buf.clear(); cursor_pos = 0
-                        try:
-                            stdscr.clear(); stdscr.refresh()
-                        except Exception:
-                            pass
                 elif stage == 'excel':
                     # Delegate to command handler (supports empty accept)
                     out_msg, opened_overlay = _handle_command(state, cmdline)
@@ -1305,7 +1187,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         # Left side: Module/Paths dynamically sized, Clocks/Resets/Params fills remainder
         # Calculate Module/Paths height based on content
         kv_items_preview = [
-            ("Hierarchy", state.module_info.module_hierarchy or "(not set)"),
+            ("RTL", _sanitize_path_for_display(_safe_str(state.rtl_start or ""))),
             ("Module", state.module_info.module or (state.target_module or "")),
             ("Excel", "placeholder"),
             ("Out", _sanitize_path_for_display(_safe_str(state.out_dir))),
@@ -1342,7 +1224,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             excel_error = True
         
         kv_items = [
-            ("Hierarchy", state.module_info.module_hierarchy or "(not set)"),
+            ("RTL", _sanitize_path_for_display(_safe_str(state.module_info.rtl_file_path or state.rtl_start or ""))),
             ("Module", state.module_info.module or (state.target_module or "")),
             ("Excel", _sanitize_path_for_display(_safe_str(excel_show)) if excel_show else "ERROR: Session Excel not loaded"),
             ("Out", _sanitize_path_for_display(_safe_str(state.out_dir))),
@@ -1760,81 +1642,34 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             try:
                 p = _P(cmdline).expanduser().resolve()  # Add .resolve() here
                 if str(p).strip() and p.exists():
-                    # Validate: must be a .v or .sv file
-                    if not p.is_file():
-                        return "❌ Error: Please provide a .v or .sv file (not a directory)", False
-                    
-                    if p.suffix.lower() not in ['.v', '.sv']:
-                        return f"❌ Error: File must be .v or .sv (got: {p.suffix})", False
-                    
                     state.rtl_start = p
-                    # Build instance list for next stage
+                    # Build modules list for next stage
                     try:
                         mods_ctx, _mi, _occs = build_context_from_rtl(p, None)
-                        state.modules_db = mods_ctx
-                        
-                        # Extract ALL instances from ALL modules in this file
-                        instances = []
-                        # Get all modules defined in this file
-                        file_modules = [name for name, m in mods_ctx.items() if Path(m["file"]).resolve() == p.resolve()]
-                        
-                        # For each module in the file, extract its instances
-                        for mod_name in file_modules:
-                            if mod_name in mods_ctx:
-                                mod_data = mods_ctx[mod_name]
-                                for inst in mod_data.get("instances", []):
-                                    inst_name = inst.get("inst", "")
-                                    inst_type = inst.get("type", "")
-                                    if inst_name and inst_type:
-                                        instances.append({
-                                            "parent_module": mod_name,
-                                            "inst": inst_name,
-                                            "type": inst_type,
-                                            "params": inst.get("params", {}),
-                                            "display": f"{inst_name} ({inst_type})"
-                                        })
-                        
-                        if instances:
-                            state.onboarding_instances = instances
-                            state.onboarding_modules = [inst["display"] for inst in instances]
+                        # If file: only modules from that file
+                        if p.is_file():
+                            from rtl_parser import modules_defined_under  # type: ignore
+                            # Use helper to filter modules by file path
+                            cand = [name for name, m in mods_ctx.items() if Path(m["file"]).resolve() == p.resolve()]
+                            state.onboarding_modules = sorted(list(set(cand)))
                         else:
-                            # No instances found - this is a leaf module
-                            # Show the module itself so user can still proceed
-                            state.onboarding_modules = sorted(file_modules)
-                            state.onboarding_instances = []
-                            
-                    except Exception as e:
-                        return f"❌ Error parsing RTL file: {e}", False
-                        
+                            state.onboarding_modules = sorted(list(mods_ctx.keys()))
+                    except Exception:
+                        state.onboarding_modules = []
                     state.onboarding_stage = 'module'
-                    return f"✓ RTL file loaded: {p.name} ({len(state.onboarding_modules)} items)", False
-                else:
-                    return "❌ Error: File not found. Please provide a valid .v or .sv file path", False
-            except Exception as e:
-                return f"❌ Error: Invalid path - {e}", False
+                    return f"rtl set: {p}", False
+            except Exception:
+                pass
         # 2) Module stage: number to pick, f filter, F clear, n/N page (wrap), prev/back to return
         if stage == 'module':
             if cmdline.isdigit():
                 idx = int(cmdline) - 1
                 if 0 <= idx < len(state.onboarding_modules):
-                    # Check if we have instance data
-                    if state.onboarding_instances and idx < len(state.onboarding_instances):
-                        # User selected an instance - use its type as target_module
-                        selected_inst = state.onboarding_instances[idx]
-                        state.target_module = selected_inst["type"]  # Use the module type, not instance name
-                        selected_inst_name = selected_inst["inst"]
-                        
-                        # Store the selected instance info for hierarchy
-                        state.selected_instance = selected_inst
-                    else:
-                        # Fallback: direct module selection
-                        state.target_module = state.onboarding_modules[idx]
-                        state.selected_instance = None
-                    
+                    state.target_module = state.onboarding_modules[idx]
                     # If starting scope was a directory, bind rtl_start to chosen module's file
                     try:
                         if state.modules_db and state.target_module in state.modules_db:
-                            fpath = Path(state.modules_db[state.target_module]["file"]).resolve()
+                            fpath = Path(state.modules_db[state.target_module]["file"]).resolve()  # type: ignore
                             if fpath.exists():
                                 state.rtl_start = fpath
                         # Refresh module_info now so panels have data in Step 3
@@ -1842,19 +1677,10 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                         state.modules_db = modules
                         state.module_info = mi
                         state.occs = occs
-                        # Auto-detect hierarchy from first occurrence
-                        if occs and len(occs) > 0:
-                            auto_hierarchy = occs[0].get("path", "")
-                            if auto_hierarchy:
-                                state.module_info.module_hierarchy = auto_hierarchy
                     except Exception:
                         pass
-                    state.onboarding_stage = 'hierarchy'
-                    
-                    if state.onboarding_instances and idx < len(state.onboarding_instances):
-                        return f"Picked instance: {selected_inst_name} (type: {state.target_module})", False
-                    else:
-                        return f"Picked module: {state.target_module}", False
+                    state.onboarding_stage = 'excel'
+                    return f"Picked module: {state.target_module}", False
             if cmd == 'f' and args:
                 state.onboarding_filter = " ".join(args)
                 state.onboarding_page = 0
@@ -1878,13 +1704,7 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 return f"Page {state.onboarding_page}", False
             if cmd in ("prev", "back"):
                 state.onboarding_stage = 'rtl'
-                return "Back to Step 1/4 — RTL", False
-        # 2.5) Hierarchy stage: accept hierarchy string or go back
-        if stage == 'hierarchy':
-            if cmd in ("prev", "back"):
-                state.onboarding_stage = 'module'
-                return "Back to Step 2/4 — Module", False
-            # Hierarchy input handled in main Enter handler
+                return "Back to Step 1/3 — RTL", False
         # 3) Excel stage: accept empty to take autodetected; or raw path
         if stage == 'excel':
             from pathlib import Path as _P
@@ -1978,8 +1798,8 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             
             # Condition 3: Navigation commands
             if cmd in ("prev", "back"):
-                state.onboarding_stage = 'hierarchy'
-                return "Back to Step 3/4 — Hierarchy", False
+                state.onboarding_stage = 'module'
+                return "Back to Step 2/3 — Module", False
             
             # If we reach here, no valid input was provided
             with open(debug_log, "a", encoding="utf-8") as f:
@@ -2034,169 +1854,62 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         raise SystemExit(0)
     
     if cmd == "debug":
-        # Hidden debug command - export comprehensive session info to file
+        # Hidden debug command to check Define sheet contents
         if not state.session_excel_path or not state.session_excel_path.exists():
-            return "ERROR: No session loaded. Create session first with 'new'", False
+            return "ERROR: No session Excel loaded", False
         
         try:
-            from datetime import datetime
             from openpyxl import load_workbook
-            
-            # Create debug export in session folder
-            sess_folder = state.session_excel_path.parent
-            debug_file = sess_folder / f"debug_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            
-            lines = []
-            lines.append("=" * 80)
-            lines.append(f"DEBUG EXPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            lines.append("=" * 80)
-            lines.append("")
-            
-            # === 1. DISPLAYED VALUES (Main Page) ===
-            lines.append("[ 1. MAIN PAGE DISPLAYED VALUES ]")
-            lines.append("-" * 80)
-            lines.append(f"Hierarchy:  {state.module_info.module_hierarchy or '(not set)'}")
-            lines.append(f"Module:     {state.module_info.module or '(not set)'}")
-            lines.append(f"Excel:      {_sanitize_path_for_display(str(state.session_excel_path))}")
-            lines.append(f"Out Dir:    {_sanitize_path_for_display(str(state.out_dir))}")
-            lines.append("")
-            lines.append(f"Clocks:     {len(state.module_info.clocks)} signals")
-            for i, clk in enumerate(state.module_info.clocks[:10], 1):
-                lines.append(f"  [{i}] {clk.get('name', '?')} - {clk.get('width', '?')} bits")
-            if len(state.module_info.clocks) > 10:
-                lines.append(f"  ... ({len(state.module_info.clocks) - 10} more)")
-            
-            lines.append("")
-            lines.append(f"Resets:     {len(state.module_info.resets)} signals")
-            for i, rst in enumerate(state.module_info.resets[:10], 1):
-                lines.append(f"  [{i}] {rst.get('name', '?')} - {rst.get('width', '?')} bits")
-            if len(state.module_info.resets) > 10:
-                lines.append(f"  ... ({len(state.module_info.resets) - 10} more)")
-            
-            lines.append("")
-            lines.append(f"Inputs:     {len(state.module_info.inputs)} signals")
-            for i, inp in enumerate(state.module_info.inputs[:20], 1):
-                lines.append(f"  [{i}] {inp.get('name', '?')} - {inp.get('width', '?')} bits")
-            if len(state.module_info.inputs) > 20:
-                lines.append(f"  ... ({len(state.module_info.inputs) - 20} more)")
-            
-            lines.append("")
-            lines.append(f"Outputs:    {len(state.module_info.outputs)} signals")
-            for i, out in enumerate(state.module_info.outputs[:20], 1):
-                lines.append(f"  [{i}] {out.get('name', '?')} - {out.get('width', '?')} bits")
-            if len(state.module_info.outputs) > 20:
-                lines.append(f"  ... ({len(state.module_info.outputs) - 20} more)")
-            
-            lines.append("")
-            lines.append(f"Conditions: {len(state.conditions)} MS signals")
-            for i, cond in enumerate(state.conditions, 1):
-                lines.append(f"  [{i}] {cond.get('name', '?')} = {cond.get('equation', '?')} ({cond.get('bits', '?')} bits)")
-            
-            lines.append("")
-            lines.append(f"Assertions: {len(state.assertions)} created")
-            for i, asrt in enumerate(state.assertions, 1):
-                lines.append(f"  [{i}] {asrt.get('type', '?')}: {asrt.get('name', '?')}")
-            
-            # === 2. SESSION JSON STATE ===
-            lines.append("")
-            lines.append("[ 2. SESSION JSON STATE ]")
-            lines.append("-" * 80)
-            session_json = sess_folder / "session.json"
-            if session_json.exists():
-                with open(session_json, 'r', encoding='utf-8') as f:
-                    json_data = json.load(f)
-                lines.append(json.dumps(json_data, indent=2, ensure_ascii=False))
-            else:
-                lines.append("ERROR: session.json not found!")
-            
-            # === 3. EXCEL DEFINE SHEET ===
-            lines.append("")
-            lines.append("[ 3. EXCEL DEFINE SHEET ]")
-            lines.append("-" * 80)
-            
             wb = load_workbook(str(state.session_excel_path))
-            if "Define" in wb.sheetnames:
-                ws = wb["Define"]
-                
-                # Base Information
-                lines.append("--- Base Section ---")
-                for row_idx in range(1, min(20, ws.max_row + 1)):
-                    label = ws.cell(row_idx, 1).value
-                    value = ws.cell(row_idx, 2).value
-                    if label:
-                        lines.append(f"  {label}: {value}")
-                
-                # Port Information
-                lines.append("")
-                lines.append("--- Ports Section (first 50) ---")
-                port_count = 0
-                for row_idx in range(1, min(100, ws.max_row + 1)):
-                    port_name = ws.cell(row_idx, 1).value
-                    if port_name and isinstance(port_name, str) and not port_name.startswith(("Target", "Base", "Signal")):
-                        port_type = ws.cell(row_idx, 2).value
-                        direction = ws.cell(row_idx, 3).value
-                        width = ws.cell(row_idx, 4).value
-                        port_count += 1
-                        lines.append(f"  [{port_count}] {port_name} | Type:{port_type} | Dir:{direction} | Width:{width}")
-                        if port_count >= 50:
-                            lines.append(f"  ... (total found: {port_count}+)")
-                            break
-                
-                if port_count == 0:
-                    lines.append("  [!] NO PORTS FOUND IN EXCEL!")
-                else:
-                    lines.append(f"  Total: {port_count} ports")
-                
-                # Signal Assignments
-                lines.append("")
-                lines.append("--- Signal Assignments Section ---")
-                found_sa = False
-                for row_idx in range(1, min(200, ws.max_row + 1)):
-                    cell_val = ws.cell(row_idx, 1).value
-                    if cell_val and isinstance(cell_val, str) and "signal" in cell_val.lower() and "assignment" in cell_val.lower():
-                        found_sa = True
-                        lines.append(f"  Found at row {row_idx}")
-                        # Read MS signals
-                        for offset in range(1, 50):
-                            name = ws.cell(row_idx + offset, 1).value
-                            equation = ws.cell(row_idx + offset, 2).value
-                            bits = ws.cell(row_idx + offset, 3).value
-                            if not name:
-                                break
-                            lines.append(f"    [{offset}] {name} = {equation} ({bits} bits)")
-                        break
-                
-                if not found_sa:
-                    lines.append("  [!] Signal Assignments section NOT FOUND")
             
+            if "Define" not in wb.sheetnames:
+                wb.close()
+                return "ERROR: Define sheet not found in Excel", False
+            
+            ws = wb["Define"]
+            output_lines = ["=== Define Sheet Contents ===\n"]
+            
+            # Check header row
+            output_lines.append("Header Row (A1:E1):")
+            for col in range(1, 6):
+                cell_val = ws.cell(1, col).value
+                output_lines.append(f"  Col {col}: {cell_val}")
+            
+            output_lines.append("\nPort Rows (A2:E50):")
+            found_ports = 0
+            for row in range(2, 51):
+                port_name = ws.cell(row, 1).value  # Column A: Port Name
+                port_type = ws.cell(row, 2).value  # Column B: Type
+                direction = ws.cell(row, 3).value  # Column C: Direction
+                width = ws.cell(row, 4).value     # Column D: Width
+                desc = ws.cell(row, 5).value      # Column E: Description
+                
+                if port_name:  # Only show rows with port names
+                    found_ports += 1
+                    output_lines.append(f"  Row {row}: {port_name} | {port_type} | {direction} | {width} | {desc}")
+                    if found_ports >= 20:  # Limit output
+                        output_lines.append(f"  ... (showing first 20 ports)")
+                        break
+            
+            if found_ports == 0:
+                output_lines.append("  ❌ NO PORTS FOUND!")
             else:
-                lines.append("ERROR: Define sheet not found in Excel!")
+                output_lines.append(f"\n✓ Total ports found: {found_ports}")
+            
+            # Check module_info
+            output_lines.append("\n=== Current module_info ===")
+            output_lines.append(f"Module: {state.module_info.module}")
+            output_lines.append(f"Clocks: {len(state.module_info.clocks)} - {[c.get('name') for c in state.module_info.clocks[:5]]}")
+            output_lines.append(f"Resets: {len(state.module_info.resets)} - {[r.get('name') for r in state.module_info.resets[:5]]}")
+            output_lines.append(f"Inputs: {len(state.module_info.inputs)} - {[i.get('name') for i in state.module_info.inputs[:5]]}")
+            output_lines.append(f"Outputs: {len(state.module_info.outputs)} - {[o.get('name') for o in state.module_info.outputs[:5]]}")
+            output_lines.append(f"Parameters: {len(state.module_info.parameters)} - {[p.get('name') for p in state.module_info.parameters[:5]]}")
             
             wb.close()
-            
-            # === 4. INTERNAL STATE ===
-            lines.append("")
-            lines.append("[ 4. INTERNAL STATE ]")
-            lines.append("-" * 80)
-            lines.append(f"rtl_start:        {state.rtl_start}")
-            lines.append(f"target_module:    {state.target_module}")
-            lines.append(f"rtl_file_path:    {state.module_info.rtl_file_path}")
-            lines.append(f"module_hierarchy: {state.module_info.module_hierarchy}")
-            lines.append(f"excel_path:       {state.excel_path}")
-            lines.append(f"session_excel:    {state.session_excel_path}")
-            lines.append(f"session_id:       {state.session_id}")
-            lines.append(f"onboarding:       {state.onboarding_active}")
-            lines.append(f"wizard_active:    {state.assertion_wizard_active}")
-            
-            # Write to file
-            with open(debug_file, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(lines))
-            
-            return f"[OK] Debug exported: {debug_file.name}\nLocation: {_sanitize_path_for_display(str(sess_folder))}", False
-            
+            return "\n".join(output_lines), False
         except Exception as e:
             import traceback
-            return f"Debug export failed: {e}\n{traceback.format_exc()}", False
+            return f"Debug failed: {e}\n{traceback.format_exc()}", False
     
     if cmd == "clear":
         state.messages.clear()
@@ -2728,7 +2441,6 @@ def _save_session_snapshot(state: AppState) -> None:
     data = {
         "rtl_start": str(state.rtl_start) if state.rtl_start else "",
         "target_module": state.target_module or "",
-        "module_hierarchy": state.module_info.module_hierarchy or "",  # Save hierarchy
         "session_excel_path": str(state.session_excel_path),  # Only session Excel!
         "out_dir": str(state.out_dir),
         "conditions": state.conditions,  # Save MS signals
@@ -3184,50 +2896,27 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                     curses.noecho()
                     
                     if confirm in (ord('y'), ord('Y')):
+                        import shutil
                         deleted_count = 0
-                        failed_count = 0
-                        error_msgs = []
-                        
                         for s in sessions:
                             try:
-                                # Delete entire session folder using force delete
+                                # Delete entire session folder
                                 session_folder = Path(s.get("_folder", ""))
                                 if session_folder.exists() and session_folder.is_dir():
-                                    success, error_msg = _force_delete_folder(session_folder)
-                                    if success:
-                                        deleted_count += 1
-                                    else:
-                                        failed_count += 1
-                                        error_msgs.append(f"{session_folder.name}: {error_msg}")
-                            except Exception as e:
-                                failed_count += 1
-                                error_msgs.append(f"Exception: {str(e)}")
+                                    shutil.rmtree(session_folder)
+                                    deleted_count += 1
+                            except Exception:
+                                pass
                         
                         sessions.clear()
                         filtered = []
                         page = 0
-                        
-                        # Show result message
-                        stdscr.clear()
-                        y_pos = 2
-                        if deleted_count > 0:
-                            msg = f"[OK] {deleted_count} session(s) deleted successfully!"
-                            stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
-                            y_pos += 1
-                        
-                        if failed_count > 0:
-                            msg = f"[X] {failed_count} session(s) failed to delete:"
-                            stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
-                            y_pos += 1
-                            for err in error_msgs[:10]:  # Show first 10 errors
-                                stdscr.addnstr(y_pos, 4, _truncate(err, max_x - 6), max_x - 6, curses.A_DIM)
-                                y_pos += 1
-                                if y_pos >= max_y - 2:
-                                    break
-                        
-                        stdscr.addnstr(max_y - 2, 2, "Press any key to continue...", max_x - 4, curses.A_DIM)
+                        # Show success message
+                        msg = f"All {deleted_count} session(s) deleted! (folders + contents)"
+                        stdscr.addnstr(5, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
                         stdscr.refresh()
-                        stdscr.getch()
+                        import time
+                        time.sleep(1)
                     else:
                         # Cancelled
                         stdscr.addnstr(5, 2, "Delete cancelled.", max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("yellow",0)))
@@ -3312,29 +3001,23 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                     confirm = stdscr.getch()
                     
                     if confirm in (ord('y'), ord('Y')):
+                        import shutil
                         # Delete in reverse order to maintain indices
                         deleted_count = 0
-                        failed_count = 0
-                        error_msgs = []
-                        
                         for idx in reversed(indices):
                             try:
                                 s = filtered[idx - 1]
                                 
-                                # Delete entire session folder using force delete
+                                # Delete entire session folder
                                 session_folder = Path(s.get("_folder", ""))
                                 if session_folder.exists() and session_folder.is_dir():
-                                    success, error_msg = _force_delete_folder(session_folder)
-                                    if success:
-                                        deleted_count += 1
-                                        # Remove from sessions list
-                                        sessions.remove(s)
-                                    else:
-                                        failed_count += 1
-                                        error_msgs.append(f"[{idx}] {session_folder.name}: {error_msg}")
-                            except Exception as e:
-                                failed_count += 1
-                                error_msgs.append(f"[{idx}] Exception: {str(e)}")
+                                    shutil.rmtree(session_folder)
+                                    deleted_count += 1
+                                
+                                # Remove from sessions list
+                                sessions.remove(s)
+                            except Exception:
+                                pass
                         
                         # Update filtered list
                         if filter_text:
@@ -3345,28 +3028,13 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                         else:
                             filtered = sessions
                         
-                        # Show result message
-                        stdscr.clear()
-                        y_pos = 2
-                        
-                        if deleted_count > 0:
-                            msg = f"[OK] {deleted_count} session(s) deleted successfully!"
-                            stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
-                            y_pos += 1
-                        
-                        if failed_count > 0:
-                            msg = f"[X] {failed_count} session(s) failed to delete:"
-                            stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("red",0)) | curses.A_BOLD)
-                            y_pos += 1
-                            for err in error_msgs[:10]:  # Show first 10 errors
-                                stdscr.addnstr(y_pos, 4, _truncate(err, max_x - 6), max_x - 6, curses.A_DIM)
-                                y_pos += 1
-                                if y_pos >= max_y - 2:
-                                    break
-                        
-                        stdscr.addnstr(max_y - 2, 2, "Press any key to continue...", max_x - 4, curses.A_DIM)
+                        # Show success message
+                        y_pos += 2
+                        msg = f"{deleted_count} session(s) deleted! (folders + contents)"
+                        stdscr.addnstr(y_pos, 2, msg, max_x - 4, curses.color_pair(_PAIR_BY_NAME.get("green",0)) | curses.A_BOLD)
                         stdscr.refresh()
-                        stdscr.getch()
+                        import time
+                        time.sleep(1)
                     else:
                         # Cancelled
                         y_pos += 2
@@ -4915,8 +4583,6 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
         box_h = min(box_h, 8)
     elif stage == 'module':
         box_h = min(box_h, 12)
-    elif stage == 'hierarchy':
-        box_h = min(box_h, 20)  # Increased for hierarchy list
     elif stage == 'excel':
         box_h = min(box_h, 13)  # Increased by 3 lines for better readability
     if top + box_h > max_y:
@@ -4926,13 +4592,11 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
     # Stage-specific content
     if state.onboarding_stage == 'rtl':
         lines = [
-            "Step 1/4 — RTL File Path",
+            "Step 1/3 — RTL Root",
             "- Enter file (.v/.sv) to pick modules in that file only.",
             "- Enter folder to scan all modules under it (recursive).",
             "- Tab: show candidates + extend common prefix. Use '/'.",
             "- Esc: cancel. prev/back: previous (exit).",
-            "",
-            "Note: After selecting module, you'll enter the hierarchy path.",
         ]
         for i, t in enumerate(lines):
             try:
@@ -4946,7 +4610,7 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
         _draw_ascii_box(stdscr, top, margin_x, box_h, box_w)
         content_bottom = top + box_h - 2  # last drawable row inside the box
         try:
-            stdscr.addnstr(min(top + 2, content_bottom), margin_x + 2, "Step 2/4 — Module: number+Enter. f <text> filter, F clear, n/N page (wrap), prev/back.", box_w - 4, curses.A_BOLD)
+            stdscr.addnstr(min(top + 2, content_bottom), margin_x + 2, "Step 2/3 — Module: number+Enter. f <text> filter, F clear, n/N page (wrap), prev/back.", box_w - 4, curses.A_BOLD)
         except curses.error:
             pass
         # Render filtered, paginated module list in 3 columns
@@ -4982,69 +4646,8 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
             stdscr.addnstr(content_bottom, margin_x + 2, _truncate(f"Page {page % pages + 1}/{pages}  Total: {total}", inner_w), inner_w, curses.A_DIM)
         except curses.error:
             pass
-    elif state.onboarding_stage == 'hierarchy':
-        try:
-            stdscr.addnstr(top + 2, margin_x + 2, _truncate("Step 3/4 — Module Hierarchy", box_w - 4), box_w - 4, curses.A_BOLD)
-            y = top + 4
-            content_bottom = top + box_h - 2
-            
-            # Show selected module in green
-            if state.target_module and y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("[OK] Selected Module:", box_w - 4), box_w - 4, curses.A_BOLD)
-                y += 1
-            
-            if state.target_module and y <= content_bottom:
-                module_display = f"  {state.target_module}"
-                stdscr.addnstr(y, margin_x + 2, _truncate(module_display, box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
-                y += 2
-            
-            # Show auto-detected hierarchies
-            if state.occs and len(state.occs) > 0 and y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("[Auto-detected Hierarchies]", box_w - 4), box_w - 4, curses.A_BOLD)
-                y += 1
-                
-                # Show up to 5 hierarchies
-                for idx, occ in enumerate(state.occs[:5], 1):
-                    if y > content_bottom:
-                        break
-                    hierarchy = occ.get("path", "")
-                    if hierarchy:
-                        # Highlight the first one (already selected)
-                        if idx == 1:
-                            line = f"  [{idx}] {hierarchy}  <-- Selected"
-                            stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
-                                         curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
-                        else:
-                            line = f"  [{idx}] {hierarchy}"
-                            stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
-                                         curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
-                        y += 1
-                
-                if len(state.occs) > 5:
-                    stdscr.addnstr(y, margin_x + 2, _truncate(f"  ... and {len(state.occs) - 5} more", box_w - 4), box_w - 4, curses.A_DIM)
-                    y += 1
-                
-                y += 1
-            
-            # Instructions
-            if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to use selected hierarchy,", box_w - 4), box_w - 4)
-                y += 1
-            
-            if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("or type number to select, or type custom path.", box_w - 4), box_w - 4)
-                y += 1
-            
-            if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("Example: top.dut.abc.u_abc", box_w - 4), box_w - 4, curses.A_DIM)
-                y += 1
-            
-            if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("Type 'prev' or 'back' to return.", box_w - 4), box_w - 4, curses.A_DIM)
-        except curses.error:
-            pass
     elif state.onboarding_stage == 'excel':
-        title = "Step 4/4 — Excel"
+        title = "Step 3/3 — Excel"
         found = state.onboarding_excel_autofound or state.excel_path
         try:
             stdscr.addnstr(top + 2, margin_x + 2, _truncate(title, box_w - 4), box_w - 4, curses.A_BOLD)
@@ -5135,11 +4738,8 @@ def _handle_onboarding_input(stdscr: "curses._CursesWindow", state: AppState, ch
         if ch in (10, 13):
             # Expect the user to type: pick <module> or set module <name>
             if state.target_module:
-                state.onboarding_stage = 'hierarchy'
+                state.onboarding_stage = 'excel'
             return True
-        return False
-    if state.onboarding_stage == 'hierarchy':
-        # Simply wait for Enter - handled in main loop
         return False
     if state.onboarding_stage == 'excel':
         if ch in (10, 13):

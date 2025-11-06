@@ -3134,3 +3134,706 @@
 [13:59:23] DEBUG: Output 추가: o_PRDATA ([`BASE_APB_MAX_DATA_WIDTH-1:0])
 [13:59:23] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\IP_BLUR_SCALER_TOP-20251028_135922\IP_BLUR_SCALER_TOP.xlsx
 [13:59:23] INFO: 모든 작업 완료
+[10:31:02] INFO: Loaded data: module=counter, inputs=4, outputs=1, conditions=0
+[10:31:02] INFO: 작업 시작 (총 11 단계)
+[10:31:02] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[10:31:02] DEBUG:   Found columns: name=12, equation=13, bits=14
+[10:31:02] DEBUG: No data to clear in Signal Assignments
+[10:31:02] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[10:31:02] DEBUG: Base 채움: Target Name -> counter
+[10:31:02] DEBUG: Base 채움: Target Path -> C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script.\EDA\RTL\counter.v
+[10:31:02] DEBUG: Base 채움: Base Clock -> I_CLK
+[10:31:02] DEBUG: Base 채움: Base Reset -> I_RSTN
+[10:31:02] DEBUG: Input: i_enable -> writing to row=10, template_row=10
+[10:31:02] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[10:31:02] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[10:31:02] DEBUG: Input 추가: i_enable (1)
+[10:31:02] DEBUG: Input: i_max_cnt -> writing to row=11, template_row=10
+[10:31:02] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[10:31:02] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[10:31:02] DEBUG: Input 추가: i_max_cnt ([BIT_WIDTH-1:0])
+[10:31:02] DEBUG: Input: i_sync_cnt -> writing to row=12, template_row=10
+[10:31:02] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[10:31:02] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[10:31:02] DEBUG: Input 추가: i_sync_cnt (1)
+[10:31:02] DEBUG: Input: o_cnt -> writing to row=13, template_row=10
+[10:31:02] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[10:31:02] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[10:31:02] DEBUG: Input 추가: o_cnt ([BIT_WIDTH-1:0])
+[10:31:02] DEBUG: Output: o_done -> writing to row=10, template_row=10
+[10:31:02] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[10:31:02] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[10:31:02] DEBUG: Output 추가: o_done (1)
+[10:31:02] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\counter-20251106_103101\counter.xlsx
+[10:31:02] INFO: 모든 작업 완료
+[11:24:06] INFO: Loaded data: module=LINE_CTRL, inputs=6, outputs=17, conditions=0
+[11:24:06] INFO: 작업 시작 (총 29 단계)
+[11:24:06] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[11:24:06] DEBUG:   Found columns: name=12, equation=13, bits=14
+[11:24:06] DEBUG: No data to clear in Signal Assignments
+[11:24:06] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[11:24:06] DEBUG: Base 채움: Target Name -> LINE_CTRL
+[11:24:06] DEBUG: Base 채움: Target Path -> EDA\RTL\LINE_CTRL.v
+[11:24:06] DEBUG: Base 채움: Base Clock -> clk
+[11:24:06] DEBUG: Base 채움: Base Reset -> resetn
+[11:24:06] DEBUG: Input: i_HSW -> writing to row=10, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_HSW (6)
+[11:24:06] DEBUG: Input: i_VSW -> writing to row=11, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_VSW (6)
+[11:24:06] DEBUG: Input: i_de -> writing to row=12, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_de (1)
+[11:24:06] DEBUG: Input: i_hsync -> writing to row=13, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_hsync (1)
+[11:24:06] DEBUG: Input: i_r -> writing to row=14, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_r (10)
+[11:24:06] DEBUG: Input: i_vsync -> writing to row=15, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[11:24:06] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Input 추가: i_vsync (1)
+[11:24:06] DEBUG: Output: o_H_ACTIVE_TH -> writing to row=10, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_H_ACTIVE_TH (9)
+[11:24:06] DEBUG: Output: o_H_WAIT_TH -> writing to row=11, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_H_WAIT_TH (9)
+[11:24:06] DEBUG: Output: o_VTOT -> writing to row=12, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_VTOT (9)
+[11:24:06] DEBUG: Output: o_V_ACTIVE_TH -> writing to row=13, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_V_ACTIVE_TH (9)
+[11:24:06] DEBUG: Output: o_V_WAIT_TH -> writing to row=14, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_V_WAIT_TH (9)
+[11:24:06] DEBUG: Output: o_addr1 -> writing to row=15, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_addr1 (6)
+[11:24:06] DEBUG: Output: o_addr2 -> writing to row=16, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_addr2 (6)
+[11:24:06] DEBUG: Output: o_cs1 -> writing to row=17, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_cs1 (1)
+[11:24:06] DEBUG: Output: o_de -> writing to row=18, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_de (1)
+[11:24:06] DEBUG: Output: o_hsync -> writing to row=19, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_hsync (1)
+[11:24:06] DEBUG: Output: o_hsync_cnt -> writing to row=20, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_hsync_cnt (9)
+[11:24:06] DEBUG: Output: o_hsync_edge -> writing to row=21, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_hsync_edge (1)
+[11:24:06] DEBUG: Output: o_mem_sel -> writing to row=22, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_mem_sel (1)
+[11:24:06] DEBUG: Output: o_rgb -> writing to row=23, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_rgb (30)
+[11:24:06] DEBUG: Output: o_vsync -> writing to row=24, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_vsync (1)
+[11:24:06] DEBUG: Output: o_vsync_cnt -> writing to row=25, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_vsync_cnt (9)
+[11:24:06] DEBUG: Output: o_we1 -> writing to row=26, template_row=10
+[11:24:06] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[11:24:06] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[11:24:06] DEBUG: Output 추가: o_we1 (1)
+[11:24:06] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251106_112406\LINE_CTRL.xlsx
+[11:24:06] INFO: 모든 작업 완료
+[13:44:03] INFO: Loaded data: module=LINE_CTRL, inputs=6, outputs=17, conditions=1
+[13:44:03] INFO: Conditions to process: ['new_sig']
+[13:44:03] INFO: 작업 시작 (총 30 단계)
+[13:44:03] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[13:44:03] DEBUG:   Found columns: name=12, equation=13, bits=14
+[13:44:03] DEBUG: No data to clear in Signal Assignments
+[13:44:03] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[13:44:03] DEBUG: Base 채움: Target Name -> LINE_CTRL
+[13:44:03] DEBUG: Base 채움: Target Path -> EDA\RTL\LINE_CTRL.v
+[13:44:03] DEBUG: Base 채움: Base Clock -> clk
+[13:44:03] DEBUG: Base 채움: Base Reset -> resetn
+[13:44:03] DEBUG: Input: i_HSW -> writing to row=10, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_HSW (6)
+[13:44:03] DEBUG: Input: i_VSW -> writing to row=11, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_VSW (6)
+[13:44:03] DEBUG: Input: i_de -> writing to row=12, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_de (1)
+[13:44:03] DEBUG: Input: i_hsync -> writing to row=13, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_hsync (1)
+[13:44:03] DEBUG: Input: i_r -> writing to row=14, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_r (10)
+[13:44:03] DEBUG: Input: i_vsync -> writing to row=15, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[13:44:03] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Input 추가: i_vsync (1)
+[13:44:03] DEBUG: Output: o_H_ACTIVE_TH -> writing to row=10, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_H_ACTIVE_TH (9)
+[13:44:03] DEBUG: Output: o_H_WAIT_TH -> writing to row=11, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_H_WAIT_TH (9)
+[13:44:03] DEBUG: Output: o_VTOT -> writing to row=12, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_VTOT (9)
+[13:44:03] DEBUG: Output: o_V_ACTIVE_TH -> writing to row=13, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=13, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_V_ACTIVE_TH (9)
+[13:44:03] DEBUG: Output: o_V_WAIT_TH -> writing to row=14, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=14, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_V_WAIT_TH (9)
+[13:44:03] DEBUG: Output: o_addr1 -> writing to row=15, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=15, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_addr1 (6)
+[13:44:03] DEBUG: Output: o_addr2 -> writing to row=16, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=16, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_addr2 (6)
+[13:44:03] DEBUG: Output: o_cs1 -> writing to row=17, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=17, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_cs1 (1)
+[13:44:03] DEBUG: Output: o_de -> writing to row=18, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=18, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_de (1)
+[13:44:03] DEBUG: Output: o_hsync -> writing to row=19, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=19, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_hsync (1)
+[13:44:03] DEBUG: Output: o_hsync_cnt -> writing to row=20, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=20, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_hsync_cnt (9)
+[13:44:03] DEBUG: Output: o_hsync_edge -> writing to row=21, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=21, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_hsync_edge (1)
+[13:44:03] DEBUG: Output: o_mem_sel -> writing to row=22, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=22, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_mem_sel (1)
+[13:44:03] DEBUG: Output: o_rgb -> writing to row=23, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=23, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_rgb (30)
+[13:44:03] DEBUG: Output: o_vsync -> writing to row=24, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=24, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_vsync (1)
+[13:44:03] DEBUG: Output: o_vsync_cnt -> writing to row=25, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=25, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_vsync_cnt (9)
+[13:44:03] DEBUG: Output: o_we1 -> writing to row=26, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=26, cols=7-8
+[13:44:03] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Output 추가: o_we1 (1)
+[13:44:03] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[13:44:03] DEBUG:   Found columns: name=12, equation=13, bits=14
+[13:44:03] DEBUG: Condition: new_sig -> writing to row=10, template_row=10
+[13:44:03] DEBUG: copy_row_format: source=10, target=10, cols=12-14
+[13:44:03] DEBUG:   Source cell (10,12) has_border=False, font=맑은 고딕
+[13:44:03] DEBUG: Condition Signal 추가: new_sig = i_HSW && i_VSW (1 bits)
+[13:44:03] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\LINE_CTRL-20251106_112406\LINE_CTRL.xlsx
+[13:44:03] INFO: 모든 작업 완료
+[16:14:24] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[16:14:24] INFO: 작업 시작 (총 22 단계)
+[16:14:24] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[16:14:24] DEBUG:   Found columns: name=12, equation=13, bits=14
+[16:14:24] DEBUG: No data to clear in Signal Assignments
+[16:14:24] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[16:14:24] DEBUG: Base 채움: Target Name -> out_sync_gen
+[16:14:24] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[16:14:24] DEBUG: Base 채움: Base Clock -> clk
+[16:14:24] DEBUG: Base 채움: Base Reset -> i_resetn
+[16:14:24] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[16:14:24] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[16:14:24] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_VTOT (1)
+[16:14:24] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[16:14:24] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[16:14:24] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_de (1)
+[16:14:24] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_hsw (6)
+[16:14:24] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_hsync (1)
+[16:14:24] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_hsync_cnt (1)
+[16:14:24] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_hsync_edge (1)
+[16:14:24] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_vsw (6)
+[16:14:24] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_vsync (1)
+[16:14:24] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[16:14:24] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Input 추가: i_vsync_cnt (1)
+[16:14:24] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[16:14:24] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Output 추가: o_de_final (1)
+[16:14:24] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[16:14:24] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Output 추가: o_hsync_final (1)
+[16:14:24] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[16:14:24] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[16:14:24] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:14:24] DEBUG: Output 추가: o_vsync_final (1)
+[16:14:24] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_161424\out_sync_gen.xlsx
+[16:14:24] INFO: 모든 작업 완료
+[16:29:43] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[16:29:43] INFO: 작업 시작 (총 22 단계)
+[16:29:43] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[16:29:43] DEBUG:   Found columns: name=12, equation=13, bits=14
+[16:29:43] DEBUG: No data to clear in Signal Assignments
+[16:29:43] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[16:29:43] DEBUG: Base 채움: Target Name -> out_sync_gen
+[16:29:43] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[16:29:43] DEBUG: Base 채움: Base Clock -> clk
+[16:29:43] DEBUG: Base 채움: Base Reset -> i_resetn
+[16:29:43] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[16:29:43] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[16:29:43] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_VTOT (1)
+[16:29:43] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[16:29:43] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[16:29:43] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_de (1)
+[16:29:43] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_hsw (6)
+[16:29:43] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_hsync (1)
+[16:29:43] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_hsync_cnt (1)
+[16:29:43] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_hsync_edge (1)
+[16:29:43] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_vsw (6)
+[16:29:43] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_vsync (1)
+[16:29:43] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[16:29:43] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Input 추가: i_vsync_cnt (1)
+[16:29:43] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[16:29:43] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Output 추가: o_de_final (1)
+[16:29:43] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[16:29:43] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Output 추가: o_hsync_final (1)
+[16:29:43] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[16:29:43] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[16:29:43] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:29:43] DEBUG: Output 추가: o_vsync_final (1)
+[16:29:43] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_162943\out_sync_gen.xlsx
+[16:29:43] INFO: 모든 작업 완료
+[16:35:35] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[16:35:35] INFO: 작업 시작 (총 22 단계)
+[16:35:35] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[16:35:35] DEBUG:   Found columns: name=12, equation=13, bits=14
+[16:35:35] DEBUG: No data to clear in Signal Assignments
+[16:35:35] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[16:35:35] DEBUG: Base 채움: Target Name -> out_sync_gen
+[16:35:35] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[16:35:35] DEBUG: Base 채움: Base Clock -> clk
+[16:35:35] DEBUG: Base 채움: Base Reset -> i_resetn
+[16:35:35] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[16:35:35] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[16:35:35] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_VTOT (1)
+[16:35:35] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[16:35:35] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[16:35:35] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_de (1)
+[16:35:35] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_hsw (6)
+[16:35:35] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_hsync (1)
+[16:35:35] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_hsync_cnt (1)
+[16:35:35] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_hsync_edge (1)
+[16:35:35] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_vsw (6)
+[16:35:35] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_vsync (1)
+[16:35:35] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[16:35:35] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Input 추가: i_vsync_cnt (1)
+[16:35:35] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[16:35:35] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Output 추가: o_de_final (1)
+[16:35:35] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[16:35:35] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Output 추가: o_hsync_final (1)
+[16:35:35] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[16:35:35] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[16:35:35] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:35:35] DEBUG: Output 추가: o_vsync_final (1)
+[16:35:35] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_163535\out_sync_gen.xlsx
+[16:35:35] INFO: 모든 작업 완료
+[16:39:53] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[16:39:53] INFO: 작업 시작 (총 22 단계)
+[16:39:53] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[16:39:53] DEBUG:   Found columns: name=12, equation=13, bits=14
+[16:39:53] DEBUG: No data to clear in Signal Assignments
+[16:39:53] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[16:39:53] DEBUG: Base 채움: Target Name -> out_sync_gen
+[16:39:53] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[16:39:53] DEBUG: Base 채움: Base Clock -> clk
+[16:39:53] DEBUG: Base 채움: Base Reset -> i_resetn
+[16:39:53] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[16:39:53] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[16:39:53] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_VTOT (1)
+[16:39:53] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[16:39:53] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[16:39:53] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_de (1)
+[16:39:53] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_hsw (6)
+[16:39:53] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_hsync (1)
+[16:39:53] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_hsync_cnt (1)
+[16:39:53] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_hsync_edge (1)
+[16:39:53] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_vsw (6)
+[16:39:53] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_vsync (1)
+[16:39:53] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[16:39:53] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Input 추가: i_vsync_cnt (1)
+[16:39:53] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[16:39:53] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Output 추가: o_de_final (1)
+[16:39:53] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[16:39:53] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Output 추가: o_hsync_final (1)
+[16:39:53] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[16:39:53] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[16:39:53] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[16:39:53] DEBUG: Output 추가: o_vsync_final (1)
+[16:39:53] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_163952\out_sync_gen.xlsx
+[16:39:53] INFO: 모든 작업 완료
+[17:14:24] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[17:14:25] INFO: 작업 시작 (총 22 단계)
+[17:14:25] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[17:14:25] DEBUG:   Found columns: name=12, equation=13, bits=14
+[17:14:25] DEBUG: No data to clear in Signal Assignments
+[17:14:25] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[17:14:25] DEBUG: Base 채움: Target Name -> out_sync_gen
+[17:14:25] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[17:14:25] DEBUG: Base 채움: Base Clock -> clk
+[17:14:25] DEBUG: Base 채움: Base Reset -> i_resetn
+[17:14:25] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[17:14:25] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[17:14:25] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_VTOT (1)
+[17:14:25] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[17:14:25] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[17:14:25] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_de (1)
+[17:14:25] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_hsw (6)
+[17:14:25] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_hsync (1)
+[17:14:25] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_hsync_cnt (1)
+[17:14:25] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_hsync_edge (1)
+[17:14:25] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_vsw (6)
+[17:14:25] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_vsync (1)
+[17:14:25] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[17:14:25] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Input 추가: i_vsync_cnt (1)
+[17:14:25] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[17:14:25] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Output 추가: o_de_final (1)
+[17:14:25] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[17:14:25] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Output 추가: o_hsync_final (1)
+[17:14:25] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[17:14:25] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[17:14:25] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:14:25] DEBUG: Output 추가: o_vsync_final (1)
+[17:14:25] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_171424\out_sync_gen.xlsx
+[17:14:25] INFO: 모든 작업 완료
+[17:36:45] INFO: Loaded data: module=out_sync_gen, inputs=13, outputs=3, conditions=0
+[17:36:45] INFO: 작업 시작 (총 22 단계)
+[17:36:45] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[17:36:45] DEBUG:   Found columns: name=12, equation=13, bits=14
+[17:36:45] DEBUG: No data to clear in Signal Assignments
+[17:36:45] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[17:36:45] DEBUG: Base 채움: Target Name -> out_sync_gen
+[17:36:45] DEBUG: Base 채움: Target Path -> EDA\RTL\out_sync_gen.v
+[17:36:45] DEBUG: Base 채움: Base Clock -> clk
+[17:36:45] DEBUG: Base 채움: Base Reset -> i_resetn
+[17:36:45] DEBUG: Input: i_H_ACTIVE_TH -> writing to row=10, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_H_ACTIVE_TH (1)
+[17:36:45] DEBUG: Input: i_H_WAIT_TH -> writing to row=11, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_H_WAIT_TH (1)
+[17:36:45] DEBUG: Input: i_VTOT -> writing to row=12, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=12, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_VTOT (1)
+[17:36:45] DEBUG: Input: i_V_ACTIVE_TH -> writing to row=13, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=13, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_V_ACTIVE_TH (1)
+[17:36:45] DEBUG: Input: i_V_WAIT_TH -> writing to row=14, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=14, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_V_WAIT_TH (1)
+[17:36:45] DEBUG: Input: i_de -> writing to row=15, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=15, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_de (1)
+[17:36:45] DEBUG: Input: i_hsw -> writing to row=16, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=16, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_hsw (6)
+[17:36:45] DEBUG: Input: i_hsync -> writing to row=17, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=17, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_hsync (1)
+[17:36:45] DEBUG: Input: i_hsync_cnt -> writing to row=18, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=18, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_hsync_cnt (1)
+[17:36:45] DEBUG: Input: i_hsync_edge -> writing to row=19, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=19, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_hsync_edge (1)
+[17:36:45] DEBUG: Input: i_vsw -> writing to row=20, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=20, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_vsw (6)
+[17:36:45] DEBUG: Input: i_vsync -> writing to row=21, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=21, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_vsync (1)
+[17:36:45] DEBUG: Input: i_vsync_cnt -> writing to row=22, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=22, cols=5-6
+[17:36:45] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Input 추가: i_vsync_cnt (1)
+[17:36:45] DEBUG: Output: o_de_final -> writing to row=10, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=10, cols=7-8
+[17:36:45] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Output 추가: o_de_final (1)
+[17:36:45] DEBUG: Output: o_hsync_final -> writing to row=11, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=11, cols=7-8
+[17:36:45] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Output 추가: o_hsync_final (1)
+[17:36:45] DEBUG: Output: o_vsync_final -> writing to row=12, template_row=10
+[17:36:45] DEBUG: copy_row_format: source=10, target=12, cols=7-8
+[17:36:45] DEBUG:   Source cell (10,7) has_border=False, font=맑은 고딕
+[17:36:45] DEBUG: Output 추가: o_vsync_final (1)
+[17:36:45] DEBUG: 저장 완료: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\out_sync_gen-20251106_173644\out_sync_gen.xlsx
+[17:36:45] INFO: 모든 작업 완료

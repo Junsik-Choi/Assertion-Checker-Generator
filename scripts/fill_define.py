@@ -380,7 +380,8 @@ def main():
         data = json.load(f)
 
     module = data.get("module") or ""
-    rtl_file_path = data.get("rtl_file_path") or ""  # Read RTL file path
+    rtl_file_path = data.get("rtl_file_path") or ""  # Full path for internal use
+    rtl_hierarchy = data.get("rtl_hierarchy") or ""  # Hierarchy path for display (EDA/RTL/file.v)
     top_path = data.get("top_path") or ""
     paths = data.get("paths") or []
     clocks = data.get("clocks") or []
@@ -394,8 +395,10 @@ def main():
     if conditions:
         logger.info(f"Conditions to process: {[c.get('name','?') for c in conditions]}")
 
-    # Target Path: use RTL file path if available, otherwise use top_path + paths
-    if rtl_file_path:
+    # Target Path: use RTL hierarchy if available (for display), otherwise RTL file path, otherwise top_path + paths
+    if rtl_hierarchy:
+        target_path_str = rtl_hierarchy
+    elif rtl_file_path:
         target_path_str = rtl_file_path
     elif top_path:
         target_path_str = ",".join(f"{top_path}.{p}" if p else top_path for p in paths) if paths else top_path

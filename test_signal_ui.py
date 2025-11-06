@@ -107,7 +107,7 @@ def test_signal_name_formatting():
 
 def test_preview_lines():
     """Test that timing diagram preview has correct signal format."""
-    print("Test 3: Timing Diagram Preview with formatted signals")
+    print("Test 3: Timing Diagram Preview with state-transition-only separators")
     print("-" * 50)
     
     def format_signal_name(name: str, role: str, width: int = 20) -> str:
@@ -118,28 +118,75 @@ def test_preview_lines():
         """Format waveform data right-aligned."""
         return waveform.rjust(width)
     
-    # Generate preview lines for counter
+    # Base clock pattern
+    BASE_CLK = "|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|"
+    
+    def build_waveform(pattern_spec: str) -> str:
+        """Build waveform with | only at state transitions."""
+        if not pattern_spec:
+            return BASE_CLK
+        
+        parts = pattern_spec.split(",")
+        waveform = ""
+        prev_state = None
+        
+        for part in parts:
+            state_info = part.strip().split(":")
+            if len(state_info) != 2:
+                continue
+            state = state_info[0].strip().upper()
+            try:
+                cycles = int(state_info[1].strip())
+            except ValueError:
+                continue
+            
+            # Add separator only at state transitions
+            if prev_state is not None and prev_state != state:
+                waveform += "|"
+            elif prev_state is None:
+                waveform += "|"
+            
+            # Fill cycles with state character and spaces
+            if state == "HIGH":
+                waveform += "‾‾‾"
+                for i in range(1, cycles):
+                    waveform += " ‾‾‾"
+            elif state == "LOW":
+                waveform += "___"
+                for i in range(1, cycles):
+                    waveform += " ___"
+            
+            prev_state = state
+        
+        waveform += "|"
+        return waveform
+    
+    # Generate preview lines
     lines = []
     lines.append("Timing Diagram:")
-    lines.append("Clock cycles: 0   1   2   3   4   5   6   7")
-    lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|")
-    lines.append("")
+    lines.append(format_waveform_line("clk") + " " + BASE_CLK)
     lines.append(format_signal_name("my_counter", "counter") + " 0   0   1   1   1   0   0   0")
-    lines.append(format_signal_name("inc_cond", "increment") + " └─────┘   └─────┘   └─────┘")
-    lines.append(format_signal_name("rst_sig", "reset") + " └───────────────┘       └───────┘")
+    lines.append(format_signal_name("inc_cond", "increment") + " " + build_waveform("HIGH:1,LOW:1,HIGH:1,LOW:1,HIGH:1,LOW:2"))
+    lines.append(format_signal_name("rst_sig", "reset") + " " + build_waveform("HIGH:1,LOW:4,HIGH:1,LOW:2"))
+    lines.append("")
     
     print("Generated Preview Lines:")
     for line in lines:
         print(line)
     
-    # Check that lines are formatted correctly
+    # Verify formatting
     counter_line = format_signal_name("my_counter", "counter")
     assert "my_counter (counter)" in counter_line, "Failed: Signal name not in line"
     assert counter_line.endswith("my_counter (counter)"), "Failed: Not right-aligned"
     
-    # Check clk line is also right-aligned
     clk_line = format_waveform_line("clk")
     assert clk_line.endswith("clk"), "Failed: CLK not right-aligned"
+    
+    # Verify waveform structure
+    waveform = build_waveform("HIGH:3,LOW:2,HIGH:3")
+    assert waveform.startswith("|"), "Failed: Should start with |"
+    assert waveform.endswith("|"), "Failed: Should end with |"
+    assert " ‾" in waveform or " _" in waveform, "Failed: Should have spaces within state"
     
     print("\n✓ Test 3 PASSED\n")
     return True
