@@ -301,7 +301,7 @@ def generate_verilog(info: Dict[str, Any]) -> str:
         end
     end
 
-    property p_counter_check
+    property p_counter_check;
         @(posedge {clk}) disable iff(!{rst})
         {trigger_con} |-> ({cnt} == {exp_cnt_val});
     endproperty
