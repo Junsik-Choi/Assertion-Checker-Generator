@@ -1,0 +1,9 @@
+{
+  "rtl_start": "D:\\Programing\\Assertion-Checker-Generator\\EDA\\RTL\\blur_scaler.v",
+  "target_module": "blur_scaler",
+  "module_hierarchy": "tb_top.dut.u_blur_scaler",
+  "session_excel_path": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\blur_scaler-20251108_005529\\blur_scaler.xlsx",
+  "out_dir": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\blur_scaler-20251108_005529\\assertions",
+  "conditions": [],
+  "assertions": []
+}

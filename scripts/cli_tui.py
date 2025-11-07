@@ -48,6 +48,7 @@ from rtl_parser import (  # type: ignore
     build_modules_db,
     find_top_modules,
     find_occurrences_of_target,
+    find_module_instances_by_file,
     compute_env_for_occurrence,
     resolve_ports_with_params,
     classify_groups,
@@ -431,17 +432,48 @@ def _get_port_width(port: Dict[str, Any]) -> str:
     return ""
 
 
-def _format_port_with_width(port: Dict[str, Any], index: int) -> str:
-    """Format port as '[idx] name [width]'."""
+def _get_port_param_info(port: Dict[str, Any]) -> Tuple[bool, str, int]:
+    """
+    Extract parameterization info from port.
+    Returns: (is_parameterized, params_str, calculated_bit_width)
+    Example: (True, "WEIGHT_WIDTH", 4)
+    """
+    is_param = port.get("is_parameterized", False)
+    params_list = port.get("params_used", [])
+    params_str = ",".join(params_list) if params_list else ""
+    bit_width = port.get("calculated_bit_width", 0)
+    return is_param, params_str, bit_width
+
+
+def _format_port_with_width(port: Dict[str, Any], index: int) -> Tuple[str, bool]:
+    """
+    Format port as '[idx] name [width]'.
+    Returns: (text, is_parameterized)
+    For parameterized ports, text includes param names and bit width info.
+    Example: "[1] i_w1_cap [WEIGHT_WIDTH-1:0] (4 bits)"
+    """
     name = port.get('name', '?')
     width = _get_port_width(port)
-    if width:
-        return f"[{index+1}] {name} {width}"
-    return f"[{index+1}] {name}"
+    is_param, params_str, bit_width = _get_port_param_info(port)
+    
+    if is_param:
+        # 파라미터화된 신호: 파라미터 이름과 계산된 bit width 표시
+        if bit_width > 0:
+            text = f"[{index+1}] {name} [{params_str}] ({bit_width}bits)"
+        else:
+            text = f"[{index+1}] {name} [{params_str}]"
+    elif width:
+        text = f"[{index+1}] {name} {width}"
+    else:
+        text = f"[{index+1}] {name}"
+    
+    return text, is_param
 
 
 def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, Any]], start_row: int = 1) -> None:
-    """Draw ports in 2-column layout with bit width information."""
+    """Draw ports in 2-column layout with bit width information.
+    Parameterized ports are shown in BLUE color.
+    """
     max_y, max_x = win.getmaxyx()
     usable_h = max_y - start_row - 1
     usable_w = max_x - 2
@@ -458,17 +490,23 @@ def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, A
         
         # Left column
         if i < len(ports):
-            left_text = _format_port_with_width(ports[i], i)
+            left_text, is_param_left = _format_port_with_width(ports[i], i)
             try:
-                win.addnstr(row, 1, _truncate(left_text, col1_w), col1_w)
+                # BLUE color for parameterized signals
+                blue_pair = _PAIR_BY_NAME.get("blue", 0)
+                attr = curses.color_pair(blue_pair) if is_param_left else curses.A_NORMAL
+                win.addnstr(row, 1, _truncate(left_text, col1_w), col1_w, attr)
             except curses.error:
                 pass
         
         # Right column
         if i + 1 < len(ports):
-            right_text = _format_port_with_width(ports[i + 1], i + 1)
+            right_text, is_param_right = _format_port_with_width(ports[i + 1], i + 1)
             try:
-                win.addnstr(row, col_w + 1, _truncate(right_text, col2_w - 1), col2_w - 1)
+                # BLUE color for parameterized signals
+                blue_pair = _PAIR_BY_NAME.get("blue", 0)
+                attr = curses.color_pair(blue_pair) if is_param_right else curses.A_NORMAL
+                win.addnstr(row, col_w + 1, _truncate(right_text, col2_w - 1), col2_w - 1, attr)
             except curses.error:
                 pass
         
@@ -1179,29 +1217,17 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 stage = state.onboarding_stage or ""
                 # Default: clear status unless error occurs
                 status_msg = ""
+                # RTL stage is now handled by _handle_command to ensure full instance discovery
                 if stage == 'rtl':
-                    from pathlib import Path as _P
-                    p = _P(cmdline).expanduser()
-                    if str(p).strip() and p.exists():
-                        state.rtl_start = p
-                        # Build modules list for next step
-                        try:
-                            mods_ctx, _mi, _occs = build_context_from_rtl(p, None)
-                            state.onboarding_modules = sorted(list(mods_ctx.keys()))
-                        except Exception:
-                            state.onboarding_modules = []
-                        state.onboarding_stage = 'module'
-                        # Hard clear once when moving to Step 2 to avoid residuals
-                        try:
-                            # Use the current stdscr provided to _main via closure; avoid global curses.stdscr
-                            stdscr.clear(); stdscr.refresh()
-                        except Exception:
-                            pass
-                        status_msg = f"rtl set: {p}"
-                        input_buf.clear(); cursor_pos = 0
+                    # Delegate to command handler which has full instance discovery logic
+                    out_msg, opened_overlay = _handle_command(state, cmdline)
+                    input_buf.clear(); cursor_pos = 0
+                    if opened_overlay:
+                        overlay_active = True
+                        overlay_page = 0
+                        overlay_scroll = 0
                     else:
-                        status_msg = "Invalid RTL path (not found)."
-                        # keep input so user can edit
+                        status_msg = out_msg or status_msg
                 elif stage == 'hierarchy':
                     # Handle hierarchy input: empty (use default), number (select from list), or custom string
                     if not cmdline.strip():
@@ -1762,56 +1788,96 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 if str(p).strip() and p.exists():
                     # Validate: must be a .v or .sv file
                     if not p.is_file():
-                        return "❌ Error: Please provide a .v or .sv file (not a directory)", False
+                        return "ERROR: Please provide a .v or .sv file (not a directory)", False
                     
                     if p.suffix.lower() not in ['.v', '.sv']:
-                        return f"❌ Error: File must be .v or .sv (got: {p.suffix})", False
+                        return f"ERROR: File must be .v or .sv (got: {p.suffix})", False
                     
                     state.rtl_start = p
                     # Build instance list for next stage
                     try:
-                        mods_ctx, _mi, _occs = build_context_from_rtl(p, None)
+                        # DEBUG LOG 파일 설정
+                        debug_log_file = _THIS_DIR.parent / "out" / "tui_step1_debug.log"
+                        debug_log_file.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        def log_debug(msg):
+                            with open(debug_log_file, "a", encoding="utf-8") as f:
+                                from datetime import datetime
+                                f.write(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] {msg}\n")
+                        
+                        # 로그 파일 초기화
+                        debug_log_file.write_text("=== TUI Step 1 Debug Log ===\n", encoding="utf-8")
+                        log_debug(f"Processing RTL file: {p}")
+                        
+                        # 1. 전체 모듈 데이터베이스 구축 (같은 폴더와 하위 폴더의 모든 .v/.sv 파일)
+                        rtl_root, _found = find_rtl_root_from(p)
+                        start_scope_dir = p if p.is_dir() else p.parent
+                        files = sorted(set(discover_files(rtl_root, [".v", ".sv"])) | set(discover_files(start_scope_dir, [".v", ".sv"])), key=lambda f: str(f))
+                        log_debug(f"Files discovered: {len(files)}")
+                        
+                        mods_ctx = build_modules_db(files, allow_unknown=True)  # 모든 모듈 포함
                         state.modules_db = mods_ctx
+                        log_debug(f"Modules parsed: {len(mods_ctx)}")
                         
-                        # Extract ALL instances from ALL modules in this file
+                        # 2. 선택한 .v 파일에 정의된 모듈들이 사용되는 모든 인스턴스 찾기
+                        log_debug("Calling find_module_instances_by_file...")
+                        file_modules_hierarchy = find_module_instances_by_file(mods_ctx, p)
+                        log_debug(f"Instances found: {len(file_modules_hierarchy)}")
+                        
+                        # 3. 파일에 정의된 모듈 확인
+                        file_modules_defined = [name for name, m in mods_ctx.items() if Path(m["file"]).resolve() == p.resolve()]
+                        log_debug(f"Modules in file: {file_modules_defined}")
+                        
+                        # 인스턴스를 반드시 찾아야 함. 없으면 에러!
+                        if not file_modules_hierarchy:
+                            log_debug("ERROR: No instances found!")
+                            if not file_modules_defined:
+                                return f"ERROR: No modules found in {p.name}", False
+                            else:
+                                # 모듈은 있는데 인스턴스가 없으면 에러
+                                modules_str = ", ".join(file_modules_defined)
+                                return (
+                                    f"ERROR: Modules found in file: {modules_str}\n"
+                                    f"But NO instances found where they are used!\n"
+                                    f"This file may be a leaf module (not instantiated anywhere).\n"
+                                    f"Or the RTL hierarchy may not be properly connected.\n"
+                                    f"Debug log: {debug_log_file}"
+                                ), False
+                        
+                        # 계층 구조를 보기 좋게 정렬하고 표시
                         instances = []
-                        # Get all modules defined in this file
-                        file_modules = [name for name, m in mods_ctx.items() if Path(m["file"]).resolve() == p.resolve()]
+                        for item in file_modules_hierarchy:
+                            hierarchy = item["hierarchy_path"]
+                            file_module = item["file_module"]
+                            log_debug(f"Processing instance: {hierarchy} (module: {file_module})")
+                            instances.append({
+                                "file_module": file_module,
+                                "hierarchy": hierarchy,
+                                "display": hierarchy,  # 표시는 hierarchy path만
+                                "chain": item["instance_chain"],
+                            })
                         
-                        # For each module in the file, extract its instances
-                        for mod_name in file_modules:
-                            if mod_name in mods_ctx:
-                                mod_data = mods_ctx[mod_name]
-                                for inst in mod_data.get("instances", []):
-                                    inst_name = inst.get("inst", "")
-                                    inst_type = inst.get("type", "")
-                                    if inst_name and inst_type:
-                                        instances.append({
-                                            "parent_module": mod_name,
-                                            "inst": inst_name,
-                                            "type": inst_type,
-                                            "params": inst.get("params", {}),
-                                            "display": f"{inst_name} ({inst_type})"
-                                        })
+                        # 계층 경로로 정렬
+                        instances.sort(key=lambda x: x["hierarchy"])
+                        log_debug(f"Total instances after sorting: {len(instances)}")
                         
-                        if instances:
-                            state.onboarding_instances = instances
-                            state.onboarding_modules = [inst["display"] for inst in instances]
-                        else:
-                            # No instances found - this is a leaf module
-                            # Show the module itself so user can still proceed
-                            state.onboarding_modules = sorted(file_modules)
-                            state.onboarding_instances = []
+                        state.onboarding_instances = instances
+                        state.onboarding_modules = [inst["display"] for inst in instances]
+                        log_debug(f"state.onboarding_modules set to: {state.onboarding_modules}")
+                        log_debug(f"SUCCESS! Moving to Step 2")
                             
                     except Exception as e:
-                        return f"❌ Error parsing RTL file: {e}", False
+                        import traceback
+                        tb = traceback.format_exc()
+                        log_debug(f"EXCEPTION: {e}\n{tb}")
+                        return f"ERROR parsing RTL file: {e}\n{tb}", False
                         
                     state.onboarding_stage = 'module'
-                    return f"✓ RTL file loaded: {p.name} ({len(state.onboarding_modules)} items)", False
+                    return f"✓ RTL file loaded: {p.name} ({len(state.onboarding_modules)} items found)", False
                 else:
-                    return "❌ Error: File not found. Please provide a valid .v or .sv file path", False
+                    return "ERROR: File not found. Please provide a valid .v or .sv file path", False
             except Exception as e:
-                return f"❌ Error: Invalid path - {e}", False
+                return f"ERROR: Invalid path - {e}", False
         # 2) Module stage: number to pick, f filter, F clear, n/N page (wrap), prev/back to return
         if stage == 'module':
             if cmdline.isdigit():
@@ -1819,17 +1885,19 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 if 0 <= idx < len(state.onboarding_modules):
                     # Check if we have instance data
                     if state.onboarding_instances and idx < len(state.onboarding_instances):
-                        # User selected an instance - use its type as target_module
+                        # User selected an instance with hierarchy path
                         selected_inst = state.onboarding_instances[idx]
-                        state.target_module = selected_inst["type"]  # Use the module type, not instance name
-                        selected_inst_name = selected_inst["inst"]
+                        state.target_module = selected_inst["file_module"]  # Use the actual module name
+                        hierarchy_path = selected_inst["hierarchy"]
                         
-                        # Store the selected instance info for hierarchy
+                        # Store the selected instance info for hierarchy (use the hierarchy path directly)
                         state.selected_instance = selected_inst
+                        state.module_info.module_hierarchy = hierarchy_path  # Pre-set hierarchy
                     else:
-                        # Fallback: direct module selection
+                        # Fallback: direct module selection (no instances, just leaf modules)
                         state.target_module = state.onboarding_modules[idx]
                         state.selected_instance = None
+                        state.module_info.module_hierarchy = ""
                     
                     # If starting scope was a directory, bind rtl_start to chosen module's file
                     try:
@@ -1841,9 +1909,15 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                         modules, mi, occs = build_context_from_rtl(state.rtl_start or Path("."), state.target_module)
                         state.modules_db = modules
                         state.module_info = mi
+                        state.target_module = mi.module
                         state.occs = occs
-                        # Auto-detect hierarchy from first occurrence
-                        if occs and len(occs) > 0:
+                        
+                        # CRITICAL: Restore the selected hierarchy from selected_instance
+                        # build_context_from_rtl() creates a new module_info, so we need to re-apply the hierarchy
+                        if state.selected_instance:
+                            state.module_info.module_hierarchy = state.selected_instance["hierarchy"]
+                        elif not state.module_info.module_hierarchy and occs and len(occs) > 0:
+                            # Fallback: Use auto-detected hierarchy if available
                             auto_hierarchy = occs[0].get("path", "")
                             if auto_hierarchy:
                                 state.module_info.module_hierarchy = auto_hierarchy
@@ -1852,7 +1926,8 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                     state.onboarding_stage = 'hierarchy'
                     
                     if state.onboarding_instances and idx < len(state.onboarding_instances):
-                        return f"Picked instance: {selected_inst_name} (type: {state.target_module})", False
+                        hierarchy = selected_inst["hierarchy"]
+                        return f"✓ Picked: {hierarchy} ({state.target_module})", False
                     else:
                         return f"Picked module: {state.target_module}", False
             if cmd == 'f' and args:
@@ -1983,7 +2058,7 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             
             # If we reach here, no valid input was provided
             with open(debug_log, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ NO VALID INPUT - Staying in Excel stage\n")
+                f.write(f"[{datetime.now().strftime('%H:%M:%S')}] ERROR: NO VALID INPUT - Staying in Excel stage\n")
             
             # Stay in Excel stage, don't proceed without Excel
             return "Please enter an Excel path or press Enter to use the auto-detected one", False
@@ -3063,9 +3138,9 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             s = filtered[idx]
             num = f"[{idx + 1}]"
             module = s.get('target_module', '') or ''
-            rtl_full = s.get('rtl_start', '') or ''
-            # Sanitize RTL path for display (replace Korean characters)
-            rtl_display = _shorten_path_for_display(rtl_full, rtl_w * 3, keep_segments=3)  # Allow more width for wrapping
+            # RTL column: show selected module/instance, not the full file path
+            # If we have hierarchy info, show that; otherwise show module name
+            rtl_display = module  # Show module name instead of file path
             # Only show session_excel_path (never reference Excel)
             xls_path = s.get('session_excel_path', '') or ''
             xls = os.path.basename(xls_path) if xls_path else 'N/A'
@@ -3780,6 +3855,7 @@ def _get_plugin_description(plugin_name: str) -> str:
         'counter': 'Generate counter-based assertions with increment/decrement/reset conditions',
         'handshake': 'Generate 2-phase or 4-phase handshake protocol assertions',
         'sequence': 'Generate temporal sequence assertions',
+        'pulseWidth': 'Verify pulse width constraints within min/max clock cycle range',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -3860,6 +3936,35 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'title': 'Receiver Signal',
                 'description': 'Select the receiver/acknowledge signal',
                 'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'pulseWidth': [
+            {
+                'name': 'target_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Pulse Signal',
+                'description': 'Select the signal to monitor for pulse width',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'min_width',
+                'type': 'string',
+                'step': 2,
+                'title': 'Minimum Pulse Width (clocks)',
+                'description': 'Enter minimum allowed pulse width in clock cycles',
+                'example': '10',
+                'required': True,
+            },
+            {
+                'name': 'max_width',
+                'type': 'string',
+                'step': 3,
+                'title': 'Maximum Pulse Width (clocks)',
+                'description': 'Enter maximum allowed pulse width in clock cycles',
+                'example': '20',
                 'required': True,
             },
         ],
@@ -4569,7 +4674,9 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 state.assertion_current_field_idx = 0
                 state.assertion_input_data.clear()
                 
-                fields = selected['fields']
+                fields = selected.get('fields', [])
+                if not fields:
+                    return f"No fields defined for {selected['name']}", True
                 current_field = fields[0]
                 msg = f"Selected {selected['name'].upper()}\n"
                 msg += f"\nStep 1/{len(fields)}: {current_field.get('title', '')}\n"
@@ -4586,7 +4693,10 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         if not plugin:
             return "Plugin not found", False
         
-        fields = plugin['fields']
+        fields = plugin.get('fields', [])
+        if not fields or state.assertion_current_field_idx >= len(fields):
+            return "No fields or invalid field index", True
+        
         current_field = fields[state.assertion_current_field_idx]
         field_name = current_field['name']
         field_type = current_field['type']
@@ -4988,19 +5098,48 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
             y = top + 4
             content_bottom = top + box_h - 2
             
-            # Show selected module in green
-            if state.target_module and y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("[OK] Selected Module:", box_w - 4), box_w - 4, curses.A_BOLD)
-                y += 1
+            # Show the selected instance's hierarchy as the DUT path (in green - this is what user should use)
+            if state.selected_instance and y <= content_bottom:
+                hierarchy = state.selected_instance.get("hierarchy", "")
+                
+                # Check if hierarchy is complete (contains a dot) or is incomplete
+                is_complete = "." in hierarchy
+                
+                if is_complete:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("[DUT Hierarchy Path]", box_w - 4), box_w - 4, curses.A_BOLD)
+                    y += 1
+                    
+                    # Display hierarchy path in GREEN - user should copy this
+                    if hierarchy and y <= content_bottom:
+                        hierarchy_display = f"  {hierarchy}"
+                        stdscr.addnstr(y, margin_x + 2, _truncate(hierarchy_display, box_w - 4), box_w - 4, 
+                                     curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
+                        y += 2
+                else:
+                    # Incomplete hierarchy - show warning in RED
+                    stdscr.addnstr(y, margin_x + 2, _truncate("[DUT Hierarchy Path] - INCOMPLETE", box_w - 4), box_w - 4, 
+                                 curses.color_pair(_PAIR_BY_NAME.get("red", 0)) | curses.A_BOLD)
+                    y += 1
+                    
+                    if hierarchy and y <= content_bottom:
+                        hierarchy_display = f"  {hierarchy}"
+                        stdscr.addnstr(y, margin_x + 2, _truncate(hierarchy_display, box_w - 4), box_w - 4, 
+                                     curses.color_pair(_PAIR_BY_NAME.get("red", 0)) | curses.A_BOLD)
+                        y += 1
+                    
+                    if y <= content_bottom:
+                        stdscr.addnstr(y, margin_x + 2, _truncate("WARNING: Could not find full hierarchy path.", box_w - 4), box_w - 4, 
+                                     curses.color_pair(_PAIR_BY_NAME.get("red", 0)))
+                        y += 1
+                    
+                    if y <= content_bottom:
+                        stdscr.addnstr(y, margin_x + 2, _truncate("Please type the full path manually (e.g., top.dut.u1_sync_signal).", box_w - 4), box_w - 4, 
+                                     curses.color_pair(_PAIR_BY_NAME.get("red", 0)))
+                        y += 2
             
-            if state.target_module and y <= content_bottom:
-                module_display = f"  {state.target_module}"
-                stdscr.addnstr(y, margin_x + 2, _truncate(module_display, box_w - 4), box_w - 4, curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
-                y += 2
-            
-            # Show auto-detected hierarchies
+            # Show auto-detected alternative hierarchies
             if state.occs and len(state.occs) > 0 and y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("[Auto-detected Hierarchies]", box_w - 4), box_w - 4, curses.A_BOLD)
+                stdscr.addnstr(y, margin_x + 2, _truncate("[Alternative Hierarchies]", box_w - 4), box_w - 4, curses.A_BOLD)
                 y += 1
                 
                 # Show up to 5 hierarchies
@@ -5009,15 +5148,9 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
                         break
                     hierarchy = occ.get("path", "")
                     if hierarchy:
-                        # Highlight the first one (already selected)
-                        if idx == 1:
-                            line = f"  [{idx}] {hierarchy}  <-- Selected"
-                            stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
-                                         curses.color_pair(_PAIR_BY_NAME.get("green", 0)) | curses.A_BOLD)
-                        else:
-                            line = f"  [{idx}] {hierarchy}"
-                            stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
-                                         curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+                        line = f"  [{idx}] {hierarchy}"
+                        stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
+                                     curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
                         y += 1
                 
                 if len(state.occs) > 5:
@@ -5028,15 +5161,18 @@ def _render_onboarding(stdscr: "curses._CursesWindow", state: AppState) -> None:
             
             # Instructions
             if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to use selected hierarchy,", box_w - 4), box_w - 4)
+                if is_complete:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept the DUT hierarchy above,", box_w - 4), box_w - 4)
+                else:
+                    stdscr.addnstr(y, margin_x + 2, _truncate("Press Enter to accept the path above (even if incomplete),", box_w - 4), box_w - 4)
                 y += 1
             
             if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("or type number to select, or type custom path.", box_w - 4), box_w - 4)
+                stdscr.addnstr(y, margin_x + 2, _truncate("or type number to select an alternative,", box_w - 4), box_w - 4)
                 y += 1
             
             if y <= content_bottom:
-                stdscr.addnstr(y, margin_x + 2, _truncate("Example: top.dut.abc.u_abc", box_w - 4), box_w - 4, curses.A_DIM)
+                stdscr.addnstr(y, margin_x + 2, _truncate("or type custom path (e.g., top.dut.abc.u_abc).", box_w - 4), box_w - 4)
                 y += 1
             
             if y <= content_bottom:
@@ -5103,13 +5239,22 @@ def _handle_onboarding_input(stdscr: "curses._CursesWindow", state: AppState, ch
             # Accept current input line as rtl path
             # Read from prompt line content via main buffer; here we just move to next stage if set by main handler
             if state.rtl_start and Path(state.rtl_start).exists():
-                # Build modules for next stage
-                try:
-                    mods_ctx, _mi, _occs = build_context_from_rtl(Path(state.rtl_start), None)
-                    mods = sorted(list(mods_ctx.keys()))
-                    state.onboarding_modules = mods
-                except Exception:
-                    state.onboarding_modules = []
+                # REMOVED: Build modules for next stage
+                # This was overwriting the hierarchy paths set in _handle_rtl_selection_for_onboarding
+                # The correct instance hierarchy is already set there (line ~1840)
+                # OLD CODE (DISABLED):
+                # try:
+                #     mods_ctx, _mi, _occs = build_context_from_rtl(Path(state.rtl_start), None)
+                #     mods = sorted(list(mods_ctx.keys()))
+                #     state.onboarding_modules = mods
+                # except Exception:
+                #     state.onboarding_modules = []
+                
+                # Check if onboarding_modules was already set by _handle_rtl_selection_for_onboarding
+                if not state.onboarding_modules:
+                    # Fallback removed per user request - show error instead
+                    state.onboarding_modules = ["ERROR: No instances found for selected RTL file"]
+                
                 state.onboarding_stage = 'module'
             return True
         return False

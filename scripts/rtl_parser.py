@@ -191,17 +191,22 @@ def extract_modules_from_text(text: str) -> List[Dict[str, Any]]:
                 i = skip_spaces(text, i)
 
         # Mandatory port list: ( ... )
-        if i >= n or text[i] != "(":
-            LOG.warning("Malformed module header (missing port list): %s", name)
-            pos = i
-            continue
-        ports_header, j = extract_balanced(text, i, "(", ")")
-        i = j
-        i = skip_spaces(text, i)
-        if i < n and text[i] == ";":
-            i += 1
+        ports_header = ""
+        if i < n and text[i] == "(":
+            ports_header, j = extract_balanced(text, i, "(", ")")
+            i = j
+            i = skip_spaces(text, i)
+            if i < n and text[i] == ";":
+                i += 1
+            else:
+                LOG.warning("Expected ';' after module port list: %s", name)
         else:
-            LOG.warning("Expected ';' after module port list: %s", name)
+            # No port list - treat as module with no ports
+            # This is valid in SystemVerilog (e.g., testbench modules)
+            if i < n and text[i] == ";":
+                i += 1
+            else:
+                LOG.warning("Expected ';' after module name (no port list): %s", name)
 
         endm = _endmodule_re.search(text, i)
         if not endm:
@@ -298,6 +303,51 @@ def resolve_width_token(width: str, env: Dict[str, str]) -> str:
     if msb is None or lsb is None: return width
     return f"[{msb}:{lsb}]"
 
+def resolve_width_token_with_params(width: str, env: Dict[str, str]) -> Dict[str, Any]:
+    """
+    width 표현식(예: [WEIGHT_WIDTH-1:0])을 파라미터 정보와 함께 해석.
+    반환: {
+        "resolved_width": "[3:0]",
+        "is_parameterized": True,
+        "params_used": ["WEIGHT_WIDTH"],
+        "calculated_bit_width": 4
+    }
+    """
+    result = {
+        "resolved_width": width,
+        "is_parameterized": False,
+        "params_used": [],
+        "calculated_bit_width": 0,
+        "raw_width": width
+    }
+    
+    m = re.search(r"\[([^\]:]+)\s*:\s*([^\]]+)\]", width)
+    if not m:
+        return result
+    
+    msb_expr = m.group(1).strip()
+    lsb_expr = m.group(2).strip()
+    
+    # 파라미터 추출
+    params_msb = set(re.findall(r"\b[A-Za-z_]\w*\b", msb_expr))
+    params_lsb = set(re.findall(r"\b[A-Za-z_]\w*\b", lsb_expr))
+    params_used = list(params_msb | params_lsb)
+    
+    # 파라미터 사용 확인
+    if any(p in env for p in params_used):
+        result["is_parameterized"] = True
+        result["params_used"] = [p for p in params_used if p in env]
+    
+    # 값 계산
+    msb = substitute_and_eval(msb_expr, env)
+    lsb = substitute_and_eval(lsb_expr, env)
+    
+    if msb is not None and lsb is not None:
+        result["resolved_width"] = f"[{msb}:{lsb}]"
+        result["calculated_bit_width"] = abs(msb - lsb) + 1
+    
+    return result
+
 def merge_ports(header_ports: List[Dict[str, str]], body_decls: Dict[str, Dict[str, str]]) -> List[Dict[str, str]]:
     # 헤더(ANSI/Non-ANSI)와 본문 선언을 병합. 본문 정보가 unknown/빈 width를 보강.
     by_name: Dict[str, Dict[str, str]] = {}
@@ -340,7 +390,7 @@ def parse_param_overrides_block(block: str) -> Dict[str, str]:
 
 def parse_param_defaults_from_header(param_ports: str) -> Dict[str, str]:
     """
-    #(parameter P=16, localparam Q=8) 내에서 기본값 수집
+    #(parameter P=16, localparam Q=8) 또는 #(P=16, Q=8) 내에서 기본값 수집
     """
     out = {}
     if not param_ports:
@@ -349,12 +399,18 @@ def parse_param_defaults_from_header(param_ports: str) -> Dict[str, str]:
     items = split_top_level_commas(param_ports)
     for it in items:
         it2 = collapse_ws(it)
-        # 기존: m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*(.+)$", it2)
-        # 개선: '=' 뒤에 콤마 또는 끝까지 모두 잡음
-        m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*([^,]+)", it2)
+        # 패턴 1: parameter/localparam 키워드 있는 경우
+        m = re.search(r"\b(localparam|parameter)\b\s+([A-Za-z_]\w*)\s*=\s*(.+)$", it2)
         if m:
             name = m.group(2)
             expr = m.group(3).strip()
+            out[name] = expr
+            continue
+        # 패턴 2: 키워드 없이 NAME=VALUE 형태인 경우 (개선)
+        m = re.search(r"^([A-Za-z_]\w*)\s*=\s*(.+)$", it2)
+        if m:
+            name = m.group(1)
+            expr = m.group(2).strip()
             out[name] = expr
     return out
 
@@ -486,7 +542,20 @@ def resolve_ports_with_params(modules: Dict[str, Any], target: str, env: Dict[st
     for p in m["ports"]:
         item = {"name": p["name"]}
         w = p.get("width","")
-        item["width"] = resolve_width_token(w, env) if w else ""
+        if w:
+            item["width"] = resolve_width_token(w, env)
+            # 파라미터 정보도 추가
+            param_info = resolve_width_token_with_params(w, env)
+            item["is_parameterized"] = param_info["is_parameterized"]
+            item["params_used"] = param_info["params_used"]
+            item["calculated_bit_width"] = param_info["calculated_bit_width"]
+            item["raw_width"] = param_info["raw_width"]
+        else:
+            item["width"] = ""
+            item["is_parameterized"] = False
+            item["params_used"] = []
+            item["calculated_bit_width"] = 0
+            item["raw_width"] = ""
         if p["dir"] == "input":
             inputs.append(item)
         elif p["dir"] == "output":
@@ -654,6 +723,110 @@ def find_occurrences_of_target(modules: Dict[str, Any], target: str) -> List[Dic
 
     occs.sort(key=lambda x: (x["path"], x["instance"]))
     return occs
+
+
+def find_module_instances_by_file(modules: Dict[str, Any], rtl_file: Path) -> List[Dict[str, Any]]:
+    """
+    주어진 RTL 파일(.v) 내에 정의된 모든 모듈들을 찾고,
+    그 모듈들이 다른 모듈에서 어떻게 인스턴스화되는지 모두 찾습니다.
+    
+    완전한 계층 경로가 없어도 부분 경로를 반환합니다:
+    - 모듈이 사용된 곳부터 시작 (예: u0_sync_signal)
+    - 위로 올라가면서 parent를 추가 (예: tb_top.u0_sync_signal)
+    - 더 이상 parent가 없으면 거기서 끊기
+    
+    Returns:
+        List of dicts with keys:
+        - file_module: 원본 파일에 정의된 모듈명
+        - hierarchy_path: "parent.u_instance_name" 형식의 계층 경로 (가능한 만큼)
+        - instance_chain: 인스턴스 체인 메타정보 리스트
+        - display: TUI에 표시할 이름 (hierarchy_path 또는 instance_name)
+    """
+    rtl_file = Path(rtl_file).resolve()
+    
+    # 1. 주어진 파일에 정의된 모든 모듈 찾기
+    file_modules = set()
+    for mod_name, mod_info in modules.items():
+        if Path(mod_info["file"]).resolve() == rtl_file:
+            file_modules.add(mod_name)
+    
+    if not file_modules:
+        return []
+    
+    # 2. 각 모듈이 인스턴스화된 곳 찾기 (bottom-up 방식)
+    results: List[Dict[str, Any]] = []
+    
+    for target_module in file_modules:
+        # Step 1: target_module을 직접 인스턴스화하는 모든 (parent_module, instance_name) 찾기
+        direct_usages: List[tuple] = []  # (parent_module, instance_name, params)
+        
+        for mod_name, mod_info in modules.items():
+            for child in mod_info.get("instances", []):
+                if child["type"] == target_module:
+                    direct_usages.append((mod_name, child["inst"], child.get("params", {})))
+        
+        # Step 2: 각 direct usage에 대해 위로 올라가며 전체 경로 구축
+        for parent_module, instance_name, params in direct_usages:
+            # Build chain from bottom to top
+            chain_meta = [{
+                "parent": parent_module,
+                "type": target_module,
+                "inst": instance_name,
+                "params": params
+            }]
+            
+            # Trace upward: parent_module이 다른 모듈에 의해 인스턴스화되는지 찾기
+            current_parent = parent_module
+            path_segments = [instance_name]  # Start with the instance we found
+            
+            max_depth = 100  # Prevent infinite loops
+            depth = 0
+            while depth < max_depth:
+                depth += 1
+                # Find who instantiates current_parent
+                found_upper_parent = False
+                for mod_name, mod_info in modules.items():
+                    for child in mod_info.get("instances", []):
+                        if child["type"] == current_parent:
+                            # Found: mod_name instantiates current_parent as child["inst"]
+                            path_segments.insert(0, child["inst"])  # Prepend to path
+                            chain_meta.insert(0, {
+                                "parent": mod_name,
+                                "type": current_parent,
+                                "inst": child["inst"],
+                                "params": child.get("params", {})
+                            })
+                            current_parent = mod_name
+                            found_upper_parent = True
+                            break  # Only take first found parent (could have multiple)
+                    if found_upper_parent:
+                        break
+                
+                if not found_upper_parent:
+                    # No more parents found - current_parent is at TOP level
+                    # Include it in the path as the top-level module
+                    if current_parent not in path_segments and current_parent != parent_module:
+                        path_segments.insert(0, current_parent)
+                    elif depth == 1 and current_parent == parent_module:
+                        # First iteration: parent_module itself is at TOP level
+                        # Add it to path only if path_segments doesn't already contain everything
+                        if len(path_segments) == 1 and path_segments[0] == instance_name:
+                            path_segments.insert(0, parent_module)
+                    break
+            
+            # Build final hierarchy path
+            hierarchy_path = ".".join(path_segments)
+            display_name = path_segments[-1] if path_segments else instance_name  # Show deepest instance
+            
+            results.append({
+                "file_module": target_module,
+                "hierarchy_path": hierarchy_path,
+                "instance_chain": chain_meta,
+                "display": hierarchy_path,  # Show full hierarchy path for TUI display
+                "hierarchy": hierarchy_path,  # Also store as 'hierarchy' for compatibility
+            })
+    
+    return results
 
 # -----------------------------
 # Ports grouping and classification

@@ -1236,3 +1236,199 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: c
 [17:55:29] not cmdline: False
 [17:55:29] autofound: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
 [17:55:29] Condition 1 (not cmdline and autofound): False
+
+[00:17:29] === ONBOARDING EXCEL STAGE ===
+[00:17:29] cmdline: '& D:/Programing/Assertion-Checker-Generator/.venv/Scripts/python.exe d:/Programing/Assertion-Checker-Generator/scripts/cli_tui.py'
+[00:17:29] len(cmdline): 129
+[00:17:29] not cmdline: False
+[00:17:29] autofound: D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:17:29] Condition 1 (not cmdline and autofound): False
+[00:17:29] Condition 2: User provided path
+[00:17:29] Parsed path: & D:\Programing\Assertion-Checker-Generator\.venv\Scripts\python.exe d:\Programing\Assertion-Checker-Generator\scripts\cli_tui.py
+[00:17:29] Path exists: False
+[00:17:58] === _create_session_excel_and_fill() CALLED ===
+[00:17:58] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:17:58] state.target_module = sync_signal
+[00:17:58] state.module_info.module = sync_signal
+[00:17:58] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758
+[00:17:58] Session directory created successfully
+[00:17:58] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\assertions
+[00:17:58] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\sync_signal.xlsx
+[00:17:58] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\sync_signal.xlsx
+[00:17:58] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\sync_signal.xlsx
+[00:17:58] Verifying Define sheet...
+[00:17:58] Define sheet verified OK
+[00:17:58] Creating define JSON...
+[00:17:58] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\module_define.json
+[00:17:58] Running fill_define.py...
+[00:17:58] fill_define.py returned: 0
+[00:17:58] fill_define.py stdout: [00:17:58] INFO: Loaded data: module=sync_signal, inputs=2, outputs=0, conditions=0
+[00:17:58] INFO: 작업 시작 (총 8 단계)
+[###-------------------------]  12% - 기존 값 클리어
+[#######---------------------]  25% - Base: Target Name
+[##########------------------]  37% - Base: Target Path
+[##############--------------]  50% - Base: Base Clock
+[#################-----------]  62% - Base: Base Reset
+[#####################-------]  75% - Inputs: i_signal
+[########################----]  87% - Inputs: o_signal_sync
+[############################] 100% - 엑셀 저장
+[00:17:58] INFO: 모든 작업 완료
+
+[00:17:58] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758
+[00:17:58] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251108_001758\sync_signal.xlsx
+[00:25:34] === _create_session_excel_and_fill() CALLED ===
+[00:25:34] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:25:34] state.target_module = blur_scaler
+[00:25:34] state.module_info.module = blur_scaler
+[00:25:34] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534
+[00:25:34] Session directory created successfully
+[00:25:34] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\assertions
+[00:25:34] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\blur_scaler.xlsx
+[00:25:34] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\blur_scaler.xlsx
+[00:25:34] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\blur_scaler.xlsx
+[00:25:34] Verifying Define sheet...
+[00:25:34] Define sheet verified OK
+[00:25:34] Creating define JSON...
+[00:25:34] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\module_define.json
+[00:25:34] Running fill_define.py...
+[00:25:35] fill_define.py returned: 0
+[00:25:35] fill_define.py stdout: [00:25:34] INFO: Loaded data: module=blur_scaler, inputs=20, outputs=4, conditions=0
+[00:25:34] INFO: 작업 시작 (총 30 단계)
+[----------------------------]   3% - 기존 값 클리어
+[#---------------------------]   6% - Base: Target Name
+[##--------------------------]  10% - Base: Target Path
+[###-------------------------]  13% - Base: Base Clock
+[####------------------------]  16% - Base: Base Reset
+[#####-----------------------]  20% - Inputs: i_blur_mode_cap
+[######----------------------]  23% - Inputs: i_den
+[#######---------------------]  26% - Inputs: i_hor_cnt
+[########--------------------]  30% - Inputs: i_hsync
+[#########-------------------]  33% - Inputs: i_mirror_mode_cap
+[##########------------------]  36% - Inputs: i_sram_rd1
+[###########-----------------]  40% - Inputs: i_sram_rd2
+[############----------------]  43% - Inputs: i_sram_rd3
+[############----------------]  46% - Inputs: i_vact_state
+[##############--------------]  50% - Inputs: i_vsync
+[##############--------------]  53% - Inputs: i_w1_cap
+[###############-------------]  56% - Inputs: i_w2_cap
+[################------------]  60% - Inputs: i_w3_cap
+[#################-----------]  63% - Inputs: i_w4_cap
+[##################----------]  66% - Inputs: i_w5_cap
+[###################---------]  70% - Inputs: i_w6_cap
+[####################--------]  73% - Inputs: i_w7_cap
+[#####################-------]  76% - Inputs: i_w8_cap
+[######################------]  80% - Inputs: i_w9_cap
+[#######################-----]  83% - Inputs: i_weight_wr_mode_cap
+[########################----]  86% - Outputs: o_data
+[#########################---]  90% - Outputs: o_den
+[##########################--]  93% - Outputs: o_hsync
+[##########################--]  96% - Outputs: o_vsync
+[############################] 100% - 엑셀 저장
+[00:25:34] INFO: 모든 작업 완료
+
+[00:25:35] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534
+[00:25:35] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_002534\blur_scaler.xlsx
+[00:48:02] === _create_session_excel_and_fill() CALLED ===
+[00:48:02] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:48:02] state.target_module = blur_scaler
+[00:48:02] state.module_info.module = blur_scaler
+[00:48:02] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802
+[00:48:02] Session directory created successfully
+[00:48:02] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\assertions
+[00:48:02] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\blur_scaler.xlsx
+[00:48:02] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\blur_scaler.xlsx
+[00:48:02] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\blur_scaler.xlsx
+[00:48:02] Verifying Define sheet...
+[00:48:02] Define sheet verified OK
+[00:48:02] Creating define JSON...
+[00:48:02] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\module_define.json
+[00:48:02] Running fill_define.py...
+[00:48:03] fill_define.py returned: 0
+[00:48:03] fill_define.py stdout: [00:48:03] INFO: Loaded data: module=blur_scaler, inputs=20, outputs=4, conditions=0
+[00:48:03] INFO: 작업 시작 (총 30 단계)
+[----------------------------]   3% - 기존 값 클리어
+[#---------------------------]   6% - Base: Target Name
+[##--------------------------]  10% - Base: Target Path
+[###-------------------------]  13% - Base: Base Clock
+[####------------------------]  16% - Base: Base Reset
+[#####-----------------------]  20% - Inputs: i_blur_mode_cap
+[######----------------------]  23% - Inputs: i_den
+[#######---------------------]  26% - Inputs: i_hor_cnt
+[########--------------------]  30% - Inputs: i_hsync
+[#########-------------------]  33% - Inputs: i_mirror_mode_cap
+[##########------------------]  36% - Inputs: i_sram_rd1
+[###########-----------------]  40% - Inputs: i_sram_rd2
+[############----------------]  43% - Inputs: i_sram_rd3
+[############----------------]  46% - Inputs: i_vact_state
+[##############--------------]  50% - Inputs: i_vsync
+[##############--------------]  53% - Inputs: i_w1_cap
+[###############-------------]  56% - Inputs: i_w2_cap
+[################------------]  60% - Inputs: i_w3_cap
+[#################-----------]  63% - Inputs: i_w4_cap
+[##################----------]  66% - Inputs: i_w5_cap
+[###################---------]  70% - Inputs: i_w6_cap
+[####################--------]  73% - Inputs: i_w7_cap
+[#####################-------]  76% - Inputs: i_w8_cap
+[######################------]  80% - Inputs: i_w9_cap
+[#######################-----]  83% - Inputs: i_weight_wr_mode_cap
+[########################----]  86% - Outputs: o_data
+[#########################---]  90% - Outputs: o_den
+[##########################--]  93% - Outputs: o_hsync
+[##########################--]  96% - Outputs: o_vsync
+[############################] 100% - 엑셀 저장
+[00:48:03] INFO: 모든 작업 완료
+
+[00:48:03] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802
+[00:48:03] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_004802\blur_scaler.xlsx
+[00:55:29] === _create_session_excel_and_fill() CALLED ===
+[00:55:29] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:55:29] state.target_module = blur_scaler
+[00:55:29] state.module_info.module = blur_scaler
+[00:55:29] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529
+[00:55:29] Session directory created successfully
+[00:55:29] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\assertions
+[00:55:29] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
+[00:55:29] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
+[00:55:29] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
+[00:55:29] Verifying Define sheet...
+[00:55:29] Define sheet verified OK
+[00:55:29] Creating define JSON...
+[00:55:29] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\module_define.json
+[00:55:29] Running fill_define.py...
+[00:55:29] fill_define.py returned: 0
+[00:55:29] fill_define.py stdout: [00:55:29] INFO: Loaded data: module=blur_scaler, inputs=20, outputs=4, conditions=0
+[00:55:29] INFO: 작업 시작 (총 30 단계)
+[----------------------------]   3% - 기존 값 클리어
+[#---------------------------]   6% - Base: Target Name
+[##--------------------------]  10% - Base: Target Path
+[###-------------------------]  13% - Base: Base Clock
+[####------------------------]  16% - Base: Base Reset
+[#####-----------------------]  20% - Inputs: i_blur_mode_cap
+[######----------------------]  23% - Inputs: i_den
+[#######---------------------]  26% - Inputs: i_hor_cnt
+[########--------------------]  30% - Inputs: i_hsync
+[#########-------------------]  33% - Inputs: i_mirror_mode_cap
+[##########------------------]  36% - Inputs: i_sram_rd1
+[###########-----------------]  40% - Inputs: i_sram_rd2
+[############----------------]  43% - Inputs: i_sram_rd3
+[############----------------]  46% - Inputs: i_vact_state
+[##############--------------]  50% - Inputs: i_vsync
+[##############--------------]  53% - Inputs: i_w1_cap
+[###############-------------]  56% - Inputs: i_w2_cap
+[################------------]  60% - Inputs: i_w3_cap
+[#################-----------]  63% - Inputs: i_w4_cap
+[##################----------]  66% - Inputs: i_w5_cap
+[###################---------]  70% - Inputs: i_w6_cap
+[####################--------]  73% - Inputs: i_w7_cap
+[#####################-------]  76% - Inputs: i_w8_cap
+[######################------]  80% - Inputs: i_w9_cap
+[#######################-----]  83% - Inputs: i_weight_wr_mode_cap
+[########################----]  86% - Outputs: o_data
+[#########################---]  90% - Outputs: o_den
+[##########################--]  93% - Outputs: o_hsync
+[##########################--]  96% - Outputs: o_vsync
+[############################] 100% - 엑셀 저장
+[00:55:29] INFO: 모든 작업 완료
+
+[00:55:29] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529
+[00:55:29] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
