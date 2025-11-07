@@ -359,7 +359,7 @@ def _build_hpulse_sv(base_clk: str, base_rst: str, target_pulse: str,
     lines.append("    (target_pulse) |-> (1, value_count = 0)")
     lines.append("    ##1 (target_pulse, value_count = value_count + 1)[*0:$]")
     lines.append("    ##1 (!target_pulse, value_count = value_count + 1)")
-    lines.append("    ##1 (expected_min_value <= value_count && value_count <= expected_max_value);")
+    lines.append("    ##0 (expected_min_value <= value_count && value_count <= expected_max_value);")
     lines.append("endproperty")
     lines.append("")
     lines.append(f'assert property (p_hpulse({target_pulse}, {expected_min}, {expected_max}))')
