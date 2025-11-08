@@ -1,0 +1,41 @@
+{
+  "top_path": "",
+  "module": "sync_signal",
+  "rtl_file_path": "D:\\Programing\\Assertion-Checker-Generator\\EDA\\RTL\\sync_signal.v",
+  "paths": [],
+  "instances": [],
+  "clocks": [
+    {
+      "name": "I_CLK",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "I_RSTN",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "i_signal",
+      "width": "[BUS_WIDTH-1:0]",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": "[BUS_WIDTH-1:0]"
+    },
+    {
+      "name": "o_signal_sync",
+      "width": "[BUS_WIDTH-1:0]",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": "[BUS_WIDTH-1:0]"
+    }
+  ],
+  "outputs": [],
+  "inouts": [],
+  "parameters": [],
+  "conditions": []
+}

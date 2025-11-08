@@ -1432,3 +1432,33 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: c
 
 [00:55:29] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529
 [00:55:29] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
+[00:40:11] === _create_session_excel_and_fill() CALLED ===
+[00:40:11] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[00:40:11] state.target_module = sync_signal
+[00:40:11] state.module_info.module = sync_signal
+[00:40:11] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011
+[00:40:11] Session directory created successfully
+[00:40:11] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\assertions
+[00:40:11] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\sync_signal.xlsx
+[00:40:11] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\sync_signal.xlsx
+[00:40:11] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\sync_signal.xlsx
+[00:40:11] Verifying Define sheet...
+[00:40:11] Define sheet verified OK
+[00:40:11] Creating define JSON...
+[00:40:11] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\module_define.json
+[00:40:11] Running fill_define.py...
+[00:40:12] fill_define.py returned: 0
+[00:40:12] fill_define.py stdout: [00:40:11] INFO: Loaded data: module=sync_signal, inputs=2, outputs=0, conditions=0
+[00:40:12] INFO: 작업 시작 (총 8 단계)
+[###-------------------------]  12% - 기존 값 클리어
+[#######---------------------]  25% - Base: Target Name
+[##########------------------]  37% - Base: Target Path
+[##############--------------]  50% - Base: Base Clock
+[#################-----------]  62% - Base: Base Reset
+[#####################-------]  75% - Inputs: i_signal
+[########################----]  87% - Inputs: o_signal_sync
+[############################] 100% - 엑셀 저장
+[00:40:12] INFO: 모든 작업 완료
+
+[00:40:12] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011
+[00:40:12] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\sync_signal.xlsx

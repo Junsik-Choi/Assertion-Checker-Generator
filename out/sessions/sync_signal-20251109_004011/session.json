@@ -1,0 +1,9 @@
+{
+  "rtl_start": "D:\\Programing\\Assertion-Checker-Generator\\EDA\\RTL\\sync_signal.v",
+  "target_module": "sync_signal",
+  "module_hierarchy": "tb_top.dut.u1_sync_signal",
+  "session_excel_path": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\sync_signal-20251109_004011\\sync_signal.xlsx",
+  "out_dir": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\sync_signal-20251109_004011\\assertions",
+  "conditions": [],
+  "assertions": []
+}

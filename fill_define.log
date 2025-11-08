@@ -4181,3 +4181,23 @@
 [00:55:29] DEBUG: Output 추가: o_vsync (1)
 [00:55:29] DEBUG: 저장 완료: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251108_005529\blur_scaler.xlsx
 [00:55:29] INFO: 모든 작업 완료
+[00:40:11] INFO: Loaded data: module=sync_signal, inputs=2, outputs=0, conditions=0
+[00:40:12] INFO: 작업 시작 (총 8 단계)
+[00:40:12] DEBUG: Found 'Signal Assignments' at row 8, col 12
+[00:40:12] DEBUG:   Found columns: name=12, equation=13, bits=14
+[00:40:12] DEBUG: No data to clear in Signal Assignments
+[00:40:12] DEBUG: 기존 값 클리어(서식 유지): Base, IO, Signal Assignments
+[00:40:12] DEBUG: Base 채움: Target Name -> sync_signal
+[00:40:12] DEBUG: Base 채움: Target Path -> D:\Programing\Assertion-Checker-Generator\EDA\RTL\sync_signal.v
+[00:40:12] DEBUG: Base 채움: Base Clock -> I_CLK
+[00:40:12] DEBUG: Base 채움: Base Reset -> I_RSTN
+[00:40:12] DEBUG: Input: i_signal -> writing to row=10, template_row=10
+[00:40:12] DEBUG: copy_row_format: source=10, target=10, cols=5-6
+[00:40:12] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[00:40:12] DEBUG: Input 추가: i_signal ([BUS_WIDTH-1:0])
+[00:40:12] DEBUG: Input: o_signal_sync -> writing to row=11, template_row=10
+[00:40:12] DEBUG: copy_row_format: source=10, target=11, cols=5-6
+[00:40:12] DEBUG:   Source cell (10,5) has_border=False, font=맑은 고딕
+[00:40:12] DEBUG: Input 추가: o_signal_sync ([BUS_WIDTH-1:0])
+[00:40:12] DEBUG: 저장 완료: D:\Programing\Assertion-Checker-Generator\out\sessions\sync_signal-20251109_004011\sync_signal.xlsx
+[00:40:12] INFO: 모든 작업 완료

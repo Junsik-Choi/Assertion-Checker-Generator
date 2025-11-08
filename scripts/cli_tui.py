@@ -1006,11 +1006,11 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 cmdline = "".join(input_buf).strip()
                 input_buf.clear()
                 cursor_pos = 0
-                if cmdline:
-                    msg, exit_wizard = _handle_assertion_wizard_command(state, cmdline)
-                    status_msg = msg
-                    if exit_wizard:
-                        state.assertion_wizard_active = False
+                # Handle both empty enter and normal commands
+                msg, exit_wizard = _handle_assertion_wizard_command(state, cmdline)
+                status_msg = msg
+                if exit_wizard:
+                    state.assertion_wizard_active = False
                 continue
             # Regular char
             if 0 <= ch <= 255:
@@ -3138,9 +3138,13 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             s = filtered[idx]
             num = f"[{idx + 1}]"
             module = s.get('target_module', '') or ''
-            # RTL column: show selected module/instance, not the full file path
-            # If we have hierarchy info, show that; otherwise show module name
-            rtl_display = module  # Show module name instead of file path
+            # RTL column: show RTL hierarchy (module_hierarchy) like main page
+            # If hierarchy not set, use rtl_start as fallback
+            rtl_hierarchy = s.get('module_hierarchy', '') or ''
+            if not rtl_hierarchy:
+                rtl_path = s.get('rtl_start', '') or ''
+                rtl_hierarchy = _shorten_path_for_display(rtl_path, rtl_w) if rtl_path else module
+            rtl_display = rtl_hierarchy
             # Only show session_excel_path (never reference Excel)
             xls_path = s.get('session_excel_path', '') or ''
             xls = os.path.basename(xls_path) if xls_path else 'N/A'
@@ -4105,107 +4109,80 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                     y += 1
         
         elif current_field['type'] == 'signal':
-            # Show available signals in 3-column layout
-            if y < top + box_h - 8:
-                stdscr.addnstr(y, margin_x + 2, "Select Signal (Enter number):", left_w, curses.A_BOLD)
-                y += 1
-                
+            # Show available signals in single-column layout for readability
+            if y < top + box_h - 5:
                 # Build signal map for this field
                 signal_map = {}  # idx -> signal_name
                 idx = 1
+                all_signals = []  # (idx, name, type)
                 
                 # Input signals
-                input_items = []
                 if state.module_info and state.module_info.inputs:
-                    for inp in state.module_info.inputs[:10]:
+                    for inp in state.module_info.inputs[:20]:
                         inp_name = inp.get('name', '')
-                        input_items.append((idx, inp_name, 'input'))
+                        all_signals.append((idx, inp_name, 'input'))
                         signal_map[idx] = inp_name
                         idx += 1
                 
                 # Output signals
-                output_items = []
                 if state.module_info and state.module_info.outputs:
-                    for out in state.module_info.outputs[:10]:
+                    for out in state.module_info.outputs[:20]:
                         out_name = out.get('name', '')
-                        output_items.append((idx, out_name, 'output'))
+                        all_signals.append((idx, out_name, 'output'))
                         signal_map[idx] = out_name
                         idx += 1
                 
                 # MS Signals (user-defined)
-                ms_items = []
                 if state.conditions:
-                    for cond in state.conditions[:10]:
+                    for cond in state.conditions[:20]:
                         cond_name = cond.get('name', '')
-                        ms_items.append((idx, cond_name, 'ms_signal'))
+                        all_signals.append((idx, cond_name, 'ms_signal'))
                         signal_map[idx] = cond_name
                         idx += 1
                 
                 # Store map in state for later lookup
                 state.assertion_signal_map = signal_map
                 
-                col_w = (left_w - 2) // 3
+                # Draw signals with proper spacing
+                max_display = min(len(all_signals), top + box_h - y - 4)
                 
-                # Draw 3-column layout with boxes
-                start_y = y
-                
-                # Input Ports Box
-                if input_items:
+                for i, (idx_num, name, sig_type) in enumerate(all_signals[:max_display]):
+                    if y >= top + box_h - 4:
+                        break
+                    
                     try:
-                        box_y = y
-                        stdscr.addnstr(box_y, margin_x + 2, "┌─ Input ─┐", col_w, curses.A_BOLD)
-                        box_y += 1
-                        for idx_num, name, _ in input_items:
-                            if box_y >= top + box_h - 5:
-                                break
-                            marker = "✓" if name == current_val else " "
-                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
-                            color = _PAIR_BY_NAME.get("cyan", 0) if name == current_val else 0
-                            stdscr.addnstr(box_y, margin_x + 2, line, col_w, curses.color_pair(color))
-                            box_y += 1
-                        stdscr.addnstr(box_y, margin_x + 2, "└─────────┘", col_w, curses.A_BOLD)
+                        marker = "✓" if name == current_val else " "
+                        
+                        # Color by signal type
+                        if sig_type == 'input':
+                            color = _PAIR_BY_NAME.get("cyan", 0)
+                            prefix = "[I]"
+                        elif sig_type == 'output':
+                            color = _PAIR_BY_NAME.get("yellow", 0)
+                            prefix = "[O]"
+                        else:  # ms_signal
+                            color = _PAIR_BY_NAME.get("magenta", 0)
+                            prefix = "[M]"
+                        
+                        # Highlight current selection
+                        if name == current_val:
+                            color = _PAIR_BY_NAME.get("green", 0)
+                        
+                        line = f"  {marker} [{idx_num}] {prefix} {name}"
+                        line = _truncate(line, left_w)
+                        stdscr.addnstr(y, margin_x + 2, line, left_w, curses.color_pair(color))
+                        y += 1
                     except curses.error:
                         pass
                 
-                # Output Ports Box
-                if output_items:
+                # Show if more signals exist
+                if len(all_signals) > max_display:
                     try:
-                        box_y = y
-                        box_x = margin_x + 2 + col_w + 1
-                        stdscr.addnstr(box_y, box_x, "┌─ Output ┐", col_w, curses.A_BOLD)
-                        box_y += 1
-                        for idx_num, name, _ in output_items:
-                            if box_y >= top + box_h - 5:
-                                break
-                            marker = "✓" if name == current_val else " "
-                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
-                            color = _PAIR_BY_NAME.get("yellow", 0) if name == current_val else 0
-                            stdscr.addnstr(box_y, box_x, line, col_w, curses.color_pair(color))
-                            box_y += 1
-                        stdscr.addnstr(box_y, box_x, "└─────────┘", col_w, curses.A_BOLD)
+                        more_msg = f"  ... and {len(all_signals) - max_display} more"
+                        stdscr.addnstr(y, margin_x + 2, _truncate(more_msg, left_w), left_w, curses.A_DIM)
+                        y += 1
                     except curses.error:
                         pass
-                
-                # MS Signals Box
-                if ms_items:
-                    try:
-                        box_y = y
-                        box_x = margin_x + 2 + (col_w + 1) * 2
-                        stdscr.addnstr(box_y, box_x, "┌─ MS Sig ┐", col_w, curses.A_BOLD)
-                        box_y += 1
-                        for idx_num, name, _ in ms_items:
-                            if box_y >= top + box_h - 5:
-                                break
-                            marker = "✓" if name == current_val else " "
-                            line = f"│{marker}[{idx_num}] {name[:max(0, col_w-8)]}"[:col_w]
-                            color = _PAIR_BY_NAME.get("magenta", 0) if name == current_val else 0
-                            stdscr.addnstr(box_y, box_x, line, col_w, curses.color_pair(color))
-                            box_y += 1
-                        stdscr.addnstr(box_y, box_x, "└─────────┘", col_w, curses.A_BOLD)
-                    except curses.error:
-                        pass
-                
-                y += max(len(input_items), len(output_items), len(ms_items)) + 2
         
         elif current_field['type'] == 'string':
             if current_val:
@@ -4237,11 +4214,11 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
     try:
         y = top + box_h - 3
         if current_field['type'] == 'choice':
-            inst = "Enter [1-9] to select (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+            inst = "Enter [1-9] to select | 'prev'/'p' for previous | 'q' to cancel"
         elif current_field['type'] == 'signal':
-            inst = "Enter signal number (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+            inst = "Enter signal number | 'prev'/'p' for previous | 'q' to cancel"
         else:  # string
-            inst = "Enter value (auto-advances) | 'prev'/'p' for previous | 'q' to cancel"
+            inst = "Enter value | 'prev'/'p' for previous | 'q' to cancel"
         
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_DIM)
     except curses.error:
@@ -4488,13 +4465,11 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
         lines.append("")
         
         lines.append("Pass Condition:")
-        lines.append(f"  When {trigger_con} is asserted,")
-        lines.append(f"  {target} MUST equal {exp_cnt_val}")
+        lines.append(f"  {trigger_con}=1 -> {target}={exp_cnt_val}")
         lines.append("")
         
         lines.append("Fail Condition:")
-        lines.append(f"  When {trigger_con} is asserted,")
-        lines.append(f"  {target} does NOT equal {exp_cnt_val}")
+        lines.append(f"  {trigger_con}=1 -> {target}!={exp_cnt_val}")
         lines.append("")
         
     elif plugin_name == 'handshake':
@@ -4523,16 +4498,16 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("")
             
             lines.append("Pass Conditions:")
-            lines.append(f"  1. {sender} goes HIGH (holds for multiple cycles)")
-            lines.append(f"  2. {receiver} eventually goes HIGH")
-            lines.append(f"  3. Both signals overlap correctly")
-            lines.append(f"  4. Protocol completes successfully")
+            lines.append(f"  1. {sender} HIGH (multi-cycle)")
+            lines.append(f"  2. {receiver} HIGH (then)")
+            lines.append(f"  3. {sender} & {receiver} overlap")
+            lines.append(f"  4. both -> LOW (after)")
             lines.append("")
             
             lines.append("Fail Conditions:")
-            lines.append(f"  1. {sender} goes HIGH but {receiver} never goes HIGH")
-            lines.append(f"  2. Timeout waiting for acknowledgment")
-            lines.append(f"  3. Unexpected signal transitions")
+            lines.append(f"  1. {sender}=HIGH but {receiver}=LOW")
+            lines.append(f"  2. timeout (waiting)")
+            lines.append(f"  3. signal-glitch")
             lines.append("")
             
         elif phase == '4phase':
@@ -4547,17 +4522,17 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("")
             
             lines.append("Pass Conditions:")
-            lines.append(f"  1. {sender} pulses (HIGH then LOW)")
-            lines.append(f"  2. {receiver} pulses in response")
-            lines.append(f"  3. All signals return to LOW before next cycle")
-            lines.append(f"  4. Dual-rail protocol maintained")
+            lines.append(f"  1. {sender}: 1->0->1 (pulse-req)")
+            lines.append(f"  2. {receiver}: 1->0->1 (pulse-ack)")
+            lines.append(f"  3. {sender}=0 before {receiver} raises")
+            lines.append(f"  4. dual-rail complete")
             lines.append("")
             
             lines.append("Fail Conditions:")
-            lines.append(f"  1. {sender} and {receiver} don't follow 4-phase rules")
-            lines.append(f"  2. Signals don't return to LOW properly")
-            lines.append(f"  3. Handshake timeout")
-            lines.append(f"  4. Invalid state transitions")
+            lines.append(f"  1. {sender} stays=1 (not-pulse)")
+            lines.append(f"  2. {receiver} stuck!=0")
+            lines.append(f"  3. timeout")
+            lines.append(f"  4. race-condition")
             lines.append("")
             
         elif phase == 'ready_valid':
@@ -4572,17 +4547,17 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("")
             
             lines.append("Pass Conditions:")
-            lines.append(f"  1. Transfer occurs when BOTH {sender} AND {receiver} are HIGH")
-            lines.append(f"  2. {sender} can hold for multiple cycles")
-            lines.append(f"  3. {receiver} controls transfer rate (throttling)")
-            lines.append(f"  4. No deadlock situations")
+            lines.append(f"  1. {sender}=1 & {receiver}=1 -> transfer")
+            lines.append(f"  2. {sender} can hold multi-cycle")
+            lines.append(f"  3. {receiver}=0 -> pause (no-transfer)")
+            lines.append(f"  4. no-deadlock")
             lines.append("")
             
             lines.append("Fail Conditions:")
-            lines.append(f"  1. Transfer happens when {receiver} is LOW")
-            lines.append(f"  2. Data not latched properly on transfer")
-            lines.append(f"  3. Protocol deadlock detected")
-            lines.append(f"  4. Invalid handshake sequence")
+            lines.append(f"  1. {receiver}=0 but transfer=occur")
+            lines.append(f"  2. data-corruption")
+            lines.append(f"  3. deadlock=detected")
+            lines.append(f"  4. invalid-sequence")
             lines.append("")
     
     else:
@@ -4635,7 +4610,7 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
     # Action instruction
     try:
         y = top + box_h - 4
-        inst = "Type 'confirm' to create or 'q' to cancel"
+        inst = "Press Enter to create or type 'q' to cancel"
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
         pass
@@ -4686,7 +4661,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 return f"Invalid. Choose 1-{len(plugins)}", False
         return "Enter number to select type", False
     
-    # Stage 2: Input Data (step-by-step with auto-advance)
+    # Stage 2: Input Data (step-by-step, input saves immediately, Enter to advance)
     elif state.assertion_wizard_stage == 'input_data':
         plugins = _get_assertion_plugins_info()
         plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
@@ -4695,7 +4670,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         
         fields = plugin.get('fields', [])
         if not fields or state.assertion_current_field_idx >= len(fields):
-            return "No fields or invalid field index", True
+            return "No fields or invalid field index", False
         
         current_field = fields[state.assertion_current_field_idx]
         field_name = current_field['name']
@@ -4713,7 +4688,25 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             else:
                 return "Already at first step", False
         
-        # Field-specific input handling with auto-advance
+        # Empty command: move to next field if current is filled
+        if cmd == '':
+            if field_name not in state.assertion_input_data:
+                return "Please enter a value", False
+            
+            # Advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return "\nAll steps complete. Review and press Enter to create.", False
+        
+        # Field-specific input handling
         if field_type == 'choice':
             options = current_field.get('options', [])
             selected_option = None
@@ -4733,20 +4726,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 return f"Invalid. Choose [1-{len(options)}] or type option name", False
             
             state.assertion_input_data[field_name] = selected_option
-            
-            # Auto-advance to next field
-            if state.assertion_current_field_idx < len(fields) - 1:
-                state.assertion_current_field_idx += 1
-                next_field = fields[state.assertion_current_field_idx]
-                step = state.assertion_current_field_idx + 1
-                msg = f"\n✓ Selected: {selected_option}\n"
-                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
-                msg += next_field.get('description', '')
-                return msg, False
-            else:
-                # All fields done, move to confirm
-                state.assertion_wizard_stage = 'confirm'
-                return f"✓ Selected: {selected_option}\n\nAll steps complete. Type 'create' to review and create.", False
+            return f"\nOK: {selected_option}\nPress Enter to continue, or 'prev' to go back", False
         
         elif field_type == 'signal':
             # Accept signal by number index or name
@@ -4769,44 +4749,18 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                     return f"Signal '{cmd}' not found. Use number or exact name", False
             
             state.assertion_input_data[field_name] = selected_signal
-            
-            # Auto-advance to next field
-            if state.assertion_current_field_idx < len(fields) - 1:
-                state.assertion_current_field_idx += 1
-                next_field = fields[state.assertion_current_field_idx]
-                step = state.assertion_current_field_idx + 1
-                msg = f"\n✓ Selected signal: {selected_signal}\n"
-                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
-                msg += next_field.get('description', '')
-                return msg, False
-            else:
-                # All fields done, move to confirm
-                state.assertion_wizard_stage = 'confirm'
-                return f"✓ Selected signal: {selected_signal}\n\nAll steps complete. Type 'create' to review and create.", False
+            return f"\nOK: {selected_signal}\nPress Enter to continue, or 'prev' to go back", False
         
         elif field_type == 'string':
             # Accept any string input
             state.assertion_input_data[field_name] = cmd
-            
-            # Auto-advance to next field
-            if state.assertion_current_field_idx < len(fields) - 1:
-                state.assertion_current_field_idx += 1
-                next_field = fields[state.assertion_current_field_idx]
-                step = state.assertion_current_field_idx + 1
-                msg = f"\n✓ Entered: {cmd}\n"
-                msg += f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
-                msg += next_field.get('description', '')
-                return msg, False
-            else:
-                # All fields done, move to confirm
-                state.assertion_wizard_stage = 'confirm'
-                return f"✓ Entered: {cmd}\n\nAll steps complete. Type 'create' to review and create.", False
+            return f"\nOK: {cmd}\nPress Enter to continue, or 'prev' to go back", False
         
         return "Invalid input for this field", False
     
     # Stage 3: Confirm
     elif state.assertion_wizard_stage == 'confirm':
-        if cmd == 'create':
+        if cmd == '' or cmd in ('yes', 'y', 'confirm', 'ok'):
             result = _create_assertion_from_wizard(state)
             state.assertion_wizard_active = False
             state.assertion_wizard_stage = ""
@@ -4829,7 +4783,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 msg += last_field.get('description', '')
                 return msg, False
         
-        return "Type 'create' to create or 'prev' to edit", False
+        return "Press Enter to create or type 'prev' to edit", False
     
     return "", False
 
