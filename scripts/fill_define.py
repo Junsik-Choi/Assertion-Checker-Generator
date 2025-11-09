@@ -395,11 +395,13 @@ def main():
     if conditions:
         logger.info(f"Conditions to process: {[c.get('name','?') for c in conditions]}")
 
-    # Target Path: use RTL hierarchy if available (for display), otherwise RTL file path, otherwise top_path + paths
+    # Target Path: use RTL hierarchy if available (for display)
+    # If no hierarchy, use module name only (not the full file path)
+    # This ensures Excel shows "blur_scaler" not "D:\...\blur_scaler.v"
     if rtl_hierarchy:
         target_path_str = rtl_hierarchy
-    elif rtl_file_path:
-        target_path_str = rtl_file_path
+    elif module:
+        target_path_str = module  # Use just module name, not full file path
     elif top_path:
         target_path_str = ",".join(f"{top_path}.{p}" if p else top_path for p in paths) if paths else top_path
     else:

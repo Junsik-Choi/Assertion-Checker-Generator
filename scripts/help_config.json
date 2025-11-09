@@ -5,37 +5,38 @@
       "title": "Commands",
       "items": [
         { "cmd": "new", "example": "new", "desc": "Create a new assertion (interactive wizard)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "gen | if | inst", "example": "gen", "desc": "Generate interface/instance files (unified command - all aliases work)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
         { "cmd": "<number>", "example": "2", "desc": "Load previous session by its number", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "help | h", "example": "help", "desc": "Open/close help overlay (this)", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
         { "cmd": "quit | q", "example": "q", "desc": "Exit the TUI", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
-
-        { "cmd": "set rtl <path>", "example": "set rtl D:/proj/top.sv", "desc": "File: restrict modules to that file; Folder: scan all under it (Tab completion)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set module <name>", "example": "set module blur_scaler", "desc": "Pick target module (Step 2 also lets you choose)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set excel <path>", "example": "set excel Data/Assertion_TF.xlsx", "desc": "Reference Excel (auto-detected if found)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "set out <path>", "example": "set out out/assertions", "desc": "Output directory for artifacts", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-
-        { "cmd": "scan", "example": "scan", "desc": "Parse RTL, populate module/ports/clocks/resets", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "fill / json / sv", "example": "fill", "desc": "Define fill / inputs JSON / SV generation", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-
         { "cmd": "f <substr>", "example": "f den", "desc": "Filter ports or modules (contains)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "F", "example": "F", "desc": "Clear filter", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "n / N", "example": "n", "desc": "Next / previous page (wrap)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "prev / back", "example": "prev", "desc": "Go to previous onboarding step", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
-        { "cmd": "Tab (path)", "example": "D:/proj/ + Tab", "desc": "Show candidates, extend common prefix; if many: Tab pages candidates", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" }
+        { "cmd": "n / N", "example": "n", "desc": "Next / previous page (wrap)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" }
       ]
     },
     {
       "key": "signals",
-      "title": "Condition Signals (ms)",
+      "title": "Condition Signals (ms) & Parameters",
       "items": [
-        { "cmd": "ms name = expr", "example": "ms valid = (1||2)&&3", "desc": "Create a condition signal. '=' optional.", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
-        { "cmd": "aliases", "example": "1,2.. → inputs; o1,o2.. → outputs", "desc": "Numeric refs map to Inputs/Inouts; oN maps to Outputs/Inouts.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "width", "example": "I_BUS[7:0]  /  ... 4", "desc": "Width from [msb:lsb] or trailing number; default 1.", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "logical", "example": "&&, ||, ! → 1-bit result", "desc": "Logical operators always produce 1-bit result.", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "bitwise", "example": "&, |, ^ → multi-bit", "desc": "Bitwise ops require bit width: 'ms name expr <width>'", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "refs", "example": "ms combined (valid && eq)", "desc": "You can reference previously defined conditions (cycle not allowed).", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" },
-        { "cmd": "excel", "example": "L/M/N from L8", "desc": "Appends name/expr/bits to session Excel Define sheet.", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
-        { "cmd": "errors", "example": "unknown signal / unmatched ']' / cycle", "desc": "Invalid expressions rejected; ms page is highlighted and error shown.", "cmd_color": "red", "example_color": "red", "desc_color": "white" }
+        { "cmd": "ms name = expr", "example": "ms valid = (i1||i2)&&i3", "desc": "Create condition signal. '=' optional.", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
+        { "cmd": "param name=val", "example": "param WIDTH=8", "desc": "Add/override module parameter", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
+        { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "INPUT signals", "example": "i1, i2, i3, ...", "desc": "Reference input port by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "OUTPUT signals", "example": "o1, o2, o3, ...", "desc": "Reference output port by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "PARAMETER values", "example": "p1, p2, p3, ...", "desc": "Reference parameter by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "CLOCK signals", "example": "c1, c2, c3, ...", "desc": "Reference clock signal by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "RESET signals", "example": "r1, r2, r3, ...", "desc": "Reference reset signal by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "LEGACY (plain #)", "example": "1, 2, 3, ...", "desc": "Plain numbers map to inputs (i1, i2, ...)", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "Combined #1", "example": "(i1 || i2) && c1", "desc": "Use inputs and clock together", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Combined #2", "example": "i1 && !i2 && r1", "desc": "Use input with reset (negation)", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Combined #3", "example": "o1 && o3", "desc": "Multiple output signals", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Combined #4", "example": "p1 > 0 && p2 < 100", "desc": "Parameter comparisons", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Combined #5", "example": "i1 || o2 || p1 || c1 || r2", "desc": "All signal types together", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "Bit width [N:0]", "example": "i1[7:0] && i2[15:8]", "desc": "Specify bit ranges from ports", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Bit width #", "example": "ms expr 4", "desc": "Result width (1=logical, 4=bitwise)", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Auto-saved", "example": "to Define sheet", "desc": "Expressions saved in session Excel", "cmd_color": "green", "example_color": "green", "desc_color": "white" }
       ]
     },
     {
@@ -55,6 +56,22 @@
         { "cmd": "confirm", "example": "confirm", "desc": "Create assertion (auto-saved to Excel sheet)", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
         
         { "cmd": "q", "example": "q", "desc": "Always press 'q' to exit and cancel wizard", "cmd_color": "red", "example_color": "red", "desc_color": "white" }
+      ]
+    },
+    {
+      "key": "file_generation",
+      "title": "File Generation (gen)",
+      "items": [
+        { "cmd": "gen", "example": "gen", "desc": "Generate interface/instance files from Excel data", "cmd_color": "green", "example_color": "green", "desc_color": "white" },
+        { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "Step 1: Filename", "example": "Enter output file name", "desc": "Name without extension (e.g., 'my_veri')", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Step 2: File Type", "example": "Choose 1 or 2 or 3", "desc": "1=Interface(.if.sv) 2=Instance(.inst.sv) 3=Both", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Step 3: Data Source", "example": "Select assertions/signals", "desc": "Choose which Define/Assertion data to include", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Step 4: Preview", "example": "View & confirm", "desc": "Review generated code before saving", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
+        { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "Output: Interface", "example": "output/*.if.sv", "desc": "SystemVerilog interface file with assertions", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Output: Instance", "example": "output/*.inst.sv", "desc": "SystemVerilog instance file with binding", "cmd_color": "magenta", "example_color": "green", "desc_color": "white" },
+        { "cmd": "Done or b", "example": "done / b", "desc": "Finish generation (b=back to Step 3)", "cmd_color": "yellow", "example_color": "yellow", "desc_color": "white" }
       ]
     },
     {
@@ -82,12 +99,11 @@
         { "text": "             --++-----****---+.                                 ", "color": "cyan" },
         { "text": "                                                                ", "color": "white" },
         { "text": "Harman Connected Services Inc", "color": "white" },
-        { "text": "Junsik Choi / email@example.com", "color": "white" },
-        { "text": "Dabeen Kim / email@example.com", "color": "white" },
-        { "text": "Seunghun Lee / email@example.com", "color": "white" }
+        { "text": "Junsik Choi / Junsik.Choi@harman.com", "color": "white" },
+        { "text": "Dabeen Kim / Sophia.Kim@harman.com", "color": "white" },
+        { "text": "Seunghun Lee / SeungHun.Lee@harman.com", "color": "white" }
       ]
     }
   ]
 }
-
 

@@ -228,10 +228,14 @@ def _create_session_excel_and_fill(state: AppState) -> Tuple[bool, str]:
         
         # Define JSON을 같은 세션 폴더에 생성
         log_debug("Creating define JSON...")
+        
+        # Ensure hierarchy is set (use module name as default if not set)
+        hierarchy = state.module_info.module_hierarchy or state.module_info.module or ""
+        
         define_json = fill_define_excel_if_needed(new_xlsx, {
             "module": state.module_info.module,
             "rtl_file_path": state.module_info.rtl_file_path,  # Internal use only
-            "rtl_hierarchy": state.module_info.module_hierarchy,  # Display path
+            "rtl_hierarchy": hierarchy,  # Display path (use module as fallback)
             "clocks": state.module_info.clocks,
             "resets": state.module_info.resets,
             "inputs": state.module_info.inputs,
@@ -298,12 +302,15 @@ def _update_define_sheet(state: AppState) -> None:
     if not state.session_excel_path or not state.session_excel_path.exists():
         raise RuntimeError("Session Excel not found")
     
+    # Ensure hierarchy is set (use module name as default if not set)
+    hierarchy = state.module_info.module_hierarchy or state.module_info.module or ""
+    
     # Create define JSON in session directory
     sess_dir = state.session_excel_path.parent
     define_json = fill_define_excel_if_needed(state.session_excel_path, {
         "module": state.module_info.module,
         "rtl_file_path": state.module_info.rtl_file_path,  # Internal use only
-        "rtl_hierarchy": state.module_info.module_hierarchy,  # Display path
+        "rtl_hierarchy": hierarchy,  # Display path (use module as fallback)
         "clocks": state.module_info.clocks,
         "resets": state.module_info.resets,
         "inputs": state.module_info.inputs,
@@ -392,12 +399,25 @@ class AppState:
     assertion_wizard_stage: str = ""  # 'select_type' | 'input_data' | 'confirm'
     assertion_selected_type: Optional[str] = None
     assertion_input_data: Dict[str, Any] = field(default_factory=dict)
+    # New: Store port_dict for each signal field (field_name -> port_dict with calculated_bit_width)
+    assertion_signal_ports: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     # New: Track current field being edited and cursor position
     assertion_current_field_idx: int = 0
     # New: Preview for assertion (right side)
     assertion_preview_lines: List[str] = field(default_factory=list)
-    # New: Signal selection map (index -> signal_name) for wizard
-    assertion_signal_map: Dict[int, str] = field(default_factory=dict)
+    # New: Signal selection map (index -> (signal_name, port_dict)) for wizard
+    assertion_signal_map: Dict[int, Tuple[str, Dict[str, Any]]] = field(default_factory=dict)
+    # New: Signal list pagination for wizard signal selection
+    assertion_signal_page: int = 0  # Current page in signal selection list
+    assertion_signal_list: List[Tuple[int, str, str, Dict[str, Any]]] = field(default_factory=list)  # (idx, name, type, port_dict)
+    
+    # File generation wizard state
+    gen_wizard_active: bool = False
+    gen_wizard_stage: str = ""  # 'filename' | 'file_type' | 'data_source' | 'preview' | 'confirm'
+    gen_filename: str = ""  # Output filename without extension
+    gen_file_type: Optional[int] = None  # 1=interface, 2=instance, 3=both
+    gen_data_source: Optional[str] = None  # 'assertions' | 'signals' | 'both'
+    gen_preview_lines: List[str] = field(default_factory=list)  # Preview of generated code
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -449,19 +469,27 @@ def _format_port_with_width(port: Dict[str, Any], index: int) -> Tuple[str, bool
     """
     Format port as '[idx] name [width]'.
     Returns: (text, is_parameterized)
-    For parameterized ports, text includes param names and bit width info.
-    Example: "[1] i_w1_cap [WEIGHT_WIDTH-1:0] (4 bits)"
+    For parameterized ports, display calculated bit width (e.g., [7:0]) not parameter name.
+    Example: "[1] i_w1_cap [3:0]"  or  "[1] i_data [DATA_WIDTH-1:0] (8bits)" if unresolved
     """
     name = port.get('name', '?')
-    width = _get_port_width(port)
+    width = _get_port_width(port)  # Original width from RTL (may contain parameters)
     is_param, params_str, bit_width = _get_port_param_info(port)
     
+    # Check if width has unresolved parameters
+    def has_param_expr(w: str) -> bool:
+        import re
+        return bool(re.search(r'[A-Za-z_]\w*', w)) if w else False
+    
     if is_param:
-        # 파라미터화된 신호: 파라미터 이름과 계산된 bit width 표시
+        # Parameterized signal
         if bit_width > 0:
-            text = f"[{index+1}] {name} [{params_str}] ({bit_width}bits)"
+            # ✅ Show calculated bit width (e.g., [7:0]) instead of parameter expression
+            formatted_width = f"[{bit_width-1}:0]"
+            text = f"[{index+1}] {name} {formatted_width}"
         else:
-            text = f"[{index+1}] {name} [{params_str}]"
+            # ⚠️ Couldn't calculate - show parameter expression with warning
+            text = f"[{index+1}] {name} {width}"  # e.g., [WEIGHT_WIDTH-1:0]
     elif width:
         text = f"[{index+1}] {name} {width}"
     else:
@@ -472,8 +500,10 @@ def _format_port_with_width(port: Dict[str, Any], index: int) -> Tuple[str, bool
 
 def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, Any]], start_row: int = 1) -> None:
     """Draw ports in 2-column layout with bit width information.
-    Parameterized ports are shown in BLUE color.
+    Only the bit width part [N:0] is shown in BLUE color for parameterized signals.
     """
+    import re
+    
     max_y, max_x = win.getmaxyx()
     usable_h = max_y - start_row - 1
     usable_w = max_x - 2
@@ -483,6 +513,32 @@ def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, A
     col1_w = col_w - 1  # Space for separator
     col2_w = usable_w - col_w
     
+    def draw_text_with_colored_width(win, row, col, text, max_w, is_param):
+        """Draw text with only the width part [N:0] in blue if parameterized."""
+        try:
+            text = _truncate(text, max_w)
+            
+            # Find the bit width pattern [N:0] at the end
+            match = re.search(r'\s+\[(\d+):0\]$', text)
+            
+            if is_param and match:
+                # Split into: "[idx] name" and "[N:0]"
+                width_start = match.start()
+                prefix = text[:width_start]
+                width_part = text[width_start:]
+                
+                # Draw prefix in normal color
+                win.addstr(row, col, prefix, curses.A_NORMAL)
+                
+                # Draw width part in blue
+                blue_pair = _PAIR_BY_NAME.get("blue", 0)
+                win.addstr(row, col + len(prefix), width_part, curses.color_pair(blue_pair))
+            else:
+                # No parameterized width, draw all in normal color
+                win.addstr(row, col, text, curses.A_NORMAL)
+        except curses.error:
+            pass
+    
     row = start_row
     for i in range(0, len(ports), 2):
         if row >= max_y - 1:
@@ -491,24 +547,12 @@ def _draw_ports_two_columns(win: "curses._CursesWindow", ports: List[Dict[str, A
         # Left column
         if i < len(ports):
             left_text, is_param_left = _format_port_with_width(ports[i], i)
-            try:
-                # BLUE color for parameterized signals
-                blue_pair = _PAIR_BY_NAME.get("blue", 0)
-                attr = curses.color_pair(blue_pair) if is_param_left else curses.A_NORMAL
-                win.addnstr(row, 1, _truncate(left_text, col1_w), col1_w, attr)
-            except curses.error:
-                pass
+            draw_text_with_colored_width(win, row, 1, left_text, col1_w, is_param_left)
         
         # Right column
         if i + 1 < len(ports):
             right_text, is_param_right = _format_port_with_width(ports[i + 1], i + 1)
-            try:
-                # BLUE color for parameterized signals
-                blue_pair = _PAIR_BY_NAME.get("blue", 0)
-                attr = curses.color_pair(blue_pair) if is_param_right else curses.A_NORMAL
-                win.addnstr(row, col_w + 1, _truncate(right_text, col2_w - 1), col2_w - 1, attr)
-            except curses.error:
-                pass
+            draw_text_with_colored_width(win, row, col_w + 1, right_text, col2_w - 1, is_param_right)
         
         row += 1
 
@@ -546,7 +590,24 @@ def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tup
         target_module = tops[0] if tops else next(iter(modules.keys()))
 
     occs = find_occurrences_of_target(modules, target_module)
-    env = compute_env_for_occurrence(occs[0], modules, {}) if occs else {}
+    
+    # Build parameter environment with proper priority:
+    # 1. If occurrence exists (module is instantiated), use hierarchy chain
+    # 2. Otherwise, use module's default parameters
+    external_params = {}
+    
+    if occs:
+        # ✅ Module is instantiated somewhere - use occurrence-based environment
+        # This handles external parameter overrides from parent modules
+        env = compute_env_for_occurrence(occs[0], modules, external_params)
+    else:
+        # ⚠️ Module is not instantiated (or at top level)
+        # Use the module's own default parameters
+        if target_module in modules:
+            target_mod = modules[target_module]
+            if "param_defaults" in target_mod:
+                external_params = dict(target_mod["param_defaults"])
+        env = external_params
     ports_resolved = resolve_ports_with_params(modules, target_module, env)
     cls = classify_groups(modules[target_module]["ports"])
     ex_names = {x["name"] for x in cls.get("clocks", [])} | {x["name"] for x in cls.get("resets", [])}
@@ -557,6 +618,12 @@ def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tup
     if target_module in modules and "file" in modules[target_module]:
         rtl_file_path = str(modules[target_module]["file"])
 
+    # Extract parameters from param_defaults instead of port classification
+    parameters = []
+    if target_module in modules and "param_defaults" in modules[target_module]:
+        param_defaults = modules[target_module]["param_defaults"]
+        parameters = [{"name": k, "default": v} for k, v in param_defaults.items()]
+
     mi = ModuleInfo(
         module=target_module,
         rtl_file_path=rtl_file_path,
@@ -565,7 +632,7 @@ def build_context_from_rtl(rtl_start: Path, target_module: Optional[str]) -> Tup
         inouts=ports_resolved["inouts"],
         clocks=cls.get("clocks", []),
         resets=cls.get("resets", []),
-        parameters=cls.get("parameters", []),
+        parameters=parameters,
     )
     return modules, mi, occs
 
@@ -857,6 +924,14 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         if "module_hierarchy" in chosen:
             state.module_info.module_hierarchy = chosen.get("module_hierarchy", "")
         
+        # Restore clocks, resets, parameters from session.json
+        if "clocks" in chosen:
+            state.module_info.clocks = chosen.get("clocks", [])
+        if "resets" in chosen:
+            state.module_info.resets = chosen.get("resets", [])
+        if "parameters" in chosen:
+            state.module_info.parameters = chosen.get("parameters", [])
+        
         # CRITICAL: Never restore excel_path (reference Excel)
         # Only restore session_excel_path
         state.excel_path = None  # Always None - we don't use reference paths
@@ -890,6 +965,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         # Restore condition signals from Excel after session Excel path is set
         if state.session_excel_path:
             _restore_conditions_from_excel(state)
+            _restore_assertions_from_excel(state)  # Also restore assertions from Excel
     elif chooser_result == "new":
         state.onboarding_active = True
         state.onboarding_stage = 'rtl'
@@ -946,26 +1022,99 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         # Assertion wizard rendering
         if state.assertion_wizard_active:
             try:
-                stdscr.erase()
-            except Exception:
-                pass
-            _render_assertion_wizard(stdscr, state)
-            max_y, max_x = stdscr.getmaxyx()
-            
-            # Status message
-            if status_msg:
+                _render_assertion_wizard(stdscr, state)
+            except Exception as e:
                 try:
-                    stdscr.addnstr(max_y - 4, 2, _truncate(status_msg, max_x - 4), max_x - 4)
-                except curses.error:
+                    stdscr.addnstr(2, 2, f"ERROR in wizard rendering: {str(e)[:60]}", 80, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("red", 0)))
+                except:
                     pass
+            max_y, max_x = stdscr.getmaxyx()
             
             # Hints
             if state.assertion_wizard_stage == 'select_type':
-                hint_line = "Enter number | q: quit"
+                hint_line = "Enter assertion type number [1-4] | 'q' to quit"
             elif state.assertion_wizard_stage == 'input_data':
-                hint_line = "field# | set # value | b: back | done: finish | q: quit"
+                hint_line = "Enter value | [Enter] to next | 'b' for previous | 'q' to cancel"
             elif state.assertion_wizard_stage == 'confirm':
-                hint_line = "confirm: create | q: quit"
+                hint_line = "[Enter] to create | 'b' to edit | 'q' to cancel"
+            else:
+                hint_line = ""
+            try:
+                stdscr.addnstr(max_y - 3, 2, _truncate(hint_line, max_x - 4), max_x - 4, curses.A_DIM)
+            except curses.error:
+                pass
+            
+            # Input prompt
+            prompt = "> "
+            edit_w = max_x - len(prompt) - 1
+            current = "".join(input_buf)
+            try:
+                stdscr.addnstr(max_y - 1, 0, prompt, len(prompt))
+                stdscr.addnstr(max_y - 1, len(prompt), _truncate(current, edit_w), edit_w)
+                curses.curs_set(1)
+                stdscr.move(max_y - 1, len(prompt) + min(cursor_pos, edit_w))
+            except curses.error:
+                pass
+            
+            stdscr.refresh()
+            
+            # Handle Assertion Wizard input
+            ch = stdscr.getch()
+            if ch in (curses.KEY_RESIZE,):
+                continue
+            if ch in (curses.KEY_BACKSPACE, 127, 8):
+                if cursor_pos > 0:
+                    del input_buf[cursor_pos - 1]
+                    cursor_pos -= 1
+                continue
+            if ch in (curses.KEY_LEFT,):
+                cursor_pos = max(0, cursor_pos - 1)
+                continue
+            if ch in (curses.KEY_RIGHT,):
+                cursor_pos = min(len(input_buf), cursor_pos + 1)
+                continue
+            if ch in (10, 13):  # Enter
+                cmdline = "".join(input_buf).strip()
+                input_buf.clear()
+                cursor_pos = 0
+                msg, exit_wizard = _handle_assertion_wizard_command(state, cmdline)
+                status_msg = msg
+                if exit_wizard:
+                    state.assertion_wizard_active = False
+                    input_buf.clear()
+                    cursor_pos = 0
+                continue
+            if ch in (ord('q'), ord('Q')):  # Quick quit
+                state.assertion_wizard_active = False
+                input_buf.clear()
+                cursor_pos = 0
+                status_msg = "Assertion wizard cancelled"
+                continue
+            # Regular char
+            if 0 <= ch <= 255:
+                try:
+                    c = chr(ch)
+                except Exception:
+                    c = ""
+                if c:
+                    input_buf.insert(cursor_pos, c)
+                    cursor_pos += 1
+            continue
+        
+        elif state.gen_wizard_active:
+            # File generation wizard rendering
+            _render_gen_wizard(stdscr, state)
+            max_y, max_x = stdscr.getmaxyx()
+            
+            # Hints for file generation wizard
+            if state.gen_wizard_stage == 'filename':
+                hint_line = "Enter output filename (no extension) | 'q' to cancel"
+            elif state.gen_wizard_stage == 'file_type':
+                hint_line = "Choose file type: 1=Interface(.if.sv) 2=Instance(.inst.sv) 3=Both | 'q' to cancel"
+            elif state.gen_wizard_stage == 'data_source':
+                hint_line = "Choose data: 1=Assertions 2=Signals 3=Both | 'b' to back | 'q' to cancel"
+            elif state.gen_wizard_stage == 'preview':
+                hint_line = "[Enter] to generate | 'b' to edit | 'q' to cancel"
             else:
                 hint_line = ""
             try:
@@ -1006,11 +1155,46 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 cmdline = "".join(input_buf).strip()
                 input_buf.clear()
                 cursor_pos = 0
-                # Handle both empty enter and normal commands
-                msg, exit_wizard = _handle_assertion_wizard_command(state, cmdline)
-                status_msg = msg
-                if exit_wizard:
-                    state.assertion_wizard_active = False
+                
+                # Handle file generation wizard stages
+                if state.gen_wizard_stage == 'filename':
+                    if not cmdline:
+                        status_msg = "ERROR: Filename cannot be empty"
+                        continue
+                    state.gen_filename = cmdline
+                    state.gen_wizard_stage = 'file_type'
+                    state.gen_file_type = None
+                elif state.gen_wizard_stage == 'file_type':
+                    if cmdline in ('1', '2', '3'):
+                        state.gen_file_type = int(cmdline)
+                        state.gen_wizard_stage = 'data_source'
+                        state.gen_data_source = None
+                    else:
+                        status_msg = "ERROR: Enter 1, 2, or 3"
+                elif state.gen_wizard_stage == 'data_source':
+                    if cmdline in ('1', '2', '3'):
+                        state.gen_data_source = cmdline
+                        state.gen_wizard_stage = 'preview'
+                        state.gen_preview_lines = []
+                    elif cmdline == 'b':
+                        state.gen_wizard_stage = 'file_type'
+                    else:
+                        status_msg = "ERROR: Enter 1, 2, 3, or 'b' to go back"
+                elif state.gen_wizard_stage == 'preview':
+                    if cmdline == '':  # Empty = generate
+                        msg = _generate_files(state)
+                        status_msg = msg
+                        state.gen_wizard_active = False
+                    elif cmdline == 'b':
+                        state.gen_wizard_stage = 'data_source'
+                    elif cmdline == 'q' or cmdline == 'Q':
+                        state.gen_wizard_active = False
+                        status_msg = "File generation cancelled"
+                    else:
+                        status_msg = "ERROR: Press Enter to generate or 'b' to edit"
+                elif cmdline == 'q' or cmdline == 'Q':
+                    state.gen_wizard_active = False
+                    status_msg = "File generation cancelled"
                 continue
             # Regular char
             if 0 <= ch <= 255:
@@ -1397,10 +1581,31 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         _draw_box(win_left_bot, "Clocks / Resets / Params")
         left_bot_h, left_bot_w = win_left_bot.getmaxyx()
         row_ptr_left_bot = 1  # Start from row 1
+        
+        try:
+            # Format parameters with default values using [i] numbering
+            param_lines = []
+            for i, p in enumerate(state.module_info.parameters):
+                pname = p.get('name', '?')
+                pdefault = p.get('default', '')
+                if pdefault:
+                    line = f"  [{i+1}] {pname} : {pdefault}"
+                else:
+                    line = f"  [{i+1}] {pname}"
+                # Wrap if line is too long
+                usable_w = max(1, left_bot_w - 4)  # Leave margin for wrapping, ensure at least 1
+                if len(line) > usable_w:
+                    wrapped = _wrap_text(line, usable_w)
+                    param_lines.extend(wrapped)
+                else:
+                    param_lines.append(line)
+        except Exception as e:
+            param_lines = [f"  ERROR formatting params: {e}"]
+        
         sections = [
             ("Clocks:", [f"  [{i+1}] {c.get('name','?')}" for i, c in enumerate(state.module_info.clocks)]),
             ("Resets:", [f"  [{i+1}] {r.get('name','?')}" for i, r in enumerate(state.module_info.resets)]),
-            ("Params:", [f"  {p.get('name','?')}" for p in state.module_info.parameters]),
+            ("Params:", param_lines if param_lines else []),
         ]
         for title, items in sections:
             if row_ptr_left_bot >= left_bot_h - 1:
@@ -1449,6 +1654,21 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         # Draw in 2-column layout
         _draw_ports_two_columns(win_in, in_page_ports, start_row=1)
         _draw_ports_two_columns(win_out, out_page_ports, start_row=1)
+        
+        # Add pagination info and navigation hint at bottom of Input/Output boxes
+        try:
+            in_total_pages = max(1, (len(in_ports) + ports_per_page_in - 1) // ports_per_page_in)
+            out_total_pages = max(1, (len(out_ports) + ports_per_page_out - 1) // ports_per_page_out)
+            in_cur_page = (_ports_page % in_total_pages) + 1 if in_total_pages > 0 else 1
+            out_cur_page = (_ports_page % out_total_pages) + 1 if out_total_pages > 0 else 1
+            
+            in_info = f"Page {in_cur_page}/{in_total_pages} | n/N to scroll"
+            out_info = f"Page {out_cur_page}/{out_total_pages} | n/N to scroll"
+            
+            win_in.addnstr(in_h - 1, 2, _truncate(in_info, in_w2 - 4), in_w2 - 4, curses.A_DIM)
+            win_out.addnstr(out_h - 1, 2, _truncate(out_info, out_w2 - 4), out_w2 - 4, curses.A_DIM)
+        except curses.error:
+            pass
         
         # Draw rightmost: Condition Signals with syntax highlighting
         _draw_box(win_cond, "Condition Signals (ms)")
@@ -1560,21 +1780,21 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             except curses.error:
                 pass
         else:
-            # Display assertions in table format: Type | Signals | Description
-            # Column widths: Type(15%) | Signals(35%) | Description(50%)
-            type_w = max(10, int(assert_inner_w * 0.15))
-            sig_w = max(15, int(assert_inner_w * 0.35))
-            desc_w = max(20, assert_inner_w - type_w - sig_w - 4)  # -4 for separators
+            # Display assertions in table format: # | Type | Description
+            # Column widths: Index(3) | Type(12) | Description(remaining)
+            idx_w = 3
+            type_w = 12
+            desc_w = max(40, assert_inner_w - idx_w - type_w - 6)  # -6 for separators
             
             # Header
-            header = f"{'Type':<{type_w}} | {'Signals':<{sig_w}} | {'Description':<{desc_w}}"
+            header = f"{'#':<{idx_w}} | {'Type':<{type_w}} | {'Description':<{desc_w}}"
             try:
                 win_assertions.addnstr(1, 2, _truncate(header, assert_inner_w), assert_inner_w, curses.A_BOLD)
             except curses.error:
                 pass
             
             # Separator
-            sep = "-" * (type_w + sig_w + desc_w + 4)
+            sep = "-" * min(idx_w + type_w + desc_w + 6, assert_inner_w)
             try:
                 win_assertions.addnstr(2, 2, _truncate(sep, assert_inner_w), assert_inner_w)
             except curses.error:
@@ -1582,18 +1802,108 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             
             # Assertion rows
             row = 3
-            for i, asrt in enumerate(state.assertions):
+            for i, asrt in enumerate(state.assertions, start=1):
                 if row >= assert_h - 1:
                     break
-                atype = asrt.get('type', 'Unknown')
-                signals = asrt.get('signals', [])
-                sig_str = ', '.join(signals[:3]) + ('...' if len(signals) > 3 else '')
-                desc = asrt.get('description', '')
                 
-                line = f"{_truncate(atype, type_w):<{type_w}} | {_truncate(sig_str, sig_w):<{sig_w}} | {_truncate(desc, desc_w):<{desc_w}}"
-                attr = curses.A_DIM if (i % 2 == 1) else 0
+                atype = asrt.get('type', 'Unknown')
+                adata = asrt.get('data', {})
+                
+                # Extract signal name and build natural language description
+                # user_input_parts: list of (text, column_offset) for user-provided values
+                full_desc = ""
+                user_input_parts = []  # List to store user-provided values for highlighting in GREEN
+                
+                if atype == 'counter':
+                    signal_name = adata.get('target', '?')
+                    exp_cnt = adata.get('exp_cnt_val', '?')
+                    # Truncate signal name to 15 chars
+                    if len(str(signal_name)) > 15:
+                        display_signal = str(signal_name)[:12] + "..."
+                    else:
+                        display_signal = str(signal_name)
+                    full_desc = f"Monitor {display_signal} counter reaching {exp_cnt}"
+                    # Both signal name and counter value are user inputs
+                    user_input_parts.append((display_signal, len("Monitor ")))
+                    user_input_parts.append((str(exp_cnt), len(f"Monitor {display_signal} counter reaching ")))
+                    
+                elif atype == 'handshake':
+                    sender = adata.get('sender', '?')
+                    receiver = adata.get('receiver', '?')
+                    phase = adata.get('phase_type', '?')
+                    
+                    # Truncate sender/receiver to fit in 15 chars
+                    sender_short = sender if len(str(sender)) <= 15 else str(sender)[:12] + "..."
+                    recv_short = receiver if len(str(receiver)) <= 15 else str(receiver)[:12] + "..."
+                    
+                    # Build description based on phase type with clear labels
+                    if phase.lower() == '2phase':
+                        full_desc = f"2-Phase: req={sender_short} ack={recv_short}"
+                        req_prefix_len = len("2-Phase: req=")
+                        ack_prefix_len = len("2-Phase: req=") + len(sender_short) + len(" ack=")
+                    elif phase.lower() == '4phase':
+                        full_desc = f"4-Phase: req={sender_short} ack={recv_short}"
+                        req_prefix_len = len("4-Phase: req=")
+                        ack_prefix_len = len("4-Phase: req=") + len(sender_short) + len(" ack=")
+                    elif phase.lower() == 'ready_valid':
+                        full_desc = f"Ready-Valid: valid={sender_short} ready={recv_short}"
+                        req_prefix_len = len("Ready-Valid: valid=")
+                        ack_prefix_len = len("Ready-Valid: valid=") + len(sender_short) + len(" ready=")
+                    else:
+                        full_desc = f"{phase}: send={sender_short} recv={recv_short}"
+                        req_prefix_len = len(f"{phase}: send=")
+                        ack_prefix_len = len(f"{phase}: send=") + len(sender_short) + len(" recv=")
+                    
+                    # Add sender and receiver (both user inputs)
+                    user_input_parts.append((sender_short, req_prefix_len))
+                    user_input_parts.append((recv_short, ack_prefix_len))
+                    
+                elif atype == 'pulseWidth':
+                    signal_name = adata.get('target_signal', '?')
+                    min_w = adata.get('min_width', '?')
+                    max_w = adata.get('max_width', '?')
+                    
+                    # Truncate signal name to 15 chars
+                    if len(str(signal_name)) > 15:
+                        display_signal = str(signal_name)[:12] + "..."
+                    else:
+                        display_signal = str(signal_name)
+                    
+                    full_desc = f"Pulse width of {display_signal} between {min_w}-{max_w} clocks"
+                    # All three parts are user inputs: signal name, min_width, max_width
+                    user_input_parts.append((display_signal, len("Pulse width of ")))
+                    user_input_parts.append((str(min_w), len(f"Pulse width of {display_signal} between ")))
+                    user_input_parts.append((str(max_w), len(f"Pulse width of {display_signal} between {min_w}-")))
+                
+                else:
+                    full_desc = f"[{atype.upper()}] assertion configured"
+                
+                # Format: Index | Type | Description
+                idx_str = f"{i}".ljust(idx_w)
+                type_str = _truncate(atype, type_w).ljust(type_w)
+                desc_str = _truncate(full_desc, desc_w)
+                
+                line = f"{idx_str} | {type_str} | {desc_str}"
+                
+                # Apply dim attribute for alternating rows
+                attr = curses.A_DIM if (i % 2 == 0) else 0
                 try:
                     win_assertions.addnstr(row, 2, _truncate(line, assert_inner_w), assert_inner_w, attr)
+                    
+                    # Highlight all user-provided values (signal names, numbers, etc.) in GREEN
+                    base_col = 2 + idx_w + 3 + type_w + 3  # Position after "# | Type | "
+                    for user_input, offset in user_input_parts:
+                        if user_input and user_input != '?':
+                            try:
+                                input_col = base_col + offset
+                                # Make sure we don't go beyond the line width
+                                if input_col < 2 + assert_inner_w:
+                                    green_pair = _PAIR_BY_NAME.get("green", 0)
+                                    win_assertions.addnstr(row, input_col, _truncate(user_input, min(20, len(user_input))), 
+                                                         min(20, len(user_input)), 
+                                                         curses.color_pair(green_pair) | attr)
+                            except curses.error:
+                                pass
                 except curses.error:
                     pass
                 row += 1
@@ -1629,7 +1939,7 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             pass
 
         # Command hints line (second last line)
-        hints = "[help] [new] [scan] [set rtl|module|excel|out] [fill] [json] [sv] [ms] [f/F] [n/N] [quit|q]"
+        hints = "[help] [new] [gen] [ms] [param] [f/F] [n/N] [quit|q]"
         try:
             stdscr.addnstr(max_y - 2, 0, _truncate(hints, max_x - 1), max_x - 1)
         except curses.error:
@@ -2069,28 +2379,64 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
     if cmd == "new":
         # Enter assertion creation wizard
         if not state.module_info.module:
-            return "Please scan RTL first (use 'scan' command)", False
+            return "ERROR: Please scan RTL first (use 'scan' command)", False
         
         # Check if session Excel exists, if not create it automatically
         if not state.session_excel_path:
             if not state.excel_path or not Path(state.excel_path).exists():
-                return "Please complete onboarding first (RTL, Module, Excel setup)", False
+                return "ERROR: Please complete onboarding first (RTL, Module, Excel setup)", False
+            
+            # Ensure hierarchy is set (use module name as default if not set)
+            if not state.module_info.module_hierarchy:
+                state.module_info.module_hierarchy = state.module_info.module
+                state.log(f"Hierarchy auto-set to module name: {state.module_info.module_hierarchy}")
             
             # Automatically create session Excel
             state.log("Creating session Excel automatically...")
             ok, err = _create_session_excel_and_fill(state)
             if not ok:
-                return f"Failed to create session Excel: {err}", False
+                return f"ERROR: Failed to create session Excel: {err}", False
             
             _save_session_snapshot(state)
             state.log(f"✓ Session Excel created: {_sanitize_path_for_display(str(state.session_excel_path))}")
         
-        # Enter assertion wizard
+        # Verify session Excel path is set and exists
+        if not state.session_excel_path or not Path(state.session_excel_path).exists():
+            return f"ERROR: Session Excel not found or not accessible", False
+        
+        # DEBUG: verify state before entering wizard
+        try:
+            plugins = _get_assertion_plugins_info()
+            if not plugins:
+                return "ERROR: No assertion plugins available", False
+        except Exception as e:
+            return f"ERROR: Failed to load assertion plugins: {str(e)[:50]}", False
+        
+        # Enter assertion wizard - SET FLAGS CAREFULLY
         state.assertion_wizard_active = True
         state.assertion_wizard_stage = 'select_type'
         state.assertion_selected_type = None
-        state.assertion_input_data.clear()
-        return "Entering assertion creator wizard...", False
+        state.assertion_input_data = {}
+        state.assertion_signal_ports = {}
+        state.assertion_current_field_idx = 0
+        return "✓ Entering assertion creator wizard...\n💡 Choose assertion type [1-4]", False
+    
+    if cmd in ("gen", "if", "iface", "inst", "instance"):
+        # Unified file generation command
+        if not state.module_info.module:
+            return "ERROR: Please scan RTL first (use 'scan' command)", False
+        
+        if not state.session_excel_path or not Path(state.session_excel_path).exists():
+            return "ERROR: Please create/load a session first (use 'new' command)", False
+        
+        # Initialize file generation wizard state
+        state.gen_wizard_active = True
+        state.gen_wizard_stage = 'filename'
+        state.gen_filename = ""
+        state.gen_file_type = None  # 1=interface, 2=instance, 3=both
+        state.gen_data_source = None
+        state.gen_preview_lines = []
+        return "Entering file generation wizard...", False
     
     if cmd in ("n", "N") and not args:
         # Port paging via command
@@ -2385,18 +2731,54 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 expr = " ".join(toks[:-1]).strip()
         except Exception:
             pass
-        # Map numeric aliases 1.. to input/inout, oN to outputs
+        # Map aliases: i1/i2 -> inputs, o1/o2 -> outputs, p1/p2 -> params, c1/c2 -> clocks, r1/r2 -> resets
         def _alias_replace(token: str) -> str:
-            if token.startswith('o') and token[1:].isdigit():
-                idx = int(token[1:])
+            import re
+            
+            # Input alias: i1, i2, i3...
+            m = re.match(r'^i(\d+)$', token)
+            if m:
+                idx = int(m.group(1))
+                ins = (state.module_info.inputs + state.module_info.inouts)
+                if 1 <= idx <= len(ins):
+                    return ins[idx-1].get('name', '')
+            
+            # Output alias: o1, o2, o3...
+            m = re.match(r'^o(\d+)$', token)
+            if m:
+                idx = int(m.group(1))
                 outs = (state.module_info.outputs + state.module_info.inouts)
                 if 1 <= idx <= len(outs):
-                    return outs[idx-1].get('name','')
+                    return outs[idx-1].get('name', '')
+            
+            # Parameter alias: p1, p2, p3...
+            m = re.match(r'^p(\d+)$', token)
+            if m:
+                idx = int(m.group(1))
+                if 1 <= idx <= len(state.module_info.parameters):
+                    return state.module_info.parameters[idx-1].get('name', '')
+            
+            # Clock alias: c1, c2, c3...
+            m = re.match(r'^c(\d+)$', token)
+            if m:
+                idx = int(m.group(1))
+                if 1 <= idx <= len(state.module_info.clocks):
+                    return state.module_info.clocks[idx-1].get('name', '')
+            
+            # Reset alias: r1, r2, r3...
+            m = re.match(r'^r(\d+)$', token)
+            if m:
+                idx = int(m.group(1))
+                if 1 <= idx <= len(state.module_info.resets):
+                    return state.module_info.resets[idx-1].get('name', '')
+            
+            # Plain number: map to input (backward compatibility)
             if token.isdigit():
-                ins = (state.module_info.inputs + state.module_info.inouts)
                 idx = int(token)
+                ins = (state.module_info.inputs + state.module_info.inouts)
                 if 1 <= idx <= len(ins):
-                    return ins[idx-1].get('name','')
+                    return ins[idx-1].get('name', '')
+            
             return token
         expr_tokens = _tokenize_expr(expr)
         expr_tokens = [ _alias_replace(t) for t in expr_tokens ]
@@ -2477,6 +2859,58 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             return f"✓ Condition added: {name} ({width}bits) - Define sheet update failed: {e}", False
         
         return f"Condition added: {name} ({width}bits)", False
+
+    if cmd == "param":
+        # Syntax: param <name>=<default> or param <name> <default>
+        rest = " ".join(args).strip()
+        if not rest:
+            _set_error_message("Usage: param p1=10 or param p1 10")
+            return "Usage: param <name>=<default_value>", False
+        
+        # Parse name=default or name default
+        if "=" in rest:
+            name, default_str = rest.split("=", 1)
+            name = name.strip()
+            default_str = default_str.strip()
+        else:
+            parts = rest.split(None, 1)
+            if len(parts) != 2:
+                _set_error_message("Usage: param p1=10 or param p1 10")
+                return "Usage: param <name>=<default_value>", False
+            name, default_str = parts
+        
+        # Validate name format (alphanumeric, underscore)
+        if not name or not (name[0].isalpha() or name[0] == '_'):
+            _set_error_message("Parameter name must start with letter or underscore")
+            return "Invalid parameter name", False
+        
+        # Try to parse default value as number
+        try:
+            default_val = int(default_str)
+        except ValueError:
+            try:
+                default_val = float(default_str)
+            except ValueError:
+                default_val = default_str  # Keep as string
+        
+        # Add to parameters
+        state.module_info.parameters.append({
+            'name': name,
+            'default': default_val,
+            'width': None
+        })
+        
+        _save_session_snapshot(state)
+        
+        # Update Define sheet in session Excel
+        try:
+            if state.session_excel_path and state.session_excel_path.exists():
+                _update_define_sheet(state)
+                return f"✓ Parameter added: {name}={default_val} - Define sheet updated", False
+        except Exception as e:
+            return f"✓ Parameter added: {name}={default_val} - Define sheet update failed: {e}", False
+        
+        return f"Parameter added: {name}={default_val}", False
 
     if cmd == "f" or raw_cmd == "F":
         # f <substr> to set filter; F (upper) or 'f' without args to clear
@@ -2808,6 +3242,9 @@ def _save_session_snapshot(state: AppState) -> None:
         "out_dir": str(state.out_dir),
         "conditions": state.conditions,  # Save MS signals
         "assertions": state.assertions,  # Save created assertions
+        "clocks": state.module_info.clocks,  # Save clocks
+        "resets": state.module_info.resets,  # Save resets
+        "parameters": state.module_info.parameters,  # Save parameters
     }
     
     # Save as session.json inside the session folder
@@ -2923,6 +3360,140 @@ def _restore_conditions_from_excel(state: AppState) -> None:
                 data = json.loads(session_json.read_text(encoding="utf-8"))
                 if "conditions" in data and isinstance(data["conditions"], list):
                     state.conditions = data["conditions"]
+                if "assertions" in data and isinstance(data["assertions"], list):
+                    state.assertions = data["assertions"]
+            except Exception:
+                pass
+
+
+def _restore_assertions_from_excel(state: AppState) -> None:
+    """
+    Restore assertions from Excel sheets (Counter, Handshake, PulseWidth).
+    Excel is the authoritative source, so we read and populate state.assertions.
+    If Excel reading fails, falls back to session.json.
+    """
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        return
+    
+    # Try to restore from Excel first (authoritative source)
+    excel_success = False
+    assertions = []
+    
+    if load_workbook:
+        try:
+            wb = load_workbook(str(state.session_excel_path))
+            
+            # ============ Counter Sheet ============
+            if "Counter" in wb.sheetnames:
+                ws = wb["Counter"]
+                for row_idx in range(2, ws.max_row + 1):
+                    target = ws.cell(row=row_idx, column=1).value
+                    if not target:
+                        break
+                    
+                    # Extract signal name (remove [...] if present)
+                    import re
+                    match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(target))
+                    target_name = match.group(1).strip() if match else str(target).strip()
+                    
+                    # Read all fields
+                    plus_con = ws.cell(row=row_idx, column=3).value
+                    reset_con = ws.cell(row=row_idx, column=4).value
+                    trigger_con = ws.cell(row=row_idx, column=5).value
+                    exp_cnt_val = ws.cell(row=row_idx, column=6).value
+                    
+                    # Build assertion entry
+                    assertion_entry = {
+                        'type': 'counter',
+                        'data': {
+                            'target': target_name,
+                            'plus_con': plus_con,
+                            'reset_con': reset_con,
+                            'trigger_con': trigger_con,
+                            'exp_cnt_val': exp_cnt_val,
+                        },
+                        'description': 'counter assertion'
+                    }
+                    assertions.append(assertion_entry)
+            
+            # ============ Handshake Sheet ============
+            if "Handshake" in wb.sheetnames:
+                ws = wb["Handshake"]
+                for row_idx in range(2, ws.max_row + 1):
+                    phase_type = ws.cell(row=row_idx, column=1).value
+                    if not phase_type:
+                        break
+                    
+                    sender = ws.cell(row=row_idx, column=2).value
+                    receiver = ws.cell(row=row_idx, column=4).value
+                    
+                    # Extract clean signal names
+                    import re
+                    sender_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(sender)) if sender else None
+                    sender_name = sender_match.group(1).strip() if sender_match else (str(sender).strip() if sender else '')
+                    
+                    receiver_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(receiver)) if receiver else None
+                    receiver_name = receiver_match.group(1).strip() if receiver_match else (str(receiver).strip() if receiver else '')
+                    
+                    # Build assertion entry
+                    assertion_entry = {
+                        'type': 'handshake',
+                        'data': {
+                            'sender': sender_name,
+                            'receiver': receiver_name,
+                            'phase_type': str(phase_type).strip() if phase_type else '2phase',
+                        },
+                        'description': 'handshake assertion'
+                    }
+                    assertions.append(assertion_entry)
+            
+            # ============ PulseWidth Sheet ============
+            if "PulseWidth" in wb.sheetnames:
+                ws = wb["PulseWidth"]
+                for row_idx in range(2, ws.max_row + 1):
+                    signal_name = ws.cell(row=row_idx, column=1).value
+                    if not signal_name:
+                        break
+                    
+                    # Extract clean signal name
+                    import re
+                    match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(signal_name))
+                    clean_signal = match.group(1).strip() if match else str(signal_name).strip()
+                    
+                    # Read min/max width
+                    min_width = ws.cell(row=row_idx, column=3).value
+                    max_width = ws.cell(row=row_idx, column=4).value
+                    
+                    # Build assertion entry
+                    assertion_entry = {
+                        'type': 'pulseWidth',
+                        'data': {
+                            'target_signal': clean_signal,
+                            'min_width': min_width,
+                            'max_width': max_width,
+                        },
+                        'description': 'pulseWidth assertion'
+                    }
+                    assertions.append(assertion_entry)
+            
+            wb.close()
+            
+            # If any assertions were found, use them
+            if assertions:
+                state.assertions = assertions
+                excel_success = True
+        
+        except Exception:
+            # Excel reading failed, will try session.json fallback
+            pass
+    
+    # Fallback: restore from session.json if Excel reading failed
+    if not excel_success:
+        session_folder = Path(state.session_excel_path).parent
+        session_json = session_folder / "session.json"
+        if session_json.exists():
+            try:
+                data = json.loads(session_json.read_text(encoding="utf-8"))
                 if "assertions" in data and isinstance(data["assertions"], list):
                     state.assertions = data["assertions"]
             except Exception:
@@ -3106,16 +3677,25 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
         _draw_ascii_box(stdscr, list_y, list_margin_x, list_h, list_w)
         # Column header inside list window
         no_w = 6
-        mod_w = max(12, inner_w // 5)
-        rtl_w = max(18, inner_w // 3)
-        xls_w = max(12, inner_w // 6)
-        out_w = max(10, inner_w - no_w - mod_w - rtl_w - xls_w - 3)
+        module_w = max(12, inner_w // 6)
+        rtl_w = max(18, inner_w // 4)
+        xls_w = max(10, inner_w // 8)
+        modified_w = 16  # "YYYY-MM-DD HH:MM"
+        gap = 3  # 3 spaces between columns
+        out_w = max(10, inner_w - no_w - module_w - rtl_w - xls_w - modified_w - (gap * 5) - 2)
         try:
-            stdscr.addnstr(list_y + 1, list_margin_x + 2, _truncate("No", no_w), no_w, curses.A_BOLD)
-            stdscr.addnstr(list_y + 1, list_margin_x + 2 + no_w + 1, _truncate("Module", mod_w), mod_w, curses.A_BOLD)
-            stdscr.addnstr(list_y + 1, list_margin_x + 2 + no_w + 1 + mod_w + 1, _truncate("RTL", rtl_w), rtl_w, curses.A_BOLD)
-            stdscr.addnstr(list_y + 1, list_margin_x + 2 + no_w + 1 + mod_w + 1 + rtl_w + 1, _truncate("Excel", xls_w), xls_w, curses.A_BOLD)
-            stdscr.addnstr(list_y + 1, list_margin_x + 2 + no_w + 1 + mod_w + 1 + rtl_w + 1 + xls_w + 1, _truncate("Out", out_w), out_w, curses.A_BOLD)
+            col_x = list_margin_x + 2
+            stdscr.addnstr(list_y + 1, col_x, _truncate("No", no_w), no_w, curses.A_BOLD)
+            col_x += no_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("Module", module_w), module_w, curses.A_BOLD)
+            col_x += module_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("RTL", rtl_w), rtl_w, curses.A_BOLD)
+            col_x += rtl_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("Excel", xls_w), xls_w, curses.A_BOLD)
+            col_x += xls_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("Modified", modified_w), modified_w, curses.A_BOLD)
+            col_x += modified_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("Out", out_w), out_w, curses.A_BOLD)
         except curses.error:
             pass
         # Filter and paginate
@@ -3149,22 +3729,46 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             xls_path = s.get('session_excel_path', '') or ''
             xls = os.path.basename(xls_path) if xls_path else 'N/A'
             outp = _shorten_path_for_display(s.get('out_dir', '') or '', out_w)
+            # Get modification date from session folder
+            mod_date_str = ""
+            folder_path = s.get('_folder', '')
+            if folder_path:
+                try:
+                    folder = Path(folder_path)
+                    if folder.exists():
+                        mtime = folder.stat().st_mtime
+                        mod_dt = datetime.fromtimestamp(mtime)
+                        mod_date_str = mod_dt.strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    mod_date_str = "N/A"
+            if not mod_date_str:
+                mod_date_str = "N/A"
             rtl_lines = _wrap_text(rtl_display, rtl_w)
             row_h = max(1, len(rtl_lines))
             if y_ptr + row_h > y_limit:
                 break
             zebra = curses.A_DIM if (row_index % 2) else 0
             try:
+                # Calculate column positions using gap variable
+                col_x = list_margin_x + 2
                 # number (cyan)
-                stdscr.addnstr(y_ptr, list_margin_x + 2, _truncate(num, no_w), no_w, curses.color_pair(_PAIR_BY_NAME.get('cyan',0)) | curses.A_BOLD)
+                stdscr.addnstr(y_ptr, col_x, _truncate(num, no_w), no_w, curses.color_pair(_PAIR_BY_NAME.get('cyan',0)) | curses.A_BOLD)
+                col_x += no_w + gap
                 # module (green bold)
-                stdscr.addnstr(y_ptr, list_margin_x + 2 + no_w + 1, _truncate(module, mod_w), mod_w, curses.color_pair(_PAIR_BY_NAME.get('green',0)) | curses.A_BOLD | zebra)
+                stdscr.addnstr(y_ptr, col_x, _truncate(module, module_w), module_w, curses.color_pair(_PAIR_BY_NAME.get('green',0)) | curses.A_BOLD | zebra)
+                col_x += module_w + gap
                 # rtl (wrap)
                 for li, rline in enumerate(rtl_lines[:row_h]):
-                    stdscr.addnstr(y_ptr + li, list_margin_x + 2 + no_w + 1 + mod_w + 1, _truncate(rline, rtl_w), rtl_w, zebra)
-                # excel (yellow) and out shown on first line of the row
-                stdscr.addnstr(y_ptr, list_margin_x + 2 + no_w + 1 + mod_w + 1 + rtl_w + 1, _truncate(xls, xls_w), xls_w, curses.color_pair(_PAIR_BY_NAME.get('yellow',0)) | zebra)
-                stdscr.addnstr(y_ptr, list_margin_x + 2 + no_w + 1 + mod_w + 1 + rtl_w + 1 + xls_w + 1, _truncate(outp, out_w), out_w, zebra)
+                    stdscr.addnstr(y_ptr + li, col_x, _truncate(rline, rtl_w), rtl_w, zebra)
+                col_x += rtl_w + gap
+                # excel (yellow)
+                stdscr.addnstr(y_ptr, col_x, _truncate(xls, xls_w), xls_w, curses.color_pair(_PAIR_BY_NAME.get('yellow',0)) | zebra)
+                col_x += xls_w + gap
+                # modified
+                stdscr.addnstr(y_ptr, col_x, _truncate(mod_date_str, modified_w), modified_w, zebra)
+                col_x += modified_w + gap
+                # out
+                stdscr.addnstr(y_ptr, col_x, _truncate(outp, out_w), out_w, zebra)
             except curses.error:
                 pass
             y_ptr += row_h
@@ -3949,7 +4553,7 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'signal',
                 'step': 1,
                 'title': 'Pulse Signal',
-                'description': 'Select the signal to monitor for pulse width',
+                'description': 'Select which signal to monitor for pulse width check',
                 'example': 'Select from available signals',
                 'required': True,
             },
@@ -3958,7 +4562,7 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'string',
                 'step': 2,
                 'title': 'Minimum Pulse Width (clocks)',
-                'description': 'Enter minimum allowed pulse width in clock cycles',
+                'description': 'Enter minimum clocks signal should be high (example: 10)',
                 'example': '10',
                 'required': True,
             },
@@ -3967,13 +4571,75 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'string',
                 'step': 3,
                 'title': 'Maximum Pulse Width (clocks)',
-                'description': 'Enter maximum allowed pulse width in clock cycles',
+                'description': 'Enter maximum clocks signal should be high (example: 20)',
                 'example': '20',
                 'required': True,
             },
         ],
     }
     return fields.get(plugin_name, [])
+
+
+def _render_gen_wizard(stdscr: "curses._CursesWindow", state: AppState) -> None:
+    """Render file generation wizard for creating interface/instance files."""
+    max_y, max_x = stdscr.getmaxyx()
+    
+    # Title
+    title = "File Generation Wizard"
+    try:
+        stdscr.box()
+        stdscr.addstr(0, 2, f" {title} ", curses.A_BOLD)
+    except curses.error:
+        pass
+    
+    margin_x = 3
+    y_start = 2
+    inner_w = max_x - 6
+    
+    try:
+        if state.gen_wizard_stage == 'filename':
+            stdscr.addnstr(y_start, margin_x, "Step 1/4: Output Filename", inner_w, curses.A_BOLD)
+            stdscr.addnstr(y_start + 2, margin_x, "Enter filename (without extension):", inner_w)
+            stdscr.addnstr(y_start + 3, margin_x, "Example: 'my_assertions' or 'my_checker'", inner_w, curses.A_DIM)
+            stdscr.addnstr(y_start + 5, margin_x, f"Current: {state.gen_filename if state.gen_filename else '(empty)'}", inner_w)
+        
+        elif state.gen_wizard_stage == 'file_type':
+            stdscr.addnstr(y_start, margin_x, "Step 2/4: File Type", inner_w, curses.A_BOLD)
+            stdscr.addnstr(y_start + 2, margin_x, "Select which files to generate:", inner_w)
+            stdscr.addnstr(y_start + 3, margin_x, "  1) Interface (.if.sv)       - Assertion interface definition", inner_w)
+            stdscr.addnstr(y_start + 4, margin_x, "  2) Instance (.inst.sv)       - Assertion instance/binding", inner_w)
+            stdscr.addnstr(y_start + 5, margin_x, "  3) Both files                - Generate both files", inner_w)
+            if state.gen_file_type:
+                type_str = ["Interface", "Instance", "Both"][state.gen_file_type - 1]
+                stdscr.addnstr(y_start + 7, margin_x, f"Selected: {type_str}", inner_w, curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        
+        elif state.gen_wizard_stage == 'data_source':
+            stdscr.addnstr(y_start, margin_x, "Step 3/4: Data Source", inner_w, curses.A_BOLD)
+            stdscr.addnstr(y_start + 2, margin_x, "What data to include in generated files:", inner_w)
+            stdscr.addnstr(y_start + 3, margin_x, "  1) Assertions                - Include only assertions from Define sheet", inner_w)
+            stdscr.addnstr(y_start + 4, margin_x, "  2) Signals                   - Include only signals from Define sheet", inner_w)
+            stdscr.addnstr(y_start + 5, margin_x, "  3) Both                      - Include assertions and signals", inner_w)
+            if state.gen_data_source:
+                src_str = ["Assertions", "Signals", "Both"][int(state.gen_data_source[0]) - 1] if state.gen_data_source else "?"
+                stdscr.addnstr(y_start + 7, margin_x, f"Selected: {src_str}", inner_w, curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        
+        elif state.gen_wizard_stage == 'preview':
+            stdscr.addnstr(y_start, margin_x, "Step 4/4: Generate Files", inner_w, curses.A_BOLD)
+            type_str = ["Interface", "Instance", "Both"][state.gen_file_type - 1] if state.gen_file_type else "?"
+            src_str = ["Assertions", "Signals", "Both"][int(state.gen_data_source[0]) - 1] if state.gen_data_source else "?"
+            
+            stdscr.addnstr(y_start + 2, margin_x, f"Filename: {state.gen_filename}", inner_w)
+            stdscr.addnstr(y_start + 3, margin_x, f"File Type: {type_str}", inner_w)
+            stdscr.addnstr(y_start + 4, margin_x, f"Data Source: {src_str}", inner_w)
+            stdscr.addnstr(y_start + 6, margin_x, "Preview (first 5 lines):", inner_w, curses.A_DIM)
+            
+            preview_lines = state.gen_preview_lines[:5] if state.gen_preview_lines else ["(No preview available)"]
+            for i, line in enumerate(preview_lines):
+                if y_start + 7 + i < max_y - 4:
+                    stdscr.addnstr(y_start + 7 + i, margin_x + 2, _truncate(line, inner_w - 2), inner_w - 2, curses.A_DIM)
+    
+    except curses.error:
+        pass
 
 
 def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) -> None:
@@ -4111,42 +4777,52 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
         elif current_field['type'] == 'signal':
             # Show available signals in single-column layout for readability
             if y < top + box_h - 5:
-                # Build signal map for this field
-                signal_map = {}  # idx -> signal_name
+                # Build complete signal list (all signals, no limit)
+                all_signals = []  # (idx, name, type, port_dict)
                 idx = 1
-                all_signals = []  # (idx, name, type)
                 
-                # Input signals
+                # Input signals - ALL of them
                 if state.module_info and state.module_info.inputs:
-                    for inp in state.module_info.inputs[:20]:
+                    for inp in state.module_info.inputs:
                         inp_name = inp.get('name', '')
-                        all_signals.append((idx, inp_name, 'input'))
-                        signal_map[idx] = inp_name
+                        all_signals.append((idx, inp_name, 'input', inp))
                         idx += 1
                 
-                # Output signals
+                # Output signals - ALL of them
                 if state.module_info and state.module_info.outputs:
-                    for out in state.module_info.outputs[:20]:
+                    for out in state.module_info.outputs:
                         out_name = out.get('name', '')
-                        all_signals.append((idx, out_name, 'output'))
-                        signal_map[idx] = out_name
+                        all_signals.append((idx, out_name, 'output', out))
                         idx += 1
                 
-                # MS Signals (user-defined)
+                # MS Signals (user-defined) - ALL of them
                 if state.conditions:
-                    for cond in state.conditions[:20]:
+                    for cond in state.conditions:
                         cond_name = cond.get('name', '')
-                        all_signals.append((idx, cond_name, 'ms_signal'))
-                        signal_map[idx] = cond_name
+                        all_signals.append((idx, cond_name, 'ms_signal', cond))
                         idx += 1
                 
-                # Store map in state for later lookup
+                # Store full list in state for pagination
+                state.assertion_signal_list = all_signals
+                
+                # Calculate pagination
+                signals_per_page = max(10, top + box_h - y - 5)  # Available lines for signals
+                total_pages = max(1, (len(all_signals) + signals_per_page - 1) // signals_per_page)
+                current_page = state.assertion_signal_page % total_pages if total_pages > 0 else 0
+                
+                # Get signals for current page
+                start_idx = current_page * signals_per_page
+                end_idx = start_idx + signals_per_page
+                page_signals = all_signals[start_idx:end_idx]
+                
+                # Build complete signal map for all signals
+                signal_map = {}
+                for idx_num, name, sig_type, port_dict in all_signals:
+                    signal_map[idx_num] = (name, port_dict)
                 state.assertion_signal_map = signal_map
                 
                 # Draw signals with proper spacing
-                max_display = min(len(all_signals), top + box_h - y - 4)
-                
-                for i, (idx_num, name, sig_type) in enumerate(all_signals[:max_display]):
+                for idx_num, name, sig_type, port_dict in page_signals:
                     if y >= top + box_h - 4:
                         break
                     
@@ -4175,11 +4851,11 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                     except curses.error:
                         pass
                 
-                # Show if more signals exist
-                if len(all_signals) > max_display:
+                # Show pagination info if multiple pages exist
+                if total_pages > 1:
                     try:
-                        more_msg = f"  ... and {len(all_signals) - max_display} more"
-                        stdscr.addnstr(y, margin_x + 2, _truncate(more_msg, left_w), left_w, curses.A_DIM)
+                        page_info = f"  ... (page {current_page + 1}/{total_pages}) [n/N to navigate]"
+                        stdscr.addnstr(y, margin_x + 2, _truncate(page_info, left_w), left_w, curses.A_DIM)
                         y += 1
                     except curses.error:
                         pass
@@ -4200,7 +4876,7 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
     py = top + 2
     
     # Show preview
-    preview_lines = _generate_assertion_preview(plugin_name, state.assertion_input_data)
+    preview_lines = _generate_assertion_preview(plugin_name, state.assertion_input_data, state)
     for line in preview_lines:
         if py >= top + box_h - 3:
             break
@@ -4216,7 +4892,7 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
         if current_field['type'] == 'choice':
             inst = "Enter [1-9] to select | 'prev'/'p' for previous | 'q' to cancel"
         elif current_field['type'] == 'signal':
-            inst = "Enter signal number | 'prev'/'p' for previous | 'q' to cancel"
+            inst = "Enter signal [1-N] | n/N page | 'prev'/'p' for previous | 'q' to cancel"
         else:  # string
             inst = "Enter value | 'prev'/'p' for previous | 'q' to cancel"
         
@@ -4226,7 +4902,7 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
 
 
 def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
-    """Render final confirmation screen."""
+    """Render final confirmation screen with preview on right panel."""
     y = top + 2
     
     try:
@@ -4236,13 +4912,20 @@ def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, t
     except curses.error:
         pass
     
-    # Show all configured fields
+    # ===== SPLIT LAYOUT: Left panel for fields, Right panel for preview =====
+    split_x = margin_x + box_w // 2 + 1
+    left_w = box_w // 2 - 2
+    right_w = box_w // 2 - 2
+    
+    # ===== LEFT PANEL: Show all configured fields =====
     plugins = _get_assertion_plugins_info()
     plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+    
+    ly = top + 2
     if plugin:
         try:
             for field in plugin['fields']:
-                if y >= top + box_h - 4:
+                if ly >= top + box_h - 4:
                     break
                 
                 field_name = field['name']
@@ -4257,16 +4940,30 @@ def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, t
                     line += "[NOT SET]"
                     color = _PAIR_BY_NAME.get("red", 0)
                 
-                stdscr.addnstr(y, margin_x + 2, _truncate(line, box_w - 4), box_w - 4, 
+                stdscr.addnstr(ly, margin_x + 2, _truncate(line, left_w), left_w, 
                               curses.color_pair(color))
-                y += 1
+                ly += 1
         except curses.error:
             pass
     
-    # Action
+    # ===== RIGHT PANEL: Preview and Timing Diagram =====
+    py = top + 2
+    
+    # Show preview
+    preview_lines = _generate_assertion_preview(state.assertion_selected_type, state.assertion_input_data, state)
+    for line in preview_lines:
+        if py >= top + box_h - 4:
+            break
+        try:
+            stdscr.addnstr(py, split_x, _truncate(line, right_w), right_w)
+            py += 1
+        except curses.error:
+            pass
+    
+    # ===== BOTTOM Instructions =====
     try:
         y = top + box_h - 3
-        inst = "Type 'create' to create assertion | 'prev' to go back | 'q' to cancel"
+        inst = "[Enter] to create | 'b' to edit | 'q' to cancel"
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, 
                       curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
@@ -4421,7 +5118,7 @@ def _render_data_input(stdscr: "curses._CursesWindow", state: AppState, top: int
         pass
 
 
-def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[str]:
+def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "AppState") -> List[str]:
     """Generate assertion preview with timing diagram and Pass/Fail conditions."""
     lines = []
     
@@ -4441,15 +5138,31 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
         trigger_con = data.get('trigger_con', '?')
         exp_cnt_val = data.get('exp_cnt_val', '?')
         
+        # Get base clock and reset from module_info
+        base_clk = '?'
+        base_rst = '?'
+        if state.module_info.clocks:
+            base_clk = state.module_info.clocks[0].get('name', '?')
+        if state.module_info.resets:
+            base_rst = state.module_info.resets[0].get('name', '?')
+        
+        # Truncate signal names to 10 characters
+        display_target = target if len(str(target)) <= 10 else str(target)[:7] + "..."
+        display_plus = plus_con if len(str(plus_con)) <= 10 else str(plus_con)[:7] + "..."
+        display_reset = reset_con if len(str(reset_con)) <= 10 else str(reset_con)[:7] + "..."
+        display_trigger = trigger_con if len(str(trigger_con)) <= 10 else str(trigger_con)[:7] + "..."
+        
         lines.append("=" * 60)
         lines.append("COUNTER ASSERTION")
         lines.append("=" * 60)
         lines.append("")
-        lines.append(f"Counter Signal: {target}")
-        lines.append(f"Increments when: {plus_con}")
-        lines.append(f"Resets when: {reset_con}")
-        lines.append(f"Checked at: {trigger_con}")
+        lines.append(f"Counter Signal: {display_target}")
+        lines.append(f"Increments when: {display_plus}")
+        lines.append(f"Resets when: {display_reset}")
+        lines.append(f"Checked at: {display_trigger}")
         lines.append(f"Expected value: {exp_cnt_val}")
+        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Base Reset: {base_rst}")
         lines.append("")
         
         lines.append("Timing Diagram:")
@@ -4458,18 +5171,18 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
         lines.append("Clock cycles: 0   1   2   3   4   5   6   7")
         lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|")
         lines.append("")
-        lines.append(format_signal_name(target, "counter") + " 0   0   1   1   1   0   0   0")
-        lines.append(format_signal_name(plus_con, "increment") + " └─────┘   └─────┘   └─────┘")
-        lines.append(format_signal_name(reset_con, "reset") + " └───────────────┘       └───────┘")
-        lines.append(format_signal_name(trigger_con, "trigger") + " └─────┘       └─────┘   └─────┘")
+        lines.append(format_signal_name(display_target, "counter") + " 0   0   1   1   1   0   0   0")
+        lines.append(format_signal_name(display_plus, "increment") + " └─────┘   └─────┘   └─────┘")
+        lines.append(format_signal_name(display_reset, "reset") + " └───────────────┘       └───────┘")
+        lines.append(format_signal_name(display_trigger, "trigger") + " └─────┘       └─────┘   └─────┘")
         lines.append("")
         
-        lines.append("Pass Condition:")
-        lines.append(f"  {trigger_con}=1 -> {target}={exp_cnt_val}")
+        lines.append("Pass:")
+        lines.append(f"  {display_trigger}=1 -> {display_target}={exp_cnt_val}")
         lines.append("")
         
-        lines.append("Fail Condition:")
-        lines.append(f"  {trigger_con}=1 -> {target}!={exp_cnt_val}")
+        lines.append("Fail:")
+        lines.append(f"  {display_trigger}=1 -> {display_target}!={exp_cnt_val}")
         lines.append("")
         
     elif plugin_name == 'handshake':
@@ -4477,13 +5190,27 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
         sender = data.get('sender', '?')
         receiver = data.get('receiver', '?')
         
+        # Get base clock and reset from module_info
+        base_clk = '?'
+        base_rst = '?'
+        if state.module_info.clocks:
+            base_clk = state.module_info.clocks[0].get('name', '?')
+        if state.module_info.resets:
+            base_rst = state.module_info.resets[0].get('name', '?')
+        
+        # Truncate signal names to 10 characters
+        display_sender = sender if len(str(sender)) <= 10 else str(sender)[:7] + "..."
+        display_receiver = receiver if len(str(receiver)) <= 10 else str(receiver)[:7] + "..."
+        
         lines.append("=" * 60)
         lines.append(f"{phase.upper()} HANDSHAKE ASSERTION")
         lines.append("=" * 60)
         lines.append("")
         lines.append(f"Protocol Type: {phase}")
-        lines.append(f"Sender Signal: {sender}")
-        lines.append(f"Receiver Signal: {receiver}")
+        lines.append(f"Sender Signal: {display_sender}")
+        lines.append(f"Receiver Signal: {display_receiver}")
+        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Base Reset: {base_rst}")
         lines.append("")
         
         if phase == '2phase':
@@ -4493,21 +5220,21 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
             lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
             lines.append("")
-            lines.append(format_signal_name(sender, "sender") + " └─────────────┘   └─────────────┘")
-            lines.append(format_signal_name(receiver, "receiver") + "     └─────────────┘   └─────────────┘")
+            lines.append(format_signal_name(display_sender, "sender") + " └─────────────┘   └─────────────┘")
+            lines.append(format_signal_name(display_receiver, "receiver") + "     └─────────────┘   └─────────────┘")
             lines.append("")
             
-            lines.append("Pass Conditions:")
-            lines.append(f"  1. {sender} HIGH (multi-cycle)")
-            lines.append(f"  2. {receiver} HIGH (then)")
-            lines.append(f"  3. {sender} & {receiver} overlap")
-            lines.append(f"  4. both -> LOW (after)")
+            lines.append("Pass:")
+            lines.append(f"  1. {display_sender}=1 (multi-cycle hold)")
+            lines.append(f"  2. {display_receiver}=1 (after {display_sender})")
+            lines.append(f"  3. {display_sender}=1 & {display_receiver}=1 (overlap)")
+            lines.append(f"  4. {display_sender}=0 & {display_receiver}=0")
             lines.append("")
             
-            lines.append("Fail Conditions:")
-            lines.append(f"  1. {sender}=HIGH but {receiver}=LOW")
-            lines.append(f"  2. timeout (waiting)")
-            lines.append(f"  3. signal-glitch")
+            lines.append("Fail:")
+            lines.append(f"  1. {display_sender}=1 but {display_receiver}=0")
+            lines.append(f"  2. wait-timeout (no-ack)")
+            lines.append(f"  3. glitch (noise)")
             lines.append("")
             
         elif phase == '4phase':
@@ -4517,22 +5244,22 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
             lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
             lines.append("")
-            lines.append(format_signal_name(sender, "sender") + " └───────┘   └───────┘   └───────┘")
-            lines.append(format_signal_name(receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
+            lines.append(format_signal_name(display_sender, "sender") + " └───────┘   └───────┘   └───────┘")
+            lines.append(format_signal_name(display_receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
             lines.append("")
             
-            lines.append("Pass Conditions:")
-            lines.append(f"  1. {sender}: 1->0->1 (pulse-req)")
-            lines.append(f"  2. {receiver}: 1->0->1 (pulse-ack)")
-            lines.append(f"  3. {sender}=0 before {receiver} raises")
-            lines.append(f"  4. dual-rail complete")
+            lines.append("Pass:")
+            lines.append(f"  1. {display_sender}: 1->0->1")
+            lines.append(f"  2. {display_receiver}: 1->0->1 (after {display_sender})")
+            lines.append(f"  3. {display_sender}=0 before {display_receiver}=1")
+            lines.append(f"  4. both=0 (sync-complete)")
             lines.append("")
             
-            lines.append("Fail Conditions:")
-            lines.append(f"  1. {sender} stays=1 (not-pulse)")
-            lines.append(f"  2. {receiver} stuck!=0")
-            lines.append(f"  3. timeout")
-            lines.append(f"  4. race-condition")
+            lines.append("Fail:")
+            lines.append(f"  1. {display_sender}!=pulse (stays-high/low)")
+            lines.append(f"  2. {display_receiver}!=pulse")
+            lines.append(f"  3. {display_sender} & {display_receiver} same-time (race)")
+            lines.append(f"  4. wait-timeout")
             lines.append("")
             
         elif phase == 'ready_valid':
@@ -4542,23 +5269,64 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any]) -> List[
             lines.append("Clock cycles: 0   1   2   3   4   5   6   7   8")
             lines.append(format_waveform_line("clk") + " |___|‾‾‾|___|‾‾‾|___|‾‾‾|___|‾‾‾|___|")
             lines.append("")
-            lines.append(format_signal_name(sender, "sender") + " └─────────────────────┘   └─────────┘")
-            lines.append(format_signal_name(receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
+            lines.append(format_signal_name(display_sender, "sender") + " └─────────────────────┘   └─────────┘")
+            lines.append(format_signal_name(display_receiver, "receiver") + "     └───────┘   └───────┘   └───────┘")
             lines.append("")
             
-            lines.append("Pass Conditions:")
-            lines.append(f"  1. {sender}=1 & {receiver}=1 -> transfer")
-            lines.append(f"  2. {sender} can hold multi-cycle")
-            lines.append(f"  3. {receiver}=0 -> pause (no-transfer)")
-            lines.append(f"  4. no-deadlock")
+            lines.append("Pass:")
+            lines.append(f"  1. {display_sender}=1 & {display_receiver}=1 -> transfer-OK")
+            lines.append(f"  2. {display_sender}=1 (hold multi-cycle)")
+            lines.append(f"  3. {display_receiver}=0 -> {display_sender}=0 (pause)")
+            lines.append(f"  4. no-hang (hang=both-wait)")
             lines.append("")
             
-            lines.append("Fail Conditions:")
-            lines.append(f"  1. {receiver}=0 but transfer=occur")
-            lines.append(f"  2. data-corruption")
-            lines.append(f"  3. deadlock=detected")
-            lines.append(f"  4. invalid-sequence")
+            lines.append("Fail:")
+            lines.append(f"  1. {display_receiver}=0 but data-send (mismatch)")
+            lines.append(f"  2. wrong-data (corruption=bad-bits)")
+            lines.append(f"  3. hang (both-stuck=no-progress)")
+            lines.append(f"  4. bad-sequence (wrong-order)")
             lines.append("")
+    
+    elif plugin_name == 'pulseWidth':
+        target_signal = data.get('target_signal', '?')
+        min_width = data.get('min_width', '?')
+        max_width = data.get('max_width', '?')
+        
+        # Get base clock and reset from module_info
+        base_clk = '?'
+        base_rst = '?'
+        if state.module_info.clocks:
+            base_clk = state.module_info.clocks[0].get('name', '?')
+        if state.module_info.resets:
+            base_rst = state.module_info.resets[0].get('name', '?')
+        
+        # Truncate signal name to 10 characters
+        display_signal = target_signal if len(str(target_signal)) <= 10 else str(target_signal)[:7] + "..."
+        
+        lines.append("=" * 60)
+        lines.append("PULSE WIDTH ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Signal to Monitor: {display_signal}")
+        lines.append(f"Minimum Pulse Width: {min_width} clocks")
+        lines.append(f"Maximum Pulse Width: {max_width} clocks")
+        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Base Reset: {base_rst}")
+        lines.append("")
+        
+        lines.append("Pulse Width Range:")
+        lines.append("-" * 60)
+        lines.append("")
+        lines.append(f"  {display_signal} pulse width must be between {min_width} and {max_width} clocks")
+        lines.append("")
+        lines.append(f"  _____|{'‾' * 20}|_____")
+        lines.append(f"       <--  {min_width}-{max_width} clocks  -->")
+        lines.append("")
+        
+        lines.append("Result:")
+        lines.append(f"  OK:   pulse_width is between {min_width} and {max_width}")
+        lines.append(f"  FAIL: pulse_width is outside {min_width}-{max_width} range")
+        lines.append("")
     
     else:
         lines.append(f"Assertion Type: {plugin_name}")
@@ -4616,6 +5384,119 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
         pass
 
 
+def _generate_files(state: AppState) -> str:
+    """Generate interface and/or instance files based on wizard configuration."""
+    if not state.gen_filename:
+        return "ERROR: Filename not set"
+    if not state.gen_file_type:
+        return "ERROR: File type not selected"
+    if not state.gen_data_source:
+        return "ERROR: Data source not selected"
+    
+    try:
+        import json
+        from pathlib import Path
+        
+        out_dir = state.out_dir or Path.cwd()
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Determine what to generate
+        gen_iface = state.gen_file_type in (1, 3)
+        gen_inst = state.gen_file_type in (2, 3)
+        include_asserts = state.gen_data_source in ('1', '3')
+        include_signals = state.gen_data_source in ('2', '3')
+        
+        generated_files = []
+        
+        # Generate interface file
+        if gen_iface:
+            iface_path = out_dir / f"{state.gen_filename}.if.sv"
+            iface_content = _generate_interface_content(state, include_asserts, include_signals)
+            iface_path.write_text(iface_content, encoding='utf-8')
+            generated_files.append(str(iface_path))
+        
+        # Generate instance file
+        if gen_inst:
+            inst_path = out_dir / f"{state.gen_filename}.inst.sv"
+            inst_content = _generate_instance_content(state, include_asserts, include_signals)
+            inst_path.write_text(inst_content, encoding='utf-8')
+            generated_files.append(str(inst_path))
+        
+        msg = f"Generated {len(generated_files)} file(s):\n" + "\n".join(f"  {Path(f).name}" for f in generated_files)
+        state.gen_wizard_active = False
+        return msg
+        
+    except Exception as e:
+        return f"ERROR generating files: {str(e)[:100]}"
+
+
+def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
+    """Generate interface file content."""
+    lines = []
+    lines.append("// Auto-generated interface file")
+    lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    
+    if include_asserts and state.assertions:
+        lines.append("// ===== ASSERTIONS =====")
+        for i, asrt in enumerate(state.assertions, 1):
+            lines.append(f"// [{i}] {asrt.get('type', 'unknown').upper()} assertion")
+            lines.append(f"//     Name: {asrt.get('name', 'unnamed')}")
+        lines.append("")
+    
+    if include_signals and (state.module_info.inputs or state.module_info.outputs):
+        lines.append("// ===== SIGNALS =====")
+        lines.append("// Input signals:")
+        for inp in state.module_info.inputs[:20]:
+            lines.append(f"//   - {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
+        if len(state.module_info.inputs) > 20:
+            lines.append(f"//   ... and {len(state.module_info.inputs) - 20} more")
+        
+        lines.append("// Output signals:")
+        for out in state.module_info.outputs[:20]:
+            lines.append(f"//   - {out.get('name', '?')} ({out.get('width', '?')} bits)")
+        if len(state.module_info.outputs) > 20:
+            lines.append(f"//   ... and {len(state.module_info.outputs) - 20} more")
+        lines.append("")
+    
+    lines.append("// Please add your interface properties here")
+    return "\n".join(lines)
+
+
+def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
+    """Generate instance file content."""
+    lines = []
+    lines.append("// Auto-generated instance file")
+    lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    
+    if include_asserts and state.assertions:
+        lines.append("// ===== ASSERTIONS =====")
+        for i, asrt in enumerate(state.assertions, 1):
+            lines.append(f"// [{i}] {asrt.get('type', 'unknown').upper()} assertion")
+            lines.append(f"//     Name: {asrt.get('name', 'unnamed')}")
+        lines.append("")
+    
+    if include_signals and (state.module_info.inputs or state.module_info.outputs):
+        lines.append("// ===== SIGNALS =====")
+        lines.append("// Input signals:")
+        for inp in state.module_info.inputs[:20]:
+            lines.append(f"//   - {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
+        if len(state.module_info.inputs) > 20:
+            lines.append(f"//   ... and {len(state.module_info.inputs) - 20} more")
+        
+        lines.append("// Output signals:")
+        for out in state.module_info.outputs[:20]:
+            lines.append(f"//   - {out.get('name', '?')} ({out.get('width', '?')} bits)")
+        if len(state.module_info.outputs) > 20:
+            lines.append(f"//   ... and {len(state.module_info.outputs) - 20} more")
+        lines.append("")
+    
+    lines.append("// Please add your binding or instance here")
+    return "\n".join(lines)
+
+
 def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
     """
     Handle commands for step-by-step wizard.
@@ -4625,7 +5506,9 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
     """
     cmd = cmdline.strip().lower()
     
-    if not cmd:
+    # Allow empty command to proceed to Confirm stage handling
+    # (empty Enter means 'confirm' in confirm stage)
+    if not cmd and state.assertion_wizard_stage != 'confirm':
         return "", False
     
     # Universal: quit
@@ -4634,6 +5517,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         state.assertion_wizard_stage = ""
         state.assertion_selected_type = None
         state.assertion_input_data.clear()
+        state.assertion_signal_ports.clear()
         state.assertion_current_field_idx = 0
         return "Cancelled", True
     
@@ -4648,6 +5532,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 state.assertion_wizard_stage = 'input_data'
                 state.assertion_current_field_idx = 0
                 state.assertion_input_data.clear()
+                state.assertion_signal_ports.clear()
                 
                 fields = selected.get('fields', [])
                 if not fields:
@@ -4725,47 +5610,120 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             if not selected_option:
                 return f"Invalid. Choose [1-{len(options)}] or type option name", False
             
+            # Save the selection
             state.assertion_input_data[field_name] = selected_option
-            return f"\nOK: {selected_option}\nPress Enter to continue, or 'prev' to go back", False
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return "\nAll steps complete. Review and press Enter to create.", False
         
         elif field_type == 'signal':
+            # Command: navigate signal pages (n = next, N = previous)
+            if cmd == 'n':
+                if state.assertion_signal_list:
+                    signals_per_page = 10
+                    total_pages = max(1, (len(state.assertion_signal_list) + signals_per_page - 1) // signals_per_page)
+                    state.assertion_signal_page = (state.assertion_signal_page + 1) % total_pages
+                    return "Signal list advanced", False
+                else:
+                    return "No signals to navigate", False
+            
+            if cmd == 'N':
+                if state.assertion_signal_list:
+                    signals_per_page = 10
+                    total_pages = max(1, (len(state.assertion_signal_list) + signals_per_page - 1) // signals_per_page)
+                    state.assertion_signal_page = (state.assertion_signal_page - 1) % total_pages
+                    return "Signal list rewound", False
+                else:
+                    return "No signals to navigate", False
+            
             # Accept signal by number index or name
             selected_signal = None
+            selected_port = None
             
             if cmd.isdigit():
                 idx = int(cmd)
                 # Look up signal from map
                 if idx in state.assertion_signal_map:
-                    selected_signal = state.assertion_signal_map[idx]
+                    selected_signal, selected_port = state.assertion_signal_map[idx]
                 else:
                     return f"Invalid signal number. Choose from displayed list", False
             else:
                 # Try to match by name
-                for signal_name in state.assertion_signal_map.values():
+                for signal_name, port_dict in state.assertion_signal_map.values():
                     if signal_name.lower() == cmd.lower():
                         selected_signal = signal_name
+                        selected_port = port_dict
                         break
                 if not selected_signal:
                     return f"Signal '{cmd}' not found. Use number or exact name", False
             
+            # Save signal name to assertion_input_data and port_dict to assertion_signal_ports
             state.assertion_input_data[field_name] = selected_signal
-            return f"\nOK: {selected_signal}\nPress Enter to continue, or 'prev' to go back", False
+            state.assertion_signal_ports[field_name] = selected_port
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return "\nAll steps complete. Review and press Enter to create.", False
         
         elif field_type == 'string':
             # Accept any string input
+            
+            # Special validation for PulseWidth max_width field
+            if field_name == 'max_width':
+                # Check if max_width < min_width
+                try:
+                    min_val = int(state.assertion_input_data.get('min_width', '0'))
+                    max_val = int(cmd)
+                    if max_val < min_val:
+                        return f"Error: Maximum width ({max_val}) must be >= Minimum width ({min_val}). Please re-enter.", False
+                except ValueError:
+                    return "Error: Please enter a valid number for maximum width.", False
+            
             state.assertion_input_data[field_name] = cmd
-            return f"\nOK: {cmd}\nPress Enter to continue, or 'prev' to go back", False
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return "\nAll steps complete. Review and press Enter to create.", False
         
         return "Invalid input for this field", False
     
     # Stage 3: Confirm
     elif state.assertion_wizard_stage == 'confirm':
-        if cmd == '' or cmd in ('yes', 'y', 'confirm', 'ok'):
+        if cmd == '' or cmd in ('yes', 'y', 'confirm', 'ok', 'create'):
             result = _create_assertion_from_wizard(state)
             state.assertion_wizard_active = False
             state.assertion_wizard_stage = ""
             state.assertion_selected_type = None
             state.assertion_input_data.clear()
+            state.assertion_signal_ports.clear()
             state.assertion_current_field_idx = 0
             return result, True
         
@@ -4783,7 +5741,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 msg += last_field.get('description', '')
                 return msg, False
         
-        return "Press Enter to create or type 'prev' to edit", False
+        return "Press Enter to create or type 'b' to edit", False
     
     return "", False
 
@@ -4895,8 +5853,8 @@ def _create_assertion_from_wizard(state: AppState) -> str:
         }
         state.assertions.append(assertion_entry)
         
-        # Try to write to Excel
-        _write_assertion_to_excel(str(excel_path), plugin_name, plugin_data)
+        # Try to write to Excel (pass state for signal width info)
+        _write_assertion_to_excel(str(excel_path), plugin_name, plugin_data, state)
         
         return f"OK. {plugin_name.upper()} assertion created and saved to Excel."
     
@@ -4904,17 +5862,62 @@ def _create_assertion_from_wizard(state: AppState) -> str:
         return f"OK. Assertion created in memory. Excel write failed: {str(e)}"
 
 
-def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str, Any]) -> None:
+def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str, Any], state: Optional['AppState'] = None) -> None:
     """Write assertion data to the corresponding Excel sheet using plugin structure."""
     try:
         from openpyxl import load_workbook  # type: ignore
         
         wb = load_workbook(excel_path)
         
+        # Helper: Format bit width as "[msb:lsb]" from calculated_bit_width
+        def format_bit_width(bit_width: int) -> str:
+            """
+            Format calculated bit width as "[msb:lsb]".
+            Input: 8 returns "[7:0]"
+            Input: 0 returns ""
+            """
+            if bit_width > 0:
+                return f"[{bit_width-1}:0]"
+            return ""
+        
+        # Helper: Get width string for a signal field (with parameter detection)
+        def get_signal_width(field_name: str) -> Tuple[str, bool]:
+            """
+            Get bit width string for a signal field.
+            Returns: (width_str, has_unresolved_params)
+            Examples:
+              - ("[7:0]", False) - resolved width
+              - ("[DATA_WIDTH-1:0]", True) - unresolved parameter expression
+              - ("", False) - no width info
+            """
+            port_dict = port_map.get(field_name)
+            if port_dict:
+                # Try calculated_bit_width first (from rtl_parser)
+                calculated_width = port_dict.get('calculated_bit_width', 0)
+                if calculated_width > 0:
+                    return (format_bit_width(calculated_width), False)
+                
+                # Check if there's a width expression with unresolved parameters
+                signal_name = data.get(field_name, '')
+                import re
+                match = re.match(r'^([^\[]*)\[([^\]]*)\]$', signal_name)
+                if match:
+                    width_expr = match.group(2).strip()
+                    # Check if expression contains identifiers (parameter references)
+                    has_identifiers = bool(re.search(r'[A-Za-z_]\w*', width_expr))
+                    if has_identifiers:
+                        return (f"[{width_expr}]", True)  # Unresolved parameter
+                    else:
+                        return (f"[{width_expr}]", False)
+            
+            return ("", False)
+        
+        # Map from assertion_signal_ports passed via state
+        port_map = state.assertion_signal_ports if hasattr(state, 'assertion_signal_ports') else {}
+        
         # Determine sheet name based on plugin
         if plugin_name == 'counter':
             sheet_name = 'Counter'
-            # Counter plugin expects specific columns: Target, Plus Condition, Reset Condition, Trigger Condition, Expect Count Value
             if sheet_name not in wb.sheetnames:
                 wb.create_sheet(sheet_name)
             
@@ -4926,12 +5929,29 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             while ws.cell(row=next_row, column=target_col).value:
                 next_row += 1
             
+            # Get signal name and width
+            target_signal = data.get('target', '')
+            target_width, has_unresolved = get_signal_width('target')
+            
+            # Extract clean signal name (remove [...] if present)
+            import re
+            match = re.match(r'^([^\[]*)(?:\[.*\])?$', target_signal)
+            target_name = match.group(1).strip() if match else target_signal.strip()
+            
             # Write data in plugin's expected format
-            ws.cell(row=next_row, column=1, value=data.get('target', ''))
-            ws.cell(row=next_row, column=2, value=data.get('plus_con', ''))
-            ws.cell(row=next_row, column=3, value=data.get('reset_con', ''))
-            ws.cell(row=next_row, column=4, value=data.get('trigger_con', ''))
-            ws.cell(row=next_row, column=5, value=data.get('exp_cnt_val', ''))
+            ws.cell(row=next_row, column=1, value=target_name)
+            
+            # Write width (if unresolved, mark in comment or keep as-is for user awareness)
+            width_cell = ws.cell(row=next_row, column=2, value=target_width)
+            if has_unresolved:
+                # Mark unresolved parameter widths (optional: add comment or formatting)
+                # For now, just keep the expression as-is so user knows there's a parameter
+                pass
+            
+            ws.cell(row=next_row, column=3, value=data.get('plus_con', ''))
+            ws.cell(row=next_row, column=4, value=data.get('reset_con', ''))
+            ws.cell(row=next_row, column=5, value=data.get('trigger_con', ''))
+            ws.cell(row=next_row, column=6, value=data.get('exp_cnt_val', ''))
         
         elif plugin_name == 'handshake':
             sheet_name = 'Handshake'
@@ -4946,10 +5966,53 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             while ws.cell(row=next_row, column=type_col).value:
                 next_row += 1
             
+            # Get signal names and widths
+            sender_signal = data.get('sender', '')
+            receiver_signal = data.get('receiver', '')
+            sender_width, sender_unresolved = get_signal_width('sender')
+            receiver_width, receiver_unresolved = get_signal_width('receiver')
+            
+            # Extract clean signal names
+            import re
+            sender_match = re.match(r'^([^\[]*)(?:\[.*\])?$', sender_signal)
+            sender_name = sender_match.group(1).strip() if sender_match else sender_signal.strip()
+            receiver_match = re.match(r'^([^\[]*)(?:\[.*\])?$', receiver_signal)
+            receiver_name = receiver_match.group(1).strip() if receiver_match else receiver_signal.strip()
+            
             # Write data in plugin's expected format
             ws.cell(row=next_row, column=1, value=data.get('phase_type', ''))
-            ws.cell(row=next_row, column=2, value=data.get('sender', ''))
-            ws.cell(row=next_row, column=3, value=data.get('receiver', ''))
+            ws.cell(row=next_row, column=2, value=sender_name)
+            ws.cell(row=next_row, column=3, value=sender_width)  # Add sender bit width
+            ws.cell(row=next_row, column=4, value=receiver_name)
+            ws.cell(row=next_row, column=5, value=receiver_width)  # Add receiver bit width
+        
+        elif plugin_name == 'pulseWidth':
+            sheet_name = 'PulseWidth'
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Find next empty row
+            signal_col = 1
+            next_row = 2
+            while ws.cell(row=next_row, column=signal_col).value:
+                next_row += 1
+            
+            # Get signal name and width
+            target_signal = data.get('target_signal', '')
+            signal_width, signal_unresolved = get_signal_width('target_signal')
+            
+            # Extract clean signal name
+            import re
+            match = re.match(r'^([^\[]*)(?:\[.*\])?$', target_signal)
+            signal_name = match.group(1).strip() if match else target_signal.strip()
+            
+            # Write data
+            ws.cell(row=next_row, column=1, value=signal_name)
+            ws.cell(row=next_row, column=2, value=signal_width)  # Add signal bit width
+            ws.cell(row=next_row, column=3, value=data.get('min_width', ''))
+            ws.cell(row=next_row, column=4, value=data.get('max_width', ''))
         
         wb.save(excel_path)
         wb.close()
