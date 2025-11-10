@@ -410,6 +410,8 @@ class AppState:
     # New: Signal list pagination for wizard signal selection
     assertion_signal_page: int = 0  # Current page in signal selection list
     assertion_signal_list: List[Tuple[int, str, str, Dict[str, Any]]] = field(default_factory=list)  # (idx, name, type, port_dict)
+    # New: Track when waiting for custom number input (for exp_cnt_val [0] option)
+    assertion_waiting_custom_number: bool = False
     
     # File generation wizard state
     gen_wizard_active: bool = False
@@ -418,6 +420,8 @@ class AppState:
     gen_file_type: Optional[int] = None  # 1=interface, 2=instance, 3=both
     gen_data_source: Optional[str] = None  # 'assertions' | 'signals' | 'both'
     gen_preview_lines: List[str] = field(default_factory=list)  # Preview of generated code
+    gen_preview_page: int = 0  # Current page in preview (for pagination)
+    gen_preview_file_idx: int = 0  # 0=interface, 1=instance (for "both" mode)
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -1114,7 +1118,10 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             elif state.gen_wizard_stage == 'data_source':
                 hint_line = "Choose data: 1=Assertions 2=Signals 3=Both | 'b' to back | 'q' to cancel"
             elif state.gen_wizard_stage == 'preview':
-                hint_line = "[Enter] to generate | 'b' to edit | 'q' to cancel"
+                if state.gen_file_type == 3:
+                    hint_line = "[Enter] to generate | n/N scroll | 'f' switch file | 'b' edit | 'q' cancel"
+                else:
+                    hint_line = "[Enter] to generate | n/N scroll | 'b' edit | 'q' cancel"
             else:
                 hint_line = ""
             try:
@@ -1175,7 +1182,10 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                     if cmdline in ('1', '2', '3'):
                         state.gen_data_source = cmdline
                         state.gen_wizard_stage = 'preview'
-                        state.gen_preview_lines = []
+                        state.gen_preview_page = 0
+                        state.gen_preview_file_idx = 0
+                        # Generate full preview content
+                        state.gen_preview_lines = _generate_preview_content(state)
                     elif cmdline == 'b':
                         state.gen_wizard_stage = 'file_type'
                     else:
@@ -1185,13 +1195,28 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                         msg = _generate_files(state)
                         status_msg = msg
                         state.gen_wizard_active = False
+                    elif cmdline == 'n':  # Next page
+                        state.gen_preview_page += 1
+                        status_msg = "Scrolled down"
+                    elif cmdline == 'N':  # Previous page
+                        state.gen_preview_page = max(0, state.gen_preview_page - 1)
+                        status_msg = "Scrolled up"
+                    elif cmdline == 'f':  # Switch file (for "both" mode)
+                        if state.gen_file_type == 3:  # Both files
+                            state.gen_preview_file_idx = 1 - state.gen_preview_file_idx
+                            state.gen_preview_page = 0
+                            state.gen_preview_lines = _generate_preview_content(state)
+                            file_name = ["Interface (.if.sv)", "Instance (.inst.sv)"][state.gen_preview_file_idx]
+                            status_msg = f"Switched to {file_name}"
+                        else:
+                            status_msg = "Only one file type selected"
                     elif cmdline == 'b':
                         state.gen_wizard_stage = 'data_source'
                     elif cmdline == 'q' or cmdline == 'Q':
                         state.gen_wizard_active = False
                         status_msg = "File generation cancelled"
                     else:
-                        status_msg = "ERROR: Press Enter to generate or 'b' to edit"
+                        status_msg = "ERROR: Press Enter to generate, n/N to scroll, 'f' to switch file, or 'b' to edit"
                 elif cmdline == 'q' or cmdline == 'Q':
                     state.gen_wizard_active = False
                     status_msg = "File generation cancelled"
@@ -3384,11 +3409,20 @@ def _restore_assertions_from_excel(state: AppState) -> None:
             wb = load_workbook(str(state.session_excel_path))
             
             # ============ Counter Sheet ============
-            if "Counter" in wb.sheetnames:
-                ws = wb["Counter"]
-                for row_idx in range(2, ws.max_row + 1):
-                    target = ws.cell(row=row_idx, column=1).value
-                    if not target:
+            # Find Counter sheet (case-insensitive)
+            counter_sheet = None
+            for name in wb.sheetnames:
+                if name.lower() == 'counter':
+                    counter_sheet = name
+                    break
+            
+            if counter_sheet:
+                ws = wb[counter_sheet]
+                # Counter sheet: Row 7 is header, data starts at Row 8
+                # Columns: B(2)=Target, C(3)=Plus, D(4)=Reset, E(5)=Trigger, F(6)=Expect Count
+                for row_idx in range(8, ws.max_row + 1):
+                    target = ws.cell(row=row_idx, column=2).value  # Column B
+                    if not target or str(target).strip() in ['', 'cnt', 'counter']:
                         break
                     
                     # Extract signal name (remove [...] if present)
@@ -3396,36 +3430,53 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(target))
                     target_name = match.group(1).strip() if match else str(target).strip()
                     
-                    # Read all fields
-                    plus_con = ws.cell(row=row_idx, column=3).value
-                    reset_con = ws.cell(row=row_idx, column=4).value
-                    trigger_con = ws.cell(row=row_idx, column=5).value
-                    exp_cnt_val = ws.cell(row=row_idx, column=6).value
+                    # Read all fields from correct columns
+                    plus_con = ws.cell(row=row_idx, column=3).value     # Column C
+                    reset_con = ws.cell(row=row_idx, column=4).value    # Column D
+                    trigger_con = ws.cell(row=row_idx, column=5).value  # Column E
+                    exp_cnt_val = ws.cell(row=row_idx, column=6).value  # Column F
                     
                     # Build assertion entry
                     assertion_entry = {
                         'type': 'counter',
                         'data': {
                             'target': target_name,
-                            'plus_con': plus_con,
-                            'reset_con': reset_con,
-                            'trigger_con': trigger_con,
-                            'exp_cnt_val': exp_cnt_val,
+                            'plus_con': str(plus_con).strip() if plus_con else '',
+                            'reset_con': str(reset_con).strip() if reset_con else '',
+                            'trigger_con': str(trigger_con).strip() if trigger_con else '',
+                            'exp_cnt_val': str(exp_cnt_val).strip() if exp_cnt_val else '',
                         },
                         'description': 'counter assertion'
                     }
                     assertions.append(assertion_entry)
             
             # ============ Handshake Sheet ============
-            if "Handshake" in wb.sheetnames:
-                ws = wb["Handshake"]
-                for row_idx in range(2, ws.max_row + 1):
-                    phase_type = ws.cell(row=row_idx, column=1).value
-                    if not phase_type:
+            # Find Handshake sheet (case-insensitive)
+            handshake_sheet = None
+            for name in wb.sheetnames:
+                if name.lower() == 'handshake':
+                    handshake_sheet = name
+                    break
+            
+            if handshake_sheet:
+                ws = wb[handshake_sheet]
+                # Handshake sheet: Row 6 is header, data starts at Row 7
+                # Columns: C(3)=Type, D(4)=Sender, E(5)=Receiver
+                for row_idx in range(7, ws.max_row + 1):
+                    phase_type = ws.cell(row=row_idx, column=3).value  # Column C
+                    if not phase_type or str(phase_type).strip() == '':
                         break
                     
-                    sender = ws.cell(row=row_idx, column=2).value
-                    receiver = ws.cell(row=row_idx, column=4).value
+                    # Skip sample data rows
+                    phase_str = str(phase_type).strip()
+                    if phase_str in ['ready_valid', '4phase', '2phase']:
+                        sender_val = ws.cell(row=row_idx, column=4).value
+                        if sender_val and str(sender_val).strip() in ['valid', 'req', 'ack']:
+                            # This looks like original sample data, skip it
+                            continue
+                    
+                    sender = ws.cell(row=row_idx, column=4).value    # Column D
+                    receiver = ws.cell(row=row_idx, column=5).value  # Column E
                     
                     # Extract clean signal names
                     import re
@@ -3435,43 +3486,77 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     receiver_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(receiver)) if receiver else None
                     receiver_name = receiver_match.group(1).strip() if receiver_match else (str(receiver).strip() if receiver else '')
                     
+                    # Skip if both sender and receiver are empty
+                    if not sender_name and not receiver_name:
+                        continue
+                    
                     # Build assertion entry
                     assertion_entry = {
                         'type': 'handshake',
                         'data': {
                             'sender': sender_name,
                             'receiver': receiver_name,
-                            'phase_type': str(phase_type).strip() if phase_type else '2phase',
+                            'phase_type': phase_str,
                         },
                         'description': 'handshake assertion'
                     }
                     assertions.append(assertion_entry)
             
             # ============ PulseWidth Sheet ============
-            if "PulseWidth" in wb.sheetnames:
-                ws = wb["PulseWidth"]
-                for row_idx in range(2, ws.max_row + 1):
-                    signal_name = ws.cell(row=row_idx, column=1).value
-                    if not signal_name:
+            # Find PulseWidth sheet (case-insensitive)
+            pulse_sheet = None
+            for name in wb.sheetnames:
+                if name.lower() == 'pulsewidth':
+                    pulse_sheet = name
+                    break
+            
+            if pulse_sheet:
+                ws = wb[pulse_sheet]
+                # PulseWidth sheet: Row 6 is header, data starts at Row 7
+                # Columns: C(3)=Type, D(4)=Count_Trigger, E(5)=Target_Pulse, F(6)=Min, G(7)=Max
+                for row_idx in range(7, ws.max_row + 1):
+                    pulse_type = ws.cell(row=row_idx, column=3).value  # Column C - Type
+                    if not pulse_type or str(pulse_type).strip() == '':
                         break
+                    
+                    # Skip sample data rows (those with 'target_pulse' as signal name)
+                    signal_name = ws.cell(row=row_idx, column=5).value  # Column E - Target_Pulse
+                    if signal_name and str(signal_name).strip() == 'target_pulse':
+                        continue
                     
                     # Extract clean signal name
                     import re
-                    match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(signal_name))
-                    clean_signal = match.group(1).strip() if match else str(signal_name).strip()
+                    match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(signal_name)) if signal_name else None
+                    clean_signal = match.group(1).strip() if match else (str(signal_name).strip() if signal_name else '')
                     
-                    # Read min/max width
-                    min_width = ws.cell(row=row_idx, column=3).value
-                    max_width = ws.cell(row=row_idx, column=4).value
+                    if not clean_signal:
+                        continue
+                    
+                    # Read Count_Trigger, min/max width from correct columns
+                    count_trigger = ws.cell(row=row_idx, column=4).value  # Column D - Count_Trigger
+                    min_width = ws.cell(row=row_idx, column=6).value  # Column F - Min
+                    max_width = ws.cell(row=row_idx, column=7).value  # Column G - Max
+                    
+                    pulse_type_str = str(pulse_type).strip() if pulse_type else 'hpulse'
+                    
+                    # Build assertion entry data dict
+                    pulse_data = {
+                        'pulse_type': pulse_type_str,
+                        'target_signal': clean_signal,
+                        'min_width': str(min_width).strip() if min_width else '',
+                        'max_width': str(max_width).strip() if max_width else '',
+                    }
+                    
+                    # Add base_clock or trigger_signal depending on pulse type
+                    if pulse_type_str == 'hpulse':
+                        pulse_data['base_clock'] = str(count_trigger).strip() if count_trigger else '<Base Clock>'
+                    elif pulse_type_str == 'vpulse':
+                        pulse_data['trigger_signal'] = str(count_trigger).strip() if count_trigger else ''
                     
                     # Build assertion entry
                     assertion_entry = {
                         'type': 'pulseWidth',
-                        'data': {
-                            'target_signal': clean_signal,
-                            'min_width': min_width,
-                            'max_width': max_width,
-                        },
+                        'data': pulse_data,
                         'description': 'pulseWidth assertion'
                     }
                     assertions.append(assertion_entry)
@@ -3591,7 +3676,7 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             "   / \\   ___ ___  ___ _ __| |_(_) ___  _ __    / ___| ___ _ __  ",
             "  / _ \\ / __/ __|/ _ \\ '__| __| |/ _ \\| '_ \\  | |  _ / _ \\ '_ \\",
             " / ___ \\\\__ \\__ \\  __/ |  | |_| | (_) | | | | | |_| |  __/ | | |",
-            "/_/   \\_\\\__/___/\\___|_|   \\__|_|\\___/|_| |_|  \\____|\\___|_| |_|",
+            "/_/   \_\__/___/\___|_|   \__|_|\___/|_| |_|  \____|\___| |_| |_|",
         ]
         guide = "Type new to start, a number to load, f <text> to filter, n/N to page, q to quit."
         y = 0
@@ -4468,6 +4553,44 @@ def _get_plugin_description(plugin_name: str) -> str:
     return descriptions.get(plugin_name, 'Custom assertion type')
 
 
+def _should_show_field(field: Dict[str, Any], current_data: Dict[str, str]) -> bool:
+    """
+    Check if a field should be shown based on show_if conditions.
+    
+    Args:
+        field: Field definition with optional 'show_if' key
+        current_data: Currently entered assertion data
+        
+    Returns:
+        True if field should be shown, False otherwise
+    """
+    show_if = field.get('show_if')
+    if not show_if:
+        return True  # No condition, always show
+    
+    # show_if is a dict like {'pulse_type': 'hpulse'}
+    for key, expected_value in show_if.items():
+        actual_value = current_data.get(key)
+        if actual_value != expected_value:
+            return False
+    
+    return True
+
+
+def _get_visible_fields(fields: List[Dict[str, Any]], current_data: Dict[str, str]) -> List[Dict[str, Any]]:
+    """
+    Filter fields based on show_if conditions.
+    
+    Args:
+        fields: All field definitions
+        current_data: Currently entered assertion data
+        
+    Returns:
+        List of fields that should be visible
+    """
+    return [f for f in fields if _should_show_field(f, current_data)]
+
+
 def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
     """Get required fields for each plugin type with step-by-step configuration."""
     fields = {
@@ -4549,10 +4672,39 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
         ],
         'pulseWidth': [
             {
+                'name': 'pulse_type',
+                'type': 'choice',
+                'step': 1,
+                'title': 'Pulse Type',
+                'description': 'Select pulse type:\n  hpulse: Uses base clock for counting\n  vpulse: Uses trigger signal for edge detection',
+                'options': ['hpulse', 'vpulse'],
+                'required': True,
+            },
+            {
+                'name': 'base_clock',
+                'type': 'choice',
+                'step': 2,
+                'title': 'Base Clock Signal',
+                'description': 'Select base clock for counting (only for hpulse)',
+                'options': [],  # Will be populated from state.clocks
+                'required': True,
+                'show_if': {'pulse_type': 'hpulse'},
+            },
+            {
+                'name': 'trigger_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Trigger Signal',
+                'description': 'Select trigger signal for edge detection (only for vpulse)',
+                'example': 'Select from available signals',
+                'required': True,
+                'show_if': {'pulse_type': 'vpulse'},
+            },
+            {
                 'name': 'target_signal',
                 'type': 'signal',
-                'step': 1,
-                'title': 'Pulse Signal',
+                'step': 3,
+                'title': 'Target Pulse Signal',
                 'description': 'Select which signal to monitor for pulse width check',
                 'example': 'Select from available signals',
                 'required': True,
@@ -4560,19 +4712,19 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             {
                 'name': 'min_width',
                 'type': 'string',
-                'step': 2,
-                'title': 'Minimum Pulse Width (clocks)',
-                'description': 'Enter minimum clocks signal should be high (example: 10)',
-                'example': '10',
+                'step': 4,
+                'title': 'Minimum Pulse Width',
+                'description': 'Enter minimum width (number or parameter like p1, p2)\nExample: 10 or PARAM_WIDTH',
+                'example': '10 or PARAM_WIDTH',
                 'required': True,
             },
             {
                 'name': 'max_width',
                 'type': 'string',
-                'step': 3,
-                'title': 'Maximum Pulse Width (clocks)',
-                'description': 'Enter maximum clocks signal should be high (example: 20)',
-                'example': '20',
+                'step': 5,
+                'title': 'Maximum Pulse Width',
+                'description': 'Enter maximum width (number or parameter like p1, p2)\nExample: 20 or MAX_COUNT',
+                'example': '20 or MAX_COUNT',
                 'required': True,
             },
         ],
@@ -4624,19 +4776,62 @@ def _render_gen_wizard(stdscr: "curses._CursesWindow", state: AppState) -> None:
                 stdscr.addnstr(y_start + 7, margin_x, f"Selected: {src_str}", inner_w, curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
         
         elif state.gen_wizard_stage == 'preview':
-            stdscr.addnstr(y_start, margin_x, "Step 4/4: Generate Files", inner_w, curses.A_BOLD)
+            stdscr.addnstr(y_start, margin_x, "Step 4/4: Generate Files - Preview", inner_w, curses.A_BOLD)
             type_str = ["Interface", "Instance", "Both"][state.gen_file_type - 1] if state.gen_file_type else "?"
             src_str = ["Assertions", "Signals", "Both"][int(state.gen_data_source[0]) - 1] if state.gen_data_source else "?"
             
+            # File info header
             stdscr.addnstr(y_start + 2, margin_x, f"Filename: {state.gen_filename}", inner_w)
             stdscr.addnstr(y_start + 3, margin_x, f"File Type: {type_str}", inner_w)
             stdscr.addnstr(y_start + 4, margin_x, f"Data Source: {src_str}", inner_w)
-            stdscr.addnstr(y_start + 6, margin_x, "Preview (first 5 lines):", inner_w, curses.A_DIM)
             
-            preview_lines = state.gen_preview_lines[:5] if state.gen_preview_lines else ["(No preview available)"]
-            for i, line in enumerate(preview_lines):
-                if y_start + 7 + i < max_y - 4:
-                    stdscr.addnstr(y_start + 7 + i, margin_x + 2, _truncate(line, inner_w - 2), inner_w - 2, curses.A_DIM)
+            # For "both" mode, show which file is currently displayed
+            if state.gen_file_type == 3:
+                current_file = ["Interface (.if.sv)", "Instance (.inst.sv)"][state.gen_preview_file_idx]
+                stdscr.addnstr(y_start + 5, margin_x, f"Viewing: {current_file} (press 'f' to switch)", inner_w, 
+                              curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+                preview_start_y = y_start + 7
+            else:
+                preview_start_y = y_start + 6
+            
+            # Calculate pagination
+            available_lines = max_y - preview_start_y - 4
+            total_lines = len(state.gen_preview_lines) if state.gen_preview_lines else 0
+            lines_per_page = max(10, available_lines)
+            total_pages = max(1, (total_lines + lines_per_page - 1) // lines_per_page) if total_lines > 0 else 1
+            
+            # Clamp current page
+            state.gen_preview_page = max(0, min(state.gen_preview_page, total_pages - 1))
+            
+            # Get lines for current page
+            start_line = state.gen_preview_page * lines_per_page
+            end_line = min(start_line + lines_per_page, total_lines)
+            
+            # Show preview header
+            preview_header = f"Preview (lines {start_line + 1}-{end_line} of {total_lines}):"
+            stdscr.addnstr(preview_start_y, margin_x, preview_header, inner_w, 
+                          curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+            
+            # Show preview lines
+            if state.gen_preview_lines:
+                preview_lines = state.gen_preview_lines[start_line:end_line]
+                for i, line in enumerate(preview_lines):
+                    line_y = preview_start_y + 1 + i
+                    if line_y < max_y - 4:
+                        # Add line number
+                        line_num = f"{start_line + i + 1:4d} "
+                        stdscr.addnstr(line_y, margin_x, line_num, len(line_num), curses.A_DIM)
+                        # Add line content
+                        stdscr.addnstr(line_y, margin_x + len(line_num), _truncate(line, inner_w - len(line_num)), 
+                                      inner_w - len(line_num))
+            else:
+                stdscr.addnstr(preview_start_y + 1, margin_x + 2, "(No preview available)", inner_w - 2, curses.A_DIM)
+            
+            # Show pagination info
+            if total_pages > 1:
+                page_info = f"Page {state.gen_preview_page + 1}/{total_pages} - Use n/N to navigate"
+                stdscr.addnstr(max_y - 4, margin_x, page_info, inner_w, 
+                              curses.A_DIM | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     
     except curses.error:
         pass
@@ -4715,13 +4910,25 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
     if not plugin:
         return
     
-    fields = plugin['fields']
-    if state.assertion_current_field_idx >= len(fields):
+    all_fields = plugin['fields']
+    
+    # Populate base_clock options dynamically from state.module_info.clocks
+    for field in all_fields:
+        if field.get('name') == 'base_clock' and field.get('type') == 'choice':
+            if state.module_info and state.module_info.clocks:
+                field['options'] = [clk.get('name', '') for clk in state.module_info.clocks if clk.get('name')]
+            else:
+                field['options'] = ['I_CLK']  # Default if no clocks defined
+    
+    # Filter fields based on show_if conditions
+    visible_fields = _get_visible_fields(all_fields, state.assertion_input_data)
+    
+    if state.assertion_current_field_idx >= len(visible_fields):
         return
     
-    current_field = fields[state.assertion_current_field_idx]
+    current_field = visible_fields[state.assertion_current_field_idx]
     current_step = current_field.get('step', 1)
-    total_steps = len(fields)
+    total_steps = len(visible_fields)
     
     # Split screen
     split_x = margin_x + (box_w - 4) // 2 + 2
@@ -4731,146 +4938,179 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
     # ===== LEFT PANEL: Step Input =====
     y = top + 2
     
-    # Title
-    try:
-        title = f"Step {current_step}/{total_steps}: {current_field.get('title', '')}"
-        stdscr.addnstr(y, margin_x + 2, _truncate(title, left_w), left_w, 
-                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
-        y += 2
-    except curses.error:
-        pass
+    # Special rendering when waiting for custom number input
+    if state.assertion_waiting_custom_number:
+        try:
+            title = f"Step {current_step}/{total_steps}: Custom Number Input"
+            stdscr.addnstr(y, margin_x + 2, _truncate(title, left_w), left_w, 
+                          curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+            y += 2
+            
+            desc = "Enter a custom number value for the expected count"
+            stdscr.addnstr(y, margin_x + 2, _truncate(desc, left_w), left_w, curses.A_DIM)
+            y += 2
+            
+            prompt = "Type number and press Enter:"
+            stdscr.addnstr(y, margin_x + 2, _truncate(prompt, left_w), left_w, 
+                          curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        except curses.error:
+            pass
+    else:
+        # Title
+        try:
+            title = f"Step {current_step}/{total_steps}: {current_field.get('title', '')}"
+            stdscr.addnstr(y, margin_x + 2, _truncate(title, left_w), left_w, 
+                          curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+            y += 2
+        except curses.error:
+            pass
     
-    # Description
-    try:
-        desc = current_field.get('description', '')
-        desc_y = y
-        for line in desc.split('\n'):
-            if desc_y >= top + box_h - 8:
-                break
-            stdscr.addnstr(desc_y, margin_x + 2, _truncate(line, left_w), left_w, curses.A_DIM)
-            desc_y += 1
-        y = desc_y + 1
-    except curses.error:
-        pass
-    
-    # Current value display
-    field_name = current_field['name']
-    current_val = state.assertion_input_data.get(field_name, '')
-    
-    try:
-        if current_field['type'] == 'choice':
-            # Show options for choice fields
-            options = current_field.get('options', [])
-            if y < top + box_h - 8:
-                stdscr.addnstr(y, margin_x + 2, "Options:", left_w, curses.A_BOLD)
-                y += 1
-                for i, opt in enumerate(options, 1):
-                    if y >= top + box_h - 5:
-                        break
-                    marker = " ✓" if opt == current_val else ""
-                    opt_line = f"  [{i}] {opt}{marker}"
-                    color = _PAIR_BY_NAME.get("green", 0) if opt == current_val else 0
-                    stdscr.addnstr(y, margin_x + 2, _truncate(opt_line, left_w), left_w, 
-                                  curses.color_pair(color))
+    # Skip normal field rendering if waiting for custom number input
+    if not state.assertion_waiting_custom_number:
+        # Description
+        try:
+            desc = current_field.get('description', '')
+            desc_y = y
+            for line in desc.split('\n'):
+                if desc_y >= top + box_h - 8:
+                    break
+                stdscr.addnstr(desc_y, margin_x + 2, _truncate(line, left_w), left_w, curses.A_DIM)
+                desc_y += 1
+            y = desc_y + 1
+        except curses.error:
+            pass
+        
+        # Current value display
+        field_name = current_field['name']
+        current_val = state.assertion_input_data.get(field_name, '')
+        
+        try:
+            if current_field['type'] == 'choice':
+                # Show options for choice fields
+                options = current_field.get('options', [])
+                if y < top + box_h - 8:
+                    stdscr.addnstr(y, margin_x + 2, "Options:", left_w, curses.A_BOLD)
                     y += 1
-        
-        elif current_field['type'] == 'signal':
-            # Show available signals in single-column layout for readability
-            if y < top + box_h - 5:
-                # Build complete signal list (all signals, no limit)
-                all_signals = []  # (idx, name, type, port_dict)
-                idx = 1
-                
-                # Input signals - ALL of them
-                if state.module_info and state.module_info.inputs:
-                    for inp in state.module_info.inputs:
-                        inp_name = inp.get('name', '')
-                        all_signals.append((idx, inp_name, 'input', inp))
-                        idx += 1
-                
-                # Output signals - ALL of them
-                if state.module_info and state.module_info.outputs:
-                    for out in state.module_info.outputs:
-                        out_name = out.get('name', '')
-                        all_signals.append((idx, out_name, 'output', out))
-                        idx += 1
-                
-                # MS Signals (user-defined) - ALL of them
-                if state.conditions:
-                    for cond in state.conditions:
-                        cond_name = cond.get('name', '')
-                        all_signals.append((idx, cond_name, 'ms_signal', cond))
-                        idx += 1
-                
-                # Store full list in state for pagination
-                state.assertion_signal_list = all_signals
-                
-                # Calculate pagination
-                signals_per_page = max(10, top + box_h - y - 5)  # Available lines for signals
-                total_pages = max(1, (len(all_signals) + signals_per_page - 1) // signals_per_page)
-                current_page = state.assertion_signal_page % total_pages if total_pages > 0 else 0
-                
-                # Get signals for current page
-                start_idx = current_page * signals_per_page
-                end_idx = start_idx + signals_per_page
-                page_signals = all_signals[start_idx:end_idx]
-                
-                # Build complete signal map for all signals
-                signal_map = {}
-                for idx_num, name, sig_type, port_dict in all_signals:
-                    signal_map[idx_num] = (name, port_dict)
-                state.assertion_signal_map = signal_map
-                
-                # Draw signals with proper spacing
-                for idx_num, name, sig_type, port_dict in page_signals:
-                    if y >= top + box_h - 4:
-                        break
+                    for i, opt in enumerate(options, 1):
+                        if y >= top + box_h - 5:
+                            break
+                        marker = " ✓" if opt == current_val else ""
+                        opt_line = f"  [{i}] {opt}{marker}"
+                        color = _PAIR_BY_NAME.get("green", 0) if opt == current_val else 0
+                        stdscr.addnstr(y, margin_x + 2, _truncate(opt_line, left_w), left_w, 
+                                      curses.color_pair(color))
+                        y += 1
+            
+            elif current_field['type'] == 'signal':
+                # Show available signals in single-column layout for readability
+                if y < top + box_h - 5:
+                    # Build complete signal list (all signals, no limit)
+                    all_signals = []  # (idx, name, type, port_dict)
+                    idx = 0
                     
-                    try:
-                        marker = "✓" if name == current_val else " "
+                    # Special option for reset_con field: "Only Base Reset"
+                    if field_name == 'reset_con':
+                        all_signals.append((idx, '<Only Base Reset>', 'special', {}))
+                        idx += 1
+                    
+                    # Special option for exp_cnt_val field: "Custom Number Input"
+                    if field_name == 'exp_cnt_val':
+                        all_signals.append((idx, '<Custom Number Input>', 'special', {}))
+                        idx += 1
+                    
+                    # Input signals - ALL of them
+                    if state.module_info and state.module_info.inputs:
+                        for inp in state.module_info.inputs:
+                            inp_name = inp.get('name', '')
+                            all_signals.append((idx, inp_name, 'input', inp))
+                            idx += 1
+                    
+                    # Output signals - ALL of them
+                    if state.module_info and state.module_info.outputs:
+                        for out in state.module_info.outputs:
+                            out_name = out.get('name', '')
+                            all_signals.append((idx, out_name, 'output', out))
+                            idx += 1
+                    
+                    # MS Signals (user-defined) - ALL of them
+                    if state.conditions:
+                        for cond in state.conditions:
+                            cond_name = cond.get('name', '')
+                            all_signals.append((idx, cond_name, 'ms_signal', cond))
+                            idx += 1
+                    
+                    # Store full list in state for pagination
+                    state.assertion_signal_list = all_signals
+                    
+                    # Calculate pagination
+                    signals_per_page = max(10, top + box_h - y - 5)  # Available lines for signals
+                    total_pages = max(1, (len(all_signals) + signals_per_page - 1) // signals_per_page)
+                    current_page = state.assertion_signal_page % total_pages if total_pages > 0 else 0
+                    
+                    # Get signals for current page
+                    start_idx = current_page * signals_per_page
+                    end_idx = start_idx + signals_per_page
+                    page_signals = all_signals[start_idx:end_idx]
+                    
+                    # Build complete signal map for all signals
+                    signal_map = {}
+                    for idx_num, name, sig_type, port_dict in all_signals:
+                        signal_map[idx_num] = (name, port_dict)
+                    state.assertion_signal_map = signal_map
+                    
+                    # Draw signals with proper spacing
+                    for idx_num, name, sig_type, port_dict in page_signals:
+                        if y >= top + box_h - 4:
+                            break
                         
-                        # Color by signal type
-                        if sig_type == 'input':
-                            color = _PAIR_BY_NAME.get("cyan", 0)
-                            prefix = "[I]"
-                        elif sig_type == 'output':
-                            color = _PAIR_BY_NAME.get("yellow", 0)
-                            prefix = "[O]"
-                        else:  # ms_signal
-                            color = _PAIR_BY_NAME.get("magenta", 0)
-                            prefix = "[M]"
-                        
-                        # Highlight current selection
-                        if name == current_val:
-                            color = _PAIR_BY_NAME.get("green", 0)
-                        
-                        line = f"  {marker} [{idx_num}] {prefix} {name}"
-                        line = _truncate(line, left_w)
-                        stdscr.addnstr(y, margin_x + 2, line, left_w, curses.color_pair(color))
-                        y += 1
-                    except curses.error:
-                        pass
-                
-                # Show pagination info if multiple pages exist
-                if total_pages > 1:
-                    try:
-                        page_info = f"  ... (page {current_page + 1}/{total_pages}) [n/N to navigate]"
-                        stdscr.addnstr(y, margin_x + 2, _truncate(page_info, left_w), left_w, curses.A_DIM)
-                        y += 1
-                    except curses.error:
-                        pass
-        
-        elif current_field['type'] == 'string':
-            if current_val:
-                val_line = f"Current: {current_val}"
-                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
-                              curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
-            else:
-                val_line = "[Enter value]"
-                stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
-                              curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
-    except curses.error:
-        pass
+                        try:
+                            marker = "✓" if name == current_val else " "
+                            
+                            # Color by signal type
+                            if sig_type == 'input':
+                                color = _PAIR_BY_NAME.get("cyan", 0)
+                                prefix = "[I]"
+                            elif sig_type == 'output':
+                                color = _PAIR_BY_NAME.get("yellow", 0)
+                                prefix = "[O]"
+                            elif sig_type == 'special':
+                                color = _PAIR_BY_NAME.get("green", 0)
+                                prefix = "[*]"
+                            else:  # ms_signal
+                                color = _PAIR_BY_NAME.get("magenta", 0)
+                                prefix = "[M]"
+                            
+                            # Highlight current selection
+                            if name == current_val:
+                                color = _PAIR_BY_NAME.get("green", 0)
+                            
+                            line = f"  {marker} [{idx_num}] {prefix} {name}"
+                            line = _truncate(line, left_w)
+                            stdscr.addnstr(y, margin_x + 2, line, left_w, curses.color_pair(color))
+                            y += 1
+                        except curses.error:
+                            pass
+                    
+                    # Show pagination info if multiple pages exist
+                    if total_pages > 1:
+                        try:
+                            page_info = f"  ... (page {current_page + 1}/{total_pages}) [n/N to navigate]"
+                            stdscr.addnstr(y, margin_x + 2, _truncate(page_info, left_w), left_w, curses.A_DIM)
+                            y += 1
+                        except curses.error:
+                            pass
+            
+            elif current_field['type'] == 'string':
+                if current_val:
+                    val_line = f"Current: {current_val}"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                                  curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+                else:
+                    val_line = "[Enter value]"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                                  curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+        except curses.error:
+            pass
     
     # ===== RIGHT PANEL: Preview and Timing Diagram =====
     py = top + 2
@@ -4889,10 +5129,20 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
     # ===== BOTTOM Instructions =====
     try:
         y = top + box_h - 3
-        if current_field['type'] == 'choice':
+        
+        if state.assertion_waiting_custom_number:
+            inst = "Enter number value | 'q' to cancel"
+        elif current_field['type'] == 'choice':
             inst = "Enter [1-9] to select | 'prev'/'p' for previous | 'q' to cancel"
         elif current_field['type'] == 'signal':
-            inst = "Enter signal [1-N] | n/N page | 'prev'/'p' for previous | 'q' to cancel"
+            # Special instruction for exp_cnt_val field
+            if field_name == 'exp_cnt_val':
+                inst = "Enter [0-N], number, or expression (e.g. 'i1 - 1') | n/N page | 'prev'/'p' | 'q'"
+            # Special instruction for reset_con field
+            elif field_name == 'reset_con':
+                inst = "Enter [0-N] (0=Only Base Reset) | n/N page | 'prev'/'p' for previous | 'q' to cancel"
+            else:
+                inst = "Enter signal [1-N], number, or expression (e.g. 'i1 - 1') | n/N page | 'prev'/'p' | 'q'"
         else:  # string
             inst = "Enter value | 'prev'/'p' for previous | 'q' to cancel"
         
@@ -4923,8 +5173,11 @@ def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, t
     
     ly = top + 2
     if plugin:
+        all_fields = plugin['fields']
+        visible_fields = _get_visible_fields(all_fields, state.assertion_input_data)
+        
         try:
-            for field in plugin['fields']:
+            for field in visible_fields:
                 if ly >= top + box_h - 4:
                     break
                 
@@ -5288,39 +5541,58 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
             lines.append("")
     
     elif plugin_name == 'pulseWidth':
+        pulse_type = data.get('pulse_type', '?')
         target_signal = data.get('target_signal', '?')
         min_width = data.get('min_width', '?')
         max_width = data.get('max_width', '?')
+        base_clock = data.get('base_clock', '?')
+        trigger_signal = data.get('trigger_signal', '?')
         
-        # Get base clock and reset from module_info
-        base_clk = '?'
+        # Get base reset from module_info
         base_rst = '?'
-        if state.module_info.clocks:
-            base_clk = state.module_info.clocks[0].get('name', '?')
         if state.module_info.resets:
             base_rst = state.module_info.resets[0].get('name', '?')
         
-        # Truncate signal name to 10 characters
+        # Truncate signal names to 10 characters
         display_signal = target_signal if len(str(target_signal)) <= 10 else str(target_signal)[:7] + "..."
+        display_base_clk = base_clock if len(str(base_clock)) <= 10 else str(base_clock)[:7] + "..."
+        display_trigger = trigger_signal if len(str(trigger_signal)) <= 10 else str(trigger_signal)[:7] + "..."
         
         lines.append("=" * 60)
         lines.append("PULSE WIDTH ASSERTION")
         lines.append("=" * 60)
         lines.append("")
-        lines.append(f"Signal to Monitor: {display_signal}")
-        lines.append(f"Minimum Pulse Width: {min_width} clocks")
-        lines.append(f"Maximum Pulse Width: {max_width} clocks")
-        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Pulse Type: {pulse_type}")
+        lines.append(f"Target Signal: {display_signal}")
+        
+        if pulse_type == 'hpulse':
+            lines.append(f"Base Clock: {display_base_clk} (for counting)")
+        elif pulse_type == 'vpulse':
+            lines.append(f"Trigger Signal: {display_trigger} (for edge detection)")
+        
+        lines.append(f"Min Width: {min_width}")
+        lines.append(f"Max Width: {max_width}")
         lines.append(f"Base Reset: {base_rst}")
         lines.append("")
+        
+        # Show available parameters
+        if state.module_info and state.module_info.parameters:
+            lines.append("Available Parameters:")
+            for param in state.module_info.parameters[:5]:  # Show first 5
+                param_name = param.get('name', '')
+                param_default = param.get('default', '')
+                lines.append(f"  {param_name} = {param_default}")
+            if len(state.module_info.parameters) > 5:
+                lines.append(f"  ... and {len(state.module_info.parameters) - 5} more")
+            lines.append("")
         
         lines.append("Pulse Width Range:")
         lines.append("-" * 60)
         lines.append("")
-        lines.append(f"  {display_signal} pulse width must be between {min_width} and {max_width} clocks")
+        lines.append(f"  {display_signal} pulse width must be between {min_width} and {max_width}")
         lines.append("")
         lines.append(f"  _____|{'‾' * 20}|_____")
-        lines.append(f"       <--  {min_width}-{max_width} clocks  -->")
+        lines.append(f"       <--  {min_width}-{max_width}  -->")
         lines.append("")
         
         lines.append("Result:")
@@ -5382,6 +5654,31 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
         pass
+
+
+def _generate_preview_content(state: AppState) -> List[str]:
+    """Generate full preview content for file generation wizard."""
+    if not state.gen_filename or not state.gen_file_type or not state.gen_data_source:
+        return ["(Configuration incomplete)"]
+    
+    # Determine what to include
+    include_asserts = state.gen_data_source in ('1', '3')
+    include_signals = state.gen_data_source in ('2', '3')
+    
+    # For "both" mode, show the file selected by gen_preview_file_idx
+    if state.gen_file_type == 3:  # Both
+        if state.gen_preview_file_idx == 0:
+            # Show interface
+            content = _generate_interface_content(state, include_asserts, include_signals)
+        else:
+            # Show instance
+            content = _generate_instance_content(state, include_asserts, include_signals)
+    elif state.gen_file_type == 1:  # Interface only
+        content = _generate_interface_content(state, include_asserts, include_signals)
+    else:  # Instance only
+        content = _generate_instance_content(state, include_asserts, include_signals)
+    
+    return content.split('\n')
 
 
 def _generate_files(state: AppState) -> str:
@@ -5519,6 +5816,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         state.assertion_input_data.clear()
         state.assertion_signal_ports.clear()
         state.assertion_current_field_idx = 0
+        state.assertion_waiting_custom_number = False
         return "Cancelled", True
     
     # Stage 1: Select Type
@@ -5548,13 +5846,62 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
     
     # Stage 2: Input Data (step-by-step, input saves immediately, Enter to advance)
     elif state.assertion_wizard_stage == 'input_data':
+        # Special handling: If waiting for custom number input (exp_cnt_val [0] selected)
+        if state.assertion_waiting_custom_number:
+            # Validate that input is a number
+            if not cmd.isdigit() and cmd != '':
+                return "Please enter a valid number", False
+            
+            if cmd == '':
+                return "Please enter a number value", False
+            
+            # Save the custom number as the expected count value
+            state.assertion_input_data['exp_cnt_val'] = cmd
+            state.assertion_signal_ports['exp_cnt_val'] = {}  # No port for custom number
+            state.assertion_waiting_custom_number = False
+            
+            # Auto-advance to next field or confirmation
+            plugins = _get_assertion_plugins_info()
+            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+            if plugin:
+                all_fields = plugin.get('fields', [])
+                fields = _get_visible_fields(all_fields, state.assertion_input_data)
+                
+                if state.assertion_current_field_idx < len(fields) - 1:
+                    state.assertion_current_field_idx += 1
+                    next_field = fields[state.assertion_current_field_idx]
+                    step = state.assertion_current_field_idx + 1
+                    msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                    msg += next_field.get('description', '')
+                    return msg, False
+                else:
+                    # All fields done, move to confirm
+                    state.assertion_wizard_stage = 'confirm'
+                    return "\nAll steps complete. Review and press Enter to create.", False
+            
+            return "Error processing custom number", False
+        
         plugins = _get_assertion_plugins_info()
         plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
         if not plugin:
             return "Plugin not found", False
         
-        fields = plugin.get('fields', [])
-        if not fields or state.assertion_current_field_idx >= len(fields):
+        all_fields = plugin.get('fields', [])
+        if not all_fields:
+            return "No fields", False
+        
+        # Populate base_clock options dynamically from state.module_info.clocks
+        for field in all_fields:
+            if field.get('name') == 'base_clock' and field.get('type') == 'choice':
+                if state.module_info and state.module_info.clocks:
+                    field['options'] = [clk.get('name', '') for clk in state.module_info.clocks if clk.get('name')]
+                else:
+                    field['options'] = ['I_CLK']  # Default if no clocks defined
+        
+        # Filter fields based on show_if conditions
+        fields = _get_visible_fields(all_fields, state.assertion_input_data)
+        
+        if state.assertion_current_field_idx >= len(fields):
             return "No fields or invalid field index", False
         
         current_field = fields[state.assertion_current_field_idx]
@@ -5646,26 +5993,56 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 else:
                     return "No signals to navigate", False
             
-            # Accept signal by number index or name
+            # Accept signal by number index, name, plain number, or expression
             selected_signal = None
             selected_port = None
             
+            # Check if cmd is a plain number (no prefix like 'i' or 'o')
+            # or an expression (contains operators like +, -, *, /)
+            is_expression = any(op in cmd for op in ['+', '-', '*', '/', '(', ')'])
+            
             if cmd.isdigit():
+                # This could be: [1] signal index, or plain number like "5"
                 idx = int(cmd)
-                # Look up signal from map
-                if idx in state.assertion_signal_map:
+                
+                # Special handling for exp_cnt_val field: [0] = Custom Number Input
+                if field_name == 'exp_cnt_val' and idx == 0:
+                    state.assertion_waiting_custom_number = True
+                    return "Enter custom number value for expected count:", False
+                
+                # Check if this index exists in signal map (small number = index)
+                # If index >= 100, likely a plain number value
+                if idx in state.assertion_signal_map and idx < 100:
+                    # Treat as signal index
                     selected_signal, selected_port = state.assertion_signal_map[idx]
                 else:
-                    return f"Invalid signal number. Choose from displayed list", False
+                    # Treat as plain number value (no signal, just number)
+                    selected_signal = cmd  # Store the number as-is
+                    selected_port = {}  # No port info for plain numbers
+            
+            elif is_expression:
+                # Expression like "i1 - 1" or "o5 + 2"
+                # Parse and validate the expression contains valid signal references
+                # For now, accept the expression as-is and store it
+                # The code generation will handle the expression properly
+                selected_signal = cmd
+                selected_port = {}  # No single port for expressions
+            
             else:
-                # Try to match by name
+                # Try to match by name (signal name without brackets)
+                found = False
                 for signal_name, port_dict in state.assertion_signal_map.values():
                     if signal_name.lower() == cmd.lower():
                         selected_signal = signal_name
                         selected_port = port_dict
+                        found = True
                         break
-                if not selected_signal:
-                    return f"Signal '{cmd}' not found. Use number or exact name", False
+                
+                if not found:
+                    # Could be a plain number value or expression that wasn't caught above
+                    # Accept it as literal value
+                    selected_signal = cmd
+                    selected_port = {}
             
             # Save signal name to assertion_input_data and port_dict to assertion_signal_ports
             state.assertion_input_data[field_name] = selected_signal
@@ -5725,6 +6102,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             state.assertion_input_data.clear()
             state.assertion_signal_ports.clear()
             state.assertion_current_field_idx = 0
+            state.assertion_waiting_custom_number = False
             return result, True
         
         elif cmd in ('prev', 'p', 'back', 'b'):
@@ -5732,12 +6110,14 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             plugins = _get_assertion_plugins_info()
             plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
             if plugin:
-                fields = plugin['fields']
+                all_fields = plugin['fields']
+                visible_fields = _get_visible_fields(all_fields, state.assertion_input_data)
+                
                 state.assertion_wizard_stage = 'input_data'
-                state.assertion_current_field_idx = len(fields) - 1
-                last_field = fields[state.assertion_current_field_idx]
+                state.assertion_current_field_idx = len(visible_fields) - 1
+                last_field = visible_fields[state.assertion_current_field_idx]
                 step = state.assertion_current_field_idx + 1
-                msg = f"\nStep {step}/{len(fields)}: {last_field.get('title', '')}\n"
+                msg = f"\nStep {step}/{len(visible_fields)}: {last_field.get('title', '')}\n"
                 msg += last_field.get('description', '')
                 return msg, False
         
@@ -5869,6 +6249,15 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
         
         wb = load_workbook(excel_path)
         
+        # Helper: Find sheet case-insensitively
+        def find_sheet_ci(target_name: str) -> Optional[str]:
+            """Find sheet by name (case-insensitive). Returns actual sheet name or None."""
+            target_lower = target_name.lower()
+            for name in wb.sheetnames:
+                if name.lower() == target_lower:
+                    return name
+            return None
+        
         # Helper: Format bit width as "[msb:lsb]" from calculated_bit_width
         def format_bit_width(bit_width: int) -> str:
             """
@@ -5915,19 +6304,41 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
         # Map from assertion_signal_ports passed via state
         port_map = state.assertion_signal_ports if hasattr(state, 'assertion_signal_ports') else {}
         
-        # Determine sheet name based on plugin
+        # Determine sheet name based on plugin (case-insensitive lookup)
         if plugin_name == 'counter':
-            sheet_name = 'Counter'
-            if sheet_name not in wb.sheetnames:
+            sheet_name = find_sheet_ci('Counter')
+            if not sheet_name:
+                sheet_name = 'Counter'
                 wb.create_sheet(sheet_name)
             
             ws = wb[sheet_name]
             
-            # Find next empty row (simplified: look for empty Target column)
-            target_col = 1
-            next_row = 2  # Start after header
-            while ws.cell(row=next_row, column=target_col).value:
-                next_row += 1
+            # Find next empty row starting from row 8 (after header at row 7)
+            # Counter sheet has header at row 7, data starts at row 8
+            # Column 2 is "Target" column (B)
+            target_col = 2
+            next_row = 8
+            
+            # Check if this is the first real data or if we have sample data
+            # Sample data has specific values like 'cnt', 'plus_condition', etc.
+            first_target = ws.cell(row=8, column=target_col).value
+            is_sample_data = (first_target and str(first_target).strip() in ['cnt', 'counter', 'sample'])
+            
+            if is_sample_data:
+                # Clear sample data only (rows 8+) - keep headers
+                # Clear from row 8 onwards (skip merged cells)
+                from openpyxl.cell import MergedCell
+                for row in range(8, ws.max_row + 1):
+                    for col in range(1, 15):
+                        cell = ws.cell(row=row, column=col)
+                        # Skip merged cells (they're read-only)
+                        if not isinstance(cell, MergedCell):
+                            cell.value = None
+                next_row = 8
+            else:
+                # Find the next empty row after existing data
+                while ws.cell(row=next_row, column=target_col).value:
+                    next_row += 1
             
             # Get signal name and width
             target_signal = data.get('target', '')
@@ -5939,32 +6350,54 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             target_name = match.group(1).strip() if match else target_signal.strip()
             
             # Write data in plugin's expected format
-            ws.cell(row=next_row, column=1, value=target_name)
-            
-            # Write width (if unresolved, mark in comment or keep as-is for user awareness)
-            width_cell = ws.cell(row=next_row, column=2, value=target_width)
-            if has_unresolved:
-                # Mark unresolved parameter widths (optional: add comment or formatting)
-                # For now, just keep the expression as-is so user knows there's a parameter
-                pass
-            
+            # Counter sheet columns (from row 7): col2=Target, col3=Plus, col4=Reset, col5=Trigger, col6=Expect Count
+            ws.cell(row=next_row, column=2, value=target_name)
             ws.cell(row=next_row, column=3, value=data.get('plus_con', ''))
             ws.cell(row=next_row, column=4, value=data.get('reset_con', ''))
             ws.cell(row=next_row, column=5, value=data.get('trigger_con', ''))
             ws.cell(row=next_row, column=6, value=data.get('exp_cnt_val', ''))
         
         elif plugin_name == 'handshake':
-            sheet_name = 'Handshake'
-            if sheet_name not in wb.sheetnames:
+            sheet_name = find_sheet_ci('Handshake')
+            if not sheet_name:
+                sheet_name = 'Handshake'
                 wb.create_sheet(sheet_name)
             
             ws = wb[sheet_name]
             
-            # Find next empty row
-            type_col = 1
-            next_row = 2
-            while ws.cell(row=next_row, column=type_col).value:
-                next_row += 1
+            # Find next empty row starting from row 7 (after header at row 6)
+            # handshake sheet has header at row 6, data starts at row 7
+            # Column 3 is "Type" column (C)
+            type_col = 3
+            next_row = 7
+            
+            # Check if this is the first real data or if we have sample data
+            first_type = ws.cell(row=7, column=type_col).value
+            first_sender = ws.cell(row=7, column=4).value
+            
+            # Check if this looks like sample data (has specific sender values or empty)
+            is_sample_data = False
+            if first_type and first_sender:
+                type_str = str(first_type).strip()
+                sender_str = str(first_sender).strip()
+                # If sender is one of the generic sample values, clear it
+                if type_str in ['ready_valid', '4phase', '2phase'] and sender_str in ['valid', 'req']:
+                    is_sample_data = True
+            
+            if is_sample_data:
+                # This appears to be the original sample - clear it
+                from openpyxl.cell import MergedCell
+                for row in range(7, ws.max_row + 1):
+                    for col in range(1, 10):
+                        cell = ws.cell(row=row, column=col)
+                        # Skip merged cells (they're read-only)
+                        if not isinstance(cell, MergedCell):
+                            cell.value = None
+                next_row = 7
+            else:
+                # Find the next empty row after existing data
+                while ws.cell(row=next_row, column=type_col).value:
+                    next_row += 1
             
             # Get signal names and widths
             sender_signal = data.get('sender', '')
@@ -5980,24 +6413,45 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             receiver_name = receiver_match.group(1).strip() if receiver_match else receiver_signal.strip()
             
             # Write data in plugin's expected format
-            ws.cell(row=next_row, column=1, value=data.get('phase_type', ''))
-            ws.cell(row=next_row, column=2, value=sender_name)
-            ws.cell(row=next_row, column=3, value=sender_width)  # Add sender bit width
-            ws.cell(row=next_row, column=4, value=receiver_name)
-            ws.cell(row=next_row, column=5, value=receiver_width)  # Add receiver bit width
+            # handshake sheet columns (from row 6): col3=Type, col4=Sender, col5=Receiver
+            ws.cell(row=next_row, column=3, value=data.get('phase_type', ''))
+            ws.cell(row=next_row, column=4, value=sender_name)
+            ws.cell(row=next_row, column=5, value=receiver_name)
         
         elif plugin_name == 'pulseWidth':
-            sheet_name = 'PulseWidth'
-            if sheet_name not in wb.sheetnames:
+            sheet_name = find_sheet_ci('PulseWidth')
+            if not sheet_name:
+                sheet_name = 'PulseWidth'
                 wb.create_sheet(sheet_name)
             
             ws = wb[sheet_name]
             
-            # Find next empty row
-            signal_col = 1
-            next_row = 2
-            while ws.cell(row=next_row, column=signal_col).value:
-                next_row += 1
+            # Find next empty row starting from row 7 (after header at row 6)
+            # pulseWidth sheet has header at row 6, data starts at row 7
+            # Column 3 is "Type" column (C)
+            type_col = 3
+            next_row = 7
+            
+            # Check if this is the first real data or if we have sample data
+            first_type = ws.cell(row=7, column=type_col).value
+            is_sample_data = (first_type and str(first_type).strip() in ['hpulse', 'vpulse', 'sample'])
+            
+            # Only clear if it's still sample data with default values
+            first_target = ws.cell(row=7, column=5).value  # Target_Pulse column
+            if is_sample_data and first_target and str(first_target).strip() == 'target_pulse':
+                # This appears to be the original sample - clear it
+                from openpyxl.cell import MergedCell
+                for row in range(7, ws.max_row + 1):
+                    for col in range(1, 10):
+                        cell = ws.cell(row=row, column=col)
+                        # Skip merged cells (they're read-only)
+                        if not isinstance(cell, MergedCell):
+                            cell.value = None
+                next_row = 7
+            else:
+                # Find the next empty row after existing data
+                while ws.cell(row=next_row, column=type_col).value:
+                    next_row += 1
             
             # Get signal name and width
             target_signal = data.get('target_signal', '')
@@ -6009,10 +6463,27 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             signal_name = match.group(1).strip() if match else target_signal.strip()
             
             # Write data
-            ws.cell(row=next_row, column=1, value=signal_name)
-            ws.cell(row=next_row, column=2, value=signal_width)  # Add signal bit width
-            ws.cell(row=next_row, column=3, value=data.get('min_width', ''))
-            ws.cell(row=next_row, column=4, value=data.get('max_width', ''))
+            # pulseWidth sheet columns (from row 6): col3=Type, col4=Count_Trigger, col5=Target_Pulse, col6=Min, col7=Max
+            pulse_type = data.get('pulse_type', 'hpulse')  # Get actual pulse type
+            
+            # Determine Count_Trigger value based on pulse type
+            if pulse_type == 'hpulse':
+                # Use actual base clock name from data
+                count_trigger = data.get('base_clock', '<Base Clock>')
+            elif pulse_type == 'vpulse':
+                # Use actual trigger signal name from data
+                trigger_sig = data.get('trigger_signal', '')
+                # Extract clean trigger signal name
+                trigger_match = re.match(r'^([^\[]*)(?:\[.*\])?$', trigger_sig)
+                count_trigger = trigger_match.group(1).strip() if trigger_match else trigger_sig.strip()
+            else:
+                count_trigger = '<Base Clock>'  # Fallback
+            
+            ws.cell(row=next_row, column=3, value=pulse_type)
+            ws.cell(row=next_row, column=4, value=count_trigger)
+            ws.cell(row=next_row, column=5, value=signal_name)
+            ws.cell(row=next_row, column=6, value=data.get('min_width', ''))
+            ws.cell(row=next_row, column=7, value=data.get('max_width', ''))
         
         wb.save(excel_path)
         wb.close()
