@@ -367,6 +367,20 @@ def run_builder(
         s = line.strip().rstrip(";")
         return s == STD_IMPORT.rstrip(";") or s == STD_INCLUDE.rstrip(";")
 
+    # Top-level signal name set (inputs + clocks + resets) — used to detect plain 'logic' decls
+    _top_signal_names = set()
+    for k in ("clocks", "resets", "inputs"):
+        for it in module_info.get(k, []):
+            if isinstance(it, dict):
+                n = it.get("name")
+            else:
+                n = it
+            if isinstance(n, str) and n:
+                _top_signal_names.add(n)
+    
+    # also match plain logic declarations (no 'input' prefix)
+    re_logic_decl = re.compile(r'^\s*(?:logic|wire|bit)\s+(?:(\[[^\]]+\])\s+)?([A-Za-z_]\w*)', re.MULTILINE)
+
     def _collect_return(ret) -> Tuple[str, str]:
         sv_txt, inst_txt = "", ""
         if isinstance(ret, dict):
@@ -424,10 +438,19 @@ def run_builder(
             w = (m.group(1) or "[0:0]").strip()
             n = m.group(2)
             _add_input(n, w)
+
+        # also detect plain 'logic/bit/wire' declarations that correspond to top-level signals
+        for m in re_logic_decl.finditer(core):
+            w = (m.group(1) or "[0:0]").strip()
+            n = m.group(2)
+            # if this name is a known top-level signal, treat it as input (so dedupe happens)
+            if n in _top_signal_names:
+                _add_input(n, w)
+
         # remove those lines
         core = "\n".join(
             line for line in core.splitlines()
-            if not re_input_decl.search(line)
+            if not (re_input_decl.search(line) or re_logic_decl.search(line) and (re_logic_decl.search(line).group(2) in _top_signal_names))
         ).strip()
 
         if core:
@@ -516,14 +539,13 @@ def run_builder(
     # Port list
     port_lines = []
     for name in agg_ports_order:
-        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
+        port_lines.append(f"    logic {agg_inputs[name]} {name}")
     ports_block = ",\n".join(port_lines) + ("\n" if port_lines else "")
 
     sv_text = (
         header_txt
-        + "interface assertion_intf\n(\n"
+        + "interface assertion_intf();\n"
         + ports_block
-        + ");\n\n"
         + (bodies + "\n" if bodies else "// No SV content generated.\n")
         + "endinterface\n"
     )

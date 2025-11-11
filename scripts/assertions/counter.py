@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import json
 import os
+import re
+from typing import Set
 
 from openpyxl import load_workbook
 from .base import BaseAssertionPlugin
@@ -140,16 +142,39 @@ def _auto_pick_clk_rst(mod: Dict[str, Any]) -> Tuple[str, str]:
 # -----------------------------
 # Is Port helpers
 # -----------------------------
-def _is_module_port(mod: Dict[str, Any], name: str) -> bool:
-    """Return True if 'name' exists in the module's declared ports."""
-    if not name or not mod:
-        return False
-    want = (name or "").strip()
+def _all_module_port_names(mod: Dict[str, Any]) -> List[str]:
+    names = []
     for key in ("inputs", "outputs", "inouts", "clocks", "resets", "ports"):
-        for port in mod.get(key, []) or []:
-            if (port.get("name") or "") == want:
-                return True
-    return False
+        for p in mod.get(key, []) or []:
+            n = (p.get("name") or "").strip()
+            if n:
+                names.append(n)
+    # 중복 제거(순서 보존)
+    
+    seen = set(); out = []
+    for n in names:
+        if n not in seen:
+            seen.add(n); out.append(n)
+    return out
+
+def _collect_expr_ports(mod: Dict[str, Any], expr: str) -> List[Tuple[str, str]]:
+    """
+    expr 안에서 모듈 포트 이름이 실제로 등장하는 것만 추출.
+    """
+    if not expr or not mod:
+        return []
+    all_names = _all_module_port_names(mod)
+    # 포트명이 특수문자 포함 가능성 대비해서 re.escape 사용, 단어 경계 \b로 안전 매칭
+    if not all_names:
+        return []
+    pat = r'\b(' + '|'.join(re.escape(n) for n in sorted(all_names, key=len, reverse=True)) + r')\b'
+    # 중복 제거(순서 보존)
+    seen = set(); found = []
+    for m in re.finditer(pat, expr):
+        n = m.group(1)
+        if n not in seen:
+            seen.add(n); found.append((n, _port_width_token(mod, n)))
+    return found
 
 # -----------------------------
 # Width helpers
@@ -217,7 +242,7 @@ def _port_width_token(mod: Dict[str, Any], name: str) -> str:
 def _fmt_input_decl(sig: str, width_tok: str) -> str:
     """Format input logic with width; defaults to [0:0] if empty."""
     width_tok = (width_tok or "").strip() or "[0:0]"
-    return f"input logic {width_tok} {sig}"
+    return f"logic {width_tok} {sig}"
 
 def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, Any]) -> int:
     """
@@ -238,7 +263,7 @@ def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, An
     ws.cell(row=write_row, column=target_col + 2, value=(cnt_cfg.get("reset_con", "") or "").strip())
     ws.cell(row=write_row, column=target_col + 3, value=(cnt_cfg.get("trigger_con", "") or "").strip())
     ws.cell(row=write_row, column=target_col + 4, value=(cnt_cfg.get("exp_cnt_val", "") or "").strip())
-    
+
     # Base Clock / Base Reset 라벨 및 값 정리
     clk_label = find_cell(ws, "Base Clock")
     rst_label = find_cell(ws, "Base Reset")
@@ -264,25 +289,33 @@ def generate_verilog(info: Dict[str, Any]) -> str:
 
     w_clk           = info.get("Base Clock Width", "")
     w_rst           = info.get("Reset Width", "")
-    w_plus_con      = info.get("Plus Condition Width", "")
-    w_reset_con     = info.get("Reset Condition Width", "")
-    w_trigger_con   = info.get("Trigger Condition Width", "")
-    w_exp_cnt_val   = info.get("Expect Count Value Width", "")
 
     port_list = []
-    port_list.append(_fmt_input_decl(clk, w_clk))
-    port_list.append(_fmt_input_decl(rst, w_rst))
-    if info["Plus Condition Is Port"]    : port_list.append(_fmt_input_decl(plus_con, w_plus_con))
-    if info["Reset Condition Is Port"]   : port_list.append(_fmt_input_decl(reset_con, w_reset_con))
-    if info["Trigger Condition Is Port"] : port_list.append(_fmt_input_decl(trigger_con, w_trigger_con))
-    if info["Expect Count Value Is Port"]: port_list.append(_fmt_input_decl(exp_cnt_val, w_exp_cnt_val))
+    declared = set()
+    #if clk : port_list.append(_fmt_input_decl(clk, w_clk)); declared.add(clk)
+    #if rst : port_list.append(_fmt_input_decl(rst, w_rst)); declared.add(rst)
+
+    for name, w in (info.get("Plus Condition Ports") or []):
+        if name not in declared:
+            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+
+    for name, w in (info.get("Reset Condition Ports") or []):
+        if name not in declared:
+            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+
+    for name, w in (info.get("Trigger Condition Ports") or []):
+        if name not in declared:
+            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+
+    for name, w in (info.get("Expect Count Value Ports") or []):
+        if name not in declared:
+            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+
     ports = ",\n    ".join(port_list)
 
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
-    return header + f"""module assertion_counter
-(
-    {ports} 
-);
+    return header + f"""interface assertion_counter\n
+    {ports}
 
     reg [31:0] {cnt};
 
@@ -308,26 +341,35 @@ def generate_verilog(info: Dict[str, Any]) -> str:
 
     assert property (p_counter_check)  else $error("failed at %t", $time);
 
-endmodule
+endinterface
 """
 
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
     clk         = info["Base Clock"]
     rst         = info["Reset"]
-    plus_con    = info["Plus Condition"]
-    reset_con   = info["Reset Condition"]
-    trigger_con = info["Trigger Condition"]
-    exp_cnt_val = info["Expect Count Value"]
 
-    mod = f"assertion_counter"
+    mod = f"assertion_counter_intf assertion_counter_intf"
 
     assign_list = []
-    assign_list.append(f"assign u_{mod}.{clk} = top.dut.{clk};")
-    assign_list.append(f"assign u_{mod}.{rst} = top.dut.{rst};")
-    if info["Plus Condition Is Port"]    : assign_list.append(f"assign u_{mod}.{plus_con} = top.dut.{plus_con};")
-    if info["Reset Condition Is Port"]   : assign_list.append(f"assign u_{mod}.{reset_con} = top.dut.{reset_con};")
-    if info["Trigger Condition Is Port"] : assign_list.append(f"assign u_{mod}.{trigger_con} = top.dut.{trigger_con};")
-    if info["Expect Count Value Is Port"]: assign_list.append(f"assign u_{mod}.{exp_cnt_val} = top.dut.{exp_cnt_val};")
+    assigned = set()
+    if clk : assign_list.append(f"assign u_{mod}.{clk} = top.dut.{clk};"); assigned.add(clk)
+    if rst : assign_list.append(f"assign u_{mod}.{rst} = top.dut.{rst};"); assigned.add(rst)
+
+    for name, w in (info.get("Plus Condition Ports") or []):
+        if name not in assigned:
+            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+
+    for name, w in (info.get("Reset Condition Ports") or []):
+        if name not in assigned:
+            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+
+    for name, w in (info.get("Trigger Condition Ports") or []):
+        if name not in assigned:
+            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+
+    for name, w in (info.get("Expect Count Value Ports") or []):
+        if name not in assigned:
+            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
     assigns = "\n".join(assign_list)
 
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
@@ -435,11 +477,11 @@ Available signals:""", sig_opts, allow_custom=True)
         info["Reset Condition Width"] = _port_width_token(mod, info.get("Reset Condition", ""))
         info["Trigger Condition Width"] = _port_width_token(mod, info.get("Trigger Condition", ""))
         info["Expect Count Value Width"] = _port_width_token(mod, info.get("Expect Count Value", ""))
-        # attach 'is custom' from module define
-        info["Plus Condition Is Port"] = _is_module_port(mod, info.get("Plus Condition", ""))
-        info["Reset Condition Is Port"] = _is_module_port(mod, info.get("Reset Condition", ""))
-        info["Trigger Condition Is Port"] = _is_module_port(mod, info.get("Trigger Condition", ""))
-        info["Expect Count Value Is Port"] = _is_module_port(mod, info.get("Expect Count Value", ""))
+        # attach 'ports in custom' from module define
+        info["Plus Condition Ports"] = _collect_expr_ports(mod, info.get("Plus Condition", ""))
+        info["Reset Condition Ports"] = _collect_expr_ports(mod, info.get("Reset Condition", ""))
+        info["Trigger Condition Ports"] = _collect_expr_ports(mod, info.get("Trigger Condition", ""))
+        info["Expect Count Value Ports"] = _collect_expr_ports(mod, info.get("Expect Count Value", ""))
         blocks: List[Dict[str, Any]] = []
         ct = "counter"
         if ct in ALLOWED_TYPES and info.get("Target") and info.get("Plus Condition") and info.get("Trigger Condition") and info.get("Expect Count Value"):
@@ -452,19 +494,17 @@ Available signals:""", sig_opts, allow_custom=True)
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-        out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
-        out_dir.mkdir(parents=True, exist_ok=True)
+        # 파일 생성은 assertion_builder.py에서 처리하도록 변경.
+        # 이 함수는 생성할 SV 문자열 스니펫들만 반환한다.
         snippets: List[str] = []
         forced = _get_forced_type()
         for info in parsed.get("blocks", []):
-            # 선택 타입만 생성
-            if forced and ("counter" != forced):
-                continue
+            #if forced and ("counter" != forced):
+                #continue
             sv = generate_verilog(info)
             inst_sv = generate_inst_verilog(info)
-            (out_dir / f"assertion_counter.sv").write_text(sv, encoding="utf-8")
-            (out_dir / f"assertion_counter_inst.sv").write_text(inst_sv, encoding="utf-8")
             snippets.append(sv)
+            snippets.append(inst_sv)
         return snippets
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
