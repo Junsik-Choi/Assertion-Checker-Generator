@@ -9,9 +9,28 @@
       "name": "new_value",
       "expr": "i_blur_mode_cap + i_den + i_mirror_mode_cap",
       "width": 1
+    },
+    {
+      "name": "new_val",
+      "expr": "i_blur_mode_cap + i_den +",
+      "width": 3
+    },
+    {
+      "name": "new",
+      "expr": "i_blur_mode_cap && i_den && i_hor_cnt && i_hsync &&",
+      "width": 6
     }
   ],
   "assertions": [
+    {
+      "type": "handshake",
+      "data": {
+        "sender": "o_hsync",
+        "receiver": "o_vsync",
+        "phase_type": "2phase"
+      },
+      "description": "handshake assertion"
+    },
     {
       "type": "pulseWidth",
       "data": {
@@ -33,15 +52,6 @@
         "base_clock": "<Base Clock>"
       },
       "description": "pulseWidth assertion"
-    },
-    {
-      "type": "handshake",
-      "data": {
-        "phase_type": "2phase",
-        "sender": "o_hsync",
-        "receiver": "o_vsync"
-      },
-      "description": "handshake assertion"
     }
   ],
   "clocks": [

@@ -266,6 +266,16 @@
       "name": "new_value",
       "expr": "i_blur_mode_cap + i_den + i_mirror_mode_cap",
       "width": 1
+    },
+    {
+      "name": "new_val",
+      "expr": "i_blur_mode_cap + i_den +",
+      "width": 3
+    },
+    {
+      "name": "new",
+      "expr": "i_blur_mode_cap && i_den && i_hor_cnt && i_hsync &&",
+      "width": 6
     }
   ]
 }

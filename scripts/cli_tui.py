@@ -703,7 +703,7 @@ def _write_colored_zebra(win: "curses._CursesWindow", items: List[Tuple[str, Opt
 def _colorize_expression(expr: str) -> List[Tuple[str, str]]:
     """
     Parse expression and return list of (text, color) tuples for syntax highlighting.
-    Colors: operators=cyan, parentheses=yellow/magenta/green (nested), signals=default
+    Colors: operators=blue(cyan), parentheses=yellow/magenta/green (nested), signals=default
     """
     if not expr:
         return [("", "")]
@@ -713,8 +713,16 @@ def _colorize_expression(expr: str) -> List[Tuple[str, str]]:
     paren_depth = 0
     paren_colors = ["yellow", "magenta", "green", "cyan"]  # Cycle through colors for nested parens
     
-    # Operators: &&, ||, &, |, ^, ~, !, ==, !=, <, >, <=, >=
-    operators = ["&&", "||", "==", "!=", "<=", ">=", "&", "|", "^", "~", "!", "<", ">"]
+    # Verilog operators (sorted by length, longest first for proper matching)
+    # Logical: &&, ||, ==, !=, <=, >=, <, >, !
+    # Bitwise: &, |, ^, ~
+    # Arithmetic: +, -, *, /, %, **
+    # Shift: <<, >>, <<<, >>>
+    operators = [
+        "<<<", ">>>",  # Arithmetic shifts (3 chars)
+        "**", "&&", "||", "==", "!=", "<=", ">=", "<<", ">>",  # 2 chars
+        "&", "|", "^", "~", "!", "<", ">", "+", "-", "*", "/", "%"  # 1 char
+    ]
     
     while i < len(expr):
         # Check for operators (longest first)
@@ -2797,12 +2805,9 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 if 1 <= idx <= len(state.module_info.resets):
                     return state.module_info.resets[idx-1].get('name', '')
             
-            # Plain number: map to input (backward compatibility)
-            if token.isdigit():
-                idx = int(token)
-                ins = (state.module_info.inputs + state.module_info.inouts)
-                if 1 <= idx <= len(ins):
-                    return ins[idx-1].get('name', '')
+            # Plain numbers (1, 2, 3, etc.) remain as literal numbers
+            # No automatic mapping to input ports
+            # Users must use i1, i2, etc. for input ports
             
             return token
         expr_tokens = _tokenize_expr(expr)
