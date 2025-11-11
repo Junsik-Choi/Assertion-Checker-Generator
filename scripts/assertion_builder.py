@@ -281,52 +281,37 @@ def run_builder(
     ctx = build_module_context(rtl_start, target_module)
     module_info = ctx["module_info"]
     actual_module = module_info["module"]
-    
-    # Handshake 타입을 플러그인에 전달(환경변수로 기본값 주입)
+
     if handshake_cfg and handshake_cfg.get("force_type"):
         os.environ["ASSERTION_FORCE_TYPE"] = handshake_cfg["force_type"]
 
-    # Reference 엑셀을 세션용으로 복사
     session_excel, session_dir = _create_session_excel_copy(excel_path, actual_module, out_dir)
 
-    # Optionally emit JSON for Define sheet population
     if auto_define_fill:
-        # JSON을 세션 디렉터리에 생성
         define_json_path = fill_define_excel_if_needed(session_excel, module_info, session_dir)
         print(f"✓ Define JSON written: {define_json_path}")
-        # Auto-run fill_define.py to populate the Excel Define sheet
         fill_script = _THIS_DIR / "fill_define.py"
         if fill_script.exists():
             try:
                 result = subprocess.run(
                     [sys.executable, "-X", "utf8", str(fill_script), str(session_excel), str(define_json_path)],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
+                    check=False, capture_output=True, text=True, encoding="utf-8", errors="replace",
                     env=dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUTF8="1"),
                 )
                 if result.returncode == 0:
                     print("✓ Define sheet populated successfully")
                 else:
                     print("[Warn] fill_define.py execution failed")
-                    if result.stdout:
-                        print(result.stdout.strip()[-500:])
-                    if result.stderr:
-                        print(result.stderr.strip()[-500:])
             except Exception as e:
                 print(f"[Warn] fill_define.py execution failed: {e}")
         else:
             print("[Info] scripts/fill_define.py not found; please run it manually.")
 
-    # Load enabled plugins
     plugin_types: List[Type[BaseAssertionPlugin]] = get_registered_plugins()
     if enabled_plugins:
         enabled_names = set(enabled_plugins)
         plugin_types = [p for p in plugin_types if p.plugin_name in enabled_names]
 
-    # Parse Excel sheets via plugins (세션 엑셀 사용)
     parsed_by_plugin: Dict[str, Dict[str, Any]] = {}
     for pcls in plugin_types:
         try:
@@ -334,7 +319,6 @@ def run_builder(
         except Exception as e:
             print(f"[Warn] Plugin {pcls.plugin_name} parse failed: {e}")
 
-    # Emit consolidated JSON (ports + per-plugin parsed structures)
     if emit_json:
         json_blob = {
             "module": module_info["module"],
@@ -346,35 +330,213 @@ def run_builder(
             "parameters": module_info["parameters"],
             "sheets": parsed_by_plugin,
         }
-        # JSON도 세션 디렉터리에 저장
         json_path = session_dir / "assertion_inputs.json"
         json_path.write_text(json.dumps(json_blob, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"✓ Inputs JSON written: {json_path}")
 
-    # 공통 컨텍스트(plugins generate_sv 호출 전에 필요)
     common_context = {
         "module_info": module_info,
         "define_excel_path": str(session_excel),
         "output_dir": str(session_dir),
         "session_dir": str(session_dir),
         "config": {
-            "auto_define_fill": True,
+            "auto_define_fill": auto_define_fill,
             "enabled_plugins": enabled_plugins,
-            "emit_json": True,
+            "emit_json": emit_json,
         },
     }
 
-    # 3) SV 생성 (항상)
-    sv_sections: List[str] = []
-    for pcls in plugin_types:
-        parsed = parsed_by_plugin.get(pcls.plugin_name)
-        if not parsed:
-            continue
-        try:
-            sv_sections.extend(pcls().generate_sv(parsed, common_context))
-        except Exception as e:
-            print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
+    # ---------------- New multi-generation aggregation logic ----------------
+    agg_headers: List[str] = []
+    agg_inputs: Dict[str, str] = {}      # name -> width token
+    agg_bodies: List[str] = []           # plain SV (no module/interface wrappers)
+    agg_ports_order: List[str] = []      # preserve insertion order
 
+    # Regex helpers
+    # 헤더 제거: ; 유무 모두 허용, 공백 허용
+    re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
+    # module/interface 래퍼 제거: 파라미터(#(...))와 개행 허용
+    re_module = re.compile(r'(?is)^\s*module\b\s+[A-Za-z_]\w*\s*(?:#\s*\(.*?\)\s*)?\(\s*(?P<ports>.*?)\s*\)\s*;\s*(?P<body>.*?)\s*endmodule\b')
+    re_interface = re.compile(r'(?is)^\s*interface\b\s+[A-Za-z_]\w*\s*(?:#\s*\(.*?\)\s*)?\s*;?\s*(?P<body>.*?)\s*endinterface\b')
+    re_input_decl = re.compile(r'^\s*input\s+logic\s+(?:(\[[^\]]+\])\s+)?([A-Za-z_]\w*)', re.MULTILINE)
+
+    # 표준 헤더 상수
+    STD_IMPORT = "import uvm_pkg::*;"
+    STD_INCLUDE = '`include "uvm_macros.svh"'
+    def _is_std_header_line(line: str) -> bool:
+        s = line.strip().rstrip(";")
+        return s == STD_IMPORT.rstrip(";") or s == STD_INCLUDE.rstrip(";")
+
+    def _collect_return(ret) -> Tuple[str, str]:
+        sv_txt, inst_txt = "", ""
+        if isinstance(ret, dict):
+            sv_txt = str(ret.get("sv", "") or "")
+            inst_txt = str(ret.get("sv_inst", "") or "")
+        elif isinstance(ret, (list, tuple)):
+            if len(ret) >= 1 and ret[0]:
+                sv_txt = str(ret[0])
+            if len(ret) >= 2 and ret[1]:
+                inst_txt = str(ret[1])
+        elif isinstance(ret, str):
+            sv_txt = ret
+        return sv_txt, inst_txt
+
+    def _add_input(name: str, width: str):
+        if not name:
+            return
+        if name not in agg_inputs:
+            agg_inputs[name] = width or "[0:0]"
+            agg_ports_order.append(name)
+
+    def _extract_inputs_from_port_block(port_block: str):
+        for line in port_block.splitlines():
+            m = re_input_decl.search(line)
+            if m:
+                w = (m.group(1) or "[0:0]").strip()
+                n = m.group(2)
+                _add_input(n, w)
+
+    def _strip_and_collect(sv_txt: str, plugin_name: str):
+        if not sv_txt.strip():
+            return
+        # headers: 표준 2개는 무시, 그 외만 수집. 본문에서는 모두 제거
+        for m in re_header.finditer(sv_txt):
+            hdr = m.group(0).strip()
+            if not _is_std_header_line(hdr) and hdr not in agg_headers:
+                agg_headers.append(hdr)
+        core = re_header.sub("", sv_txt)
+
+        # interface unwrap
+        m_iface = re_interface.search(core)
+        if m_iface:
+            core = m_iface.group("body").strip()
+
+        # module unwrap
+        m_mod = re_module.search(core)
+        if m_mod:
+            ports_block = m_mod.group("ports")
+            _extract_inputs_from_port_block(ports_block)
+            mod_body = m_mod.group("body").strip()
+            core = mod_body
+
+        # standalone input decl lines in body
+        for m in re_input_decl.finditer(core):
+            w = (m.group(1) or "[0:0]").strip()
+            n = m.group(2)
+            _add_input(n, w)
+        # remove those lines
+        core = "\n".join(
+            line for line in core.splitlines()
+            if not re_input_decl.search(line)
+        ).strip()
+
+        if core:
+            agg_bodies.append(f"// {plugin_name}\n{core}")
+
+    def _run_generation(p_types: List[Type[BaseAssertionPlugin]]):
+        for pcls in p_types:
+            parsed = parsed_by_plugin.get(pcls.plugin_name)
+            if not parsed:
+                continue
+            try:
+                ret = pcls().generate_sv(parsed, common_context)
+                sv_txt, _ = _collect_return(ret)
+                _strip_and_collect(sv_txt, pcls.plugin_name)
+            except Exception as e:
+                print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
+
+    # First pass
+    _run_generation(plugin_types)
+
+    # Loop for additional generations
+    while True:
+        ans = input("\nDo you want to continue generating Assertion Code?\n[1] Yes\n[2] No\n> ").strip()
+        if ans == "2":
+            break
+        if ans != "1":
+            print("Invalid selection. Try again.")
+            continue
+        # Re-select plugins
+        _import_all_plugins()
+        all_types = get_registered_plugins()
+        names = [p.plugin_name for p in all_types]
+        picks = _pick_multi("Select plugins (or 'all')", names)
+        next_types = [p for p in all_types if p.plugin_name in set(picks)]
+        # Handshake 타입 선택 지원
+        handshake_cls = next((p for p in all_types if p.plugin_name == "handshake"), None)
+        chosen_has_handshake = any(p.plugin_name == "handshake" for p in next_types)
+        # 비-handshake 플러그인 먼저 처리
+        non_hs_types = [p for p in next_types if p.plugin_name != "handshake"]
+        for pcls in non_hs_types:
+            try:
+                parsed_by_plugin[pcls.plugin_name] = pcls().parse(session_excel)
+            except Exception as e:
+                print(f"[Warn] Plugin {pcls.plugin_name} parse failed: {e}")
+        _run_generation(non_hs_types)
+        # handshake가 선택된 경우, 타입(복수 선택 가능)별로 개별 실행
+        if chosen_has_handshake and handshake_cls is not None:
+            hs_options = ["2phase", "4phase", "ready_valid"]
+            hs_picks = _pick_multi("Select handshake type(s) (or 'all')", hs_options)
+            prev = os.environ.get("ASSERTION_FORCE_TYPE")
+            try:
+                for hs in hs_picks:
+                    os.environ["ASSERTION_FORCE_TYPE"] = hs
+                    try:
+                        parsed_by_plugin["handshake"] = handshake_cls().parse(session_excel)
+                    except Exception as e:
+                        print(f"[Warn] Plugin handshake parse failed ({hs}): {e}")
+                        continue
+                    try:
+                        ret = handshake_cls().generate_sv(parsed_by_plugin["handshake"], common_context)
+                        sv_txt, _ = _collect_return(ret)
+                        _strip_and_collect(sv_txt, "handshake")
+                    except Exception as e:
+                        print(f"[Warn] Plugin handshake generate failed ({hs}): {e}")
+            finally:
+                if prev is None:
+                    os.environ.pop("ASSERTION_FORCE_TYPE", None)
+                else:
+                    os.environ["ASSERTION_FORCE_TYPE"] = prev
+
+    # Build final assertion_gen.sv
+    session_dir_path = Path(common_context["session_dir"])
+    gen_sv_path = session_dir_path / "assertion_gen.sv"
+    gen_inst_path = session_dir_path / "assertion_gen_inst.sv"
+
+    # 최상단 헤더: import 다음 include 1회만, 그 외 헤더는 그 아래에 한번만
+    extra_headers = "\n".join(h for h in agg_headers if not _is_std_header_line(h))
+    header_txt = STD_IMPORT + "\n" + STD_INCLUDE + "\n"
+    if extra_headers.strip():
+        header_txt += extra_headers.strip() + "\n"
+    header_txt += "\n"
+
+    body_sep = "\n\n// ===== Next plugin section =====\n\n"
+    bodies = body_sep.join([b for b in agg_bodies if b.strip()])
+
+    # Port list
+    port_lines = []
+    for name in agg_ports_order:
+        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
+    ports_block = ",\n".join(port_lines) + ("\n" if port_lines else "")
+
+    sv_text = (
+        header_txt
+        + "module assertion_gen\n(\n"
+        + ports_block
+        + ");\n\n"
+        + (bodies + "\n" if bodies else "// No SV content generated.\n")
+        + "endmodule\n"
+    )
+    gen_sv_path.write_text(sv_text, encoding="utf-8")
+
+    # Build instantiation file
+    inst_lines = [header_txt.rstrip(), "assertion_gen", "      u_assertion_gen();", ""]
+    for name in agg_ports_order:
+        inst_lines.append(f"assign u_assertion_gen.{name} = top.dut.{name};")
+    inst_text = "\n".join(inst_lines).rstrip() + "\n"
+    gen_inst_path.write_text(inst_text, encoding="utf-8")
+
+    print(f"✓ Wrote {gen_sv_path.name} and {gen_inst_path.name}")
     print(f"\n===== Outputs saved to: {session_dir} =====")
 
 
