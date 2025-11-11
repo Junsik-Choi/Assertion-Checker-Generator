@@ -498,10 +498,10 @@ def run_builder(
                 else:
                     os.environ["ASSERTION_FORCE_TYPE"] = prev
 
-    # Build final assertion_gen.sv
+    # Build final assertion_intf.sv
     session_dir_path = Path(common_context["session_dir"])
-    gen_sv_path = session_dir_path / "assertion_gen.sv"
-    gen_inst_path = session_dir_path / "assertion_gen_inst.sv"
+    gen_sv_path = session_dir_path / "assertion_intf.sv"
+    gen_inst_path = session_dir_path / "assertion_intf_inst.sv"
 
     # 최상단 헤더: import 다음 include 1회만, 그 외 헤더는 그 아래에 한번만
     extra_headers = "\n".join(h for h in agg_headers if not _is_std_header_line(h))
@@ -521,18 +521,18 @@ def run_builder(
 
     sv_text = (
         header_txt
-        + "module assertion_gen\n(\n"
+        + "interface assertion_intf\n(\n"
         + ports_block
         + ");\n\n"
         + (bodies + "\n" if bodies else "// No SV content generated.\n")
-        + "endmodule\n"
+        + "endinterface\n"
     )
     gen_sv_path.write_text(sv_text, encoding="utf-8")
 
     # Build instantiation file
-    inst_lines = [header_txt.rstrip(), "assertion_gen", "      u_assertion_gen();", ""]
+    inst_lines = [header_txt.rstrip(), "assertion_intf", "      u_assertion_intf();", ""]
     for name in agg_ports_order:
-        inst_lines.append(f"assign u_assertion_gen.{name} = top.dut.{name};")
+        inst_lines.append(f"assign u_assertion_intf.{name} = top.dut.{name};")
     inst_text = "\n".join(inst_lines).rstrip() + "\n"
     gen_inst_path.write_text(inst_text, encoding="utf-8")
 
