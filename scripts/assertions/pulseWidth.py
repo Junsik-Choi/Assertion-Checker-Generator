@@ -600,45 +600,49 @@ class PulseWidthPlugin(BaseAssertionPlugin):
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-        out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        snippets: List[str] = []
+        sv_parts: List[str] = []
+        inst_parts: List[str] = []
         for b in (parsed.get("blocks") or []):
             t = (b.get("Type") or "").lower()
             base_clk = b.get("Base Clock", "")
             base_rst = b.get("Base Reset", "")
             target_pulse = b.get("Target_Pulse", "")
             exp_min = b.get("Expected_Min_Value", "")
-            exp_max = b.get("Expected_Max_Value", "")
+            exp_max = b.get("Expected_Max_Value", "[0:0]")
             # widths (defaults)
             w_clk = b.get("Base Clock Width", "[0:0]")
             w_rst = b.get("Base Reset Width", "[0:0]")
             w_tp  = b.get("Target_Pulse Width", "[0:0]")
             w_min = b.get("Expected_Min_Value Width", "[0:0]")
             w_max = b.get("Expected_Max_Value Width", "[0:0]")
+
             if t == "hpulse":
                 if not base_clk or not base_rst or not target_pulse or not exp_min or not exp_max:
                     continue
-                sv = _build_hpulse_sv(base_clk, base_rst, target_pulse, exp_min, exp_max,
-                                      w_clk, w_rst, w_tp, w_min, w_max)
+                sv = _build_hpulse_sv(
+                    base_clk, base_rst, target_pulse, exp_min, exp_max,
+                    w_clk, w_rst, w_tp, w_min, w_max
+                )
                 inst_sv = _build_hpulse_inst_sv(base_clk, base_rst, target_pulse, exp_min, exp_max)
-                (out_dir / "assertion_hpulse.sv").write_text(sv, encoding="utf-8")
-                (out_dir / "assertion_hpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
-                snippets.append(sv)
+                sv_parts.append(sv)
+                inst_parts.append(inst_sv)
+
             elif t == "vpulse":
                 count_trig = b.get("Count_Trigger", "")
                 w_ct = b.get("Count_Trigger Width", "[0:0]")
                 if not base_clk or not base_rst or not count_trig or not target_pulse or not exp_min or not exp_max:
                     continue
-                sv = _build_vpulse_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max,
-                                      w_clk, w_rst, w_ct, w_tp, w_min, w_max)
+                sv = _build_vpulse_sv(
+                    base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max,
+                    w_clk, w_rst, w_ct, w_tp, w_min, w_max
+                )
                 inst_sv = _build_vpulse_inst_sv(base_clk, base_rst, count_trig, target_pulse, exp_min, exp_max)
-                (out_dir / "assertion_vpulse.sv").write_text(sv, encoding="utf-8")
-                (out_dir / "assertion_vpulse_inst.sv").write_text(inst_sv, encoding="utf-8")
-                snippets.append(sv)
+                sv_parts.append(sv)
+                inst_parts.append(inst_sv)
 
-        return snippets
+        combined_sv = "\n\n".join([s.strip() for s in sv_parts if str(s).strip()]) + ("\n" if sv_parts else "")
+        combined_inst = "\n\n".join([s.strip() for s in inst_parts if str(s).strip()]) + ("\n" if inst_parts else "")
+        return [combined_sv, combined_inst]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
