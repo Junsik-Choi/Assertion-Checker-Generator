@@ -1,8 +1,10 @@
 from __future__ import annotations
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
 import json
 import os
+import importlib
+import re
 
 from openpyxl import load_workbook
 from .base import BaseAssertionPlugin
@@ -228,7 +230,7 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     # ready_valid
     if info["phase_type"] == "ready_valid":
-        return header + f"""module assertion_ready_valid
+        return header + f"""module assertion_gen
 (
     {_fmt_input_decl(clk, w_clk)},
     {_fmt_input_decl(rst, w_rst)},
@@ -246,7 +248,7 @@ assert_rv_0 : assert property (p_ready_valid_check({s}, {r})) else $error("faile
 endmodule
 """
     if info["phase_type"] == "4phase":
-        return header + f"""module assertion_4phase
+        return header + f"""module assertion_gen
  (
      {_fmt_input_decl(clk, w_clk)},
      {_fmt_input_decl(rst, w_rst)},
@@ -276,7 +278,7 @@ assert_4ph_2 : assert property (p_4ph_check_2({s}, {r})) else $error("failed at 
 endmodule
 """
     else:
-        return header + f"""module assertion_2phase
+        return header + f"""module assertion_gen
  (
      {_fmt_input_decl(clk, w_clk)},
      {_fmt_input_decl(rst, w_rst)},
@@ -315,13 +317,12 @@ endmodule
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
     s = info["Sender"]; r = info["Receiver"]
-    phase = info["phase_type"] or "2phase"
-    mod = f"assertion_{phase}"
+    mod = "assertion_gen"
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     # inst 파일은 모듈 래퍼 없이 인스턴스와 assign만 생성
     return header + (
         f"{mod}\n"
-        f" u_{mod} ();\n\n"
+        f"      u_{mod} ();\n\n"
         f"assign u_{mod}.{clk} = top.dut.{clk};\n"
         f"assign u_{mod}.{rst} = top.dut.{rst};\n"
         f"assign u_{mod}.{s} = top.dut.{s};\n"
@@ -397,21 +398,18 @@ class HandshakePlugin(BaseAssertionPlugin):
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-        out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
-        out_dir.mkdir(parents=True, exist_ok=True)
-        snippets: List[str] = []
+        # 파일 저장은 assertion_builder.py에서 처리. 여기서는 문자열만 반환.
+        sv_parts: List[str] = []
+        inst_parts: List[str] = []
         forced = _get_forced_type()
         for info in parsed.get("blocks", []):
-            # 선택 타입만 생성
             if forced and (info.get("phase_type", "").lower() != forced):
                 continue
-            phase = info.get("phase_type", "2phase")
-            sv = generate_verilog(info)
-            inst_sv = generate_inst_verilog(info)
-            (out_dir / f"assertion_{phase}.sv").write_text(sv, encoding="utf-8")
-            (out_dir / f"assertion_{phase}_inst.sv").write_text(inst_sv, encoding="utf-8")
-            snippets.append(sv)
-        return snippets
+            sv_parts.append(generate_verilog(info))
+            inst_parts.append(generate_inst_verilog(info))
+        combined_sv = "\n\n".join([s.strip() for s in sv_parts if str(s).strip()]) + ("\n" if sv_parts else "")
+        combined_inst = "\n\n".join([s.strip() for s in inst_parts if str(s).strip()]) + ("\n" if inst_parts else "")
+        return [combined_sv, combined_inst]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
@@ -426,5 +424,186 @@ def main(xlsx_path: str) -> None:
         ws = _get_sheet_ci(wb, "Handshake", create=True)
     _ensure_handshake_layout(ws)
     wb.save(xlsx_path)
+
+def run_builder(
+    rtl_start: Path,
+    target_module: Optional[str],
+    excel_path: Path,
+    out_dir: Path,
+    auto_define_fill: bool,
+    enabled_plugins: Optional[List[str]],
+    emit_json: bool,
+    handshake_cfg: Optional[Dict[str, str]] = None,
+) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    ctx = build_module_context(rtl_start, target_module)
+    module_info = ctx["module_info"]
+    actual_module = module_info["module"]
+
+    if handshake_cfg and handshake_cfg.get("force_type"):
+        os.environ["ASSERTION_FORCE_TYPE"] = handshake_cfg["force_type"]
+
+    session_excel, session_dir = _create_session_excel_copy(excel_path, actual_module, out_dir)
+
+    if auto_define_fill:
+        define_json_path = fill_define_excel_if_needed(session_excel, module_info, session_dir)
+        print(f"✓ Define JSON written: {define_json_path}")
+        # ...existing code...
+
+    # 초기 플러그인 후보
+    plugin_types: List[Type[BaseAssertionPlugin]] = get_registered_plugins()
+    if enabled_plugins:
+        enabled_names = set(enabled_plugins)
+        plugin_types = [p for p in plugin_types if p.plugin_name in enabled_names]
+
+    common_context = {
+        "module_info": module_info,
+        "define_excel_path": str(session_excel),
+        "output_dir": str(session_dir),
+        "session_dir": str(session_dir),
+        "config": {
+            "auto_define_fill": auto_define_fill,
+            "enabled_plugins": enabled_plugins,
+            "emit_json": emit_json,
+        },
+    }
+
+    # 누적 버퍼
+    agg_headers: List[str] = []
+    agg_inputs: Dict[str, str] = {}  # name -> [msb:lsb]
+    agg_bodies: List[str] = []
+
+    def _collect_from_ret(ret) -> Tuple[str, str]:
+        sv_txt, inst_txt = "", ""
+        if isinstance(ret, dict):
+            sv_txt = str(ret.get("sv", "") or "")
+            inst_txt = str(ret.get("sv_inst", "") or "")
+        elif isinstance(ret, (list, tuple)):
+            if len(ret) >= 1 and ret[0]:
+                sv_txt = str(ret[0])
+            if len(ret) >= 2 and ret[1]:
+                inst_txt = str(ret[1])
+        elif isinstance(ret, str):
+            sv_txt = ret
+        return sv_txt, inst_txt
+
+    # 헤더/본문/포트 선언 추출
+    _re_hdr = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;|import\s+uvm_pkg::\*\s*;\s*)\s*$', re.MULTILINE)
+    _re_iface = re.compile(r'(?is)^\s*interface\b.*?;\s*(.*?)\s*endinterface\b')
+    _re_module = re.compile(r'(?is)^\s*module\b\s+\w+\s*\((.*?)\)\s*;\s*(.*?)\s*endmodule\b', re.DOTALL)
+    _re_input_line = re.compile(r'^\s*input\s+logic\s+(?:(\[[^\]]+\])\s+)?([A-Za-z_]\w*)', re.MULTILINE)
+
+    def _merge_headers(txt: str) -> str:
+        for m in _re_hdr.finditer(txt):
+            h = m.group(0).strip()
+            if h and h not in agg_headers:
+                agg_headers.append(h)
+        return _re_hdr.sub("", txt)
+
+    def _harvest_inputs_from_ports(port_block: str) -> None:
+        if not port_block:
+            return
+        for m in _re_input_line.finditer(port_block):
+            width = (m.group(1) or "[0:0]").strip()
+            name = m.group(2)
+            if name not in agg_inputs:
+                agg_inputs[name] = width
+
+    def _strip_wrappers_and_collect(txt: str) -> str:
+        if not txt.strip():
+            return ""
+        core = _merge_headers(txt)
+        # interface 안쪽만
+        chunks = []
+        for m in _re_iface.finditer(core):
+            chunks.append(m.group(1).strip())
+        if chunks:
+            core = "\n\n".join(chunks)
+        # module: 포트/본문 추출
+        m = _re_module.search(core)
+        if m:
+            _harvest_inputs_from_ports(m.group(1) or "")
+            core = (m.group(2) or "").strip()
+        # 모듈 밖의 input logic 라인도 수집하고 제거
+        for m2 in _re_input_line.finditer(core):
+            width = (m2.group(1) or "[0:0]").strip()
+            name = m2.group(2)
+            if name not in agg_inputs:
+                agg_inputs[name] = width
+        core = _re_input_line.sub("", core)
+        return core.strip()
+
+    def _process_batch(selected: List[Type[BaseAssertionPlugin]]) -> None:
+        parsed_by_plugin: Dict[str, Dict[str, Any]] = {}
+        for pcls in selected:
+            try:
+                parsed_by_plugin[pcls.plugin_name] = pcls().parse(session_excel)
+            except Exception as e:
+                print(f"[Warn] Plugin {pcls.plugin_name} parse failed: {e}")
+        for pcls in selected:
+            parsed = parsed_by_plugin.get(pcls.plugin_name)
+            if not parsed:
+                continue
+            try:
+                ret = pcls().generate_sv(parsed, common_context)
+                sv_txt, _ = _collect_from_ret(ret)
+                body = _strip_wrappers_and_collect(sv_txt)
+                if body:
+                    agg_bodies.append(f"// {pcls.plugin_name}\n" + body)
+            except Exception as e:
+                print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
+
+    # 1차 실행
+    _process_batch(plugin_types)
+
+    # 반복 생성 루프
+    while True:
+        ans = input("\nDo you want to continue generating Assertion Code?\n[1] Yes\n[2] No\n> ").strip()
+        if ans == "2":
+            break
+        if ans != "1":
+            print("Invalid selection. Try again.")
+            continue
+        # 플러그인 재선택
+        _import_all_plugins()
+        all_types = get_registered_plugins()
+        names = [p.plugin_name for p in all_types]
+        picks = _pick_multi("Select plugins (comma: e.g. handshake,delayCondition or 'all')", names)
+        next_types = [p for p in all_types if (p.plugin_name in set(picks))]
+        _process_batch(next_types)
+
+    # 최종 SV/INST 생성: assertion_gen.sv / assertion_gen_inst.sv
+    session_dir_path = Path(common_context["session_dir"])
+    gen_sv_path = session_dir_path / "assertion_gen.sv"
+    gen_inst_path = session_dir_path / "assertion_gen_inst.sv"
+
+    headers_txt = ("\n".join(agg_headers) + "\n\n") if agg_headers else '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
+    # 모듈 헤더(포트 목록)
+    port_lines: List[str] = []
+    for name in sorted(agg_inputs.keys()):
+        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
+    ports_block = ""
+    if port_lines:
+        ports_block = ",\n".join(port_lines) + "\n"
+    sv_body = "\n\n// ===== Next plugin section =====\n\n".join([b for b in agg_bodies if b.strip()])
+    sv_text = (
+        headers_txt
+        + "module assertion_gen\n(\n"
+        + ports_block
+        + ");\n\n"
+        + (sv_body + "\n" if sv_body else "")
+        + "endmodule\n"
+    )
+    gen_sv_path.write_text(sv_text, encoding="utf-8")
+
+    # inst: 고정 인스턴스 선언 + 포트 assign (집계된 포트 기준)
+    inst_lines: List[str] = [headers_txt.rstrip(), "assertion_gen", "      u_assertion_gen();", ""]
+    for name in sorted(agg_inputs.keys()):
+        inst_lines.append(f"assign u_assertion_gen.{name} = top.dut.{name};")
+    inst_text = "\n".join(inst_lines).rstrip() + "\n"
+    gen_inst_path.write_text(inst_text, encoding="utf-8")
+
+    print(f"✓ Wrote {gen_sv_path.name} and {gen_inst_path.name}")
+    print(f"\n===== Outputs saved to: {session_dir} =====")
 
 

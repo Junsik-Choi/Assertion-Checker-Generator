@@ -501,25 +501,21 @@ class DelayConditionPlugin(BaseAssertionPlugin):
         return parsed
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-        out_dir = Path(context.get("output_dir") or context.get("session_dir") or ".")
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        base_clk = parsed.get("Base Clock", "")
-        base_rst = parsed.get("Base Reset", "")
-        sets: List[Dict[str, str]] = parsed.get("sets", []) or []
-        unique_ports: List[str] = parsed.get("unique_ports", []) or []
-        width_map: Dict[str, str] = parsed.get("width_map", {}) or {}
-
-        # 플레이스홀더 보정(비어 있을 때)
-        base_clk_p = _nz(base_clk, "UNDEF_CLK")
-        base_rst_p = _nz(base_rst, "UNDEF_RST")
-
-        sv = _build_delaycondition_sv_multi(base_clk_p, base_rst_p, sets, unique_ports, width_map)
-        inst_sv = _build_delaycondition_inst_sv_multi(base_clk_p, base_rst_p, unique_ports)
-
-        (out_dir / "assertion_delayCondition.sv").write_text(sv, encoding="utf-8")
-        (out_dir / "assertion_delayCondition_inst.sv").write_text(inst_sv, encoding="utf-8")
-        return [sv]
+         base_clk = parsed.get("Base Clock", "")
+         base_rst = parsed.get("Base Reset", "")
+         sets: List[Dict[str, str]] = parsed.get("sets", []) or []
+         unique_ports: List[str] = parsed.get("unique_ports", []) or []
+         width_map: Dict[str, str] = parsed.get("width_map", {}) or {}
+ 
+         # 플레이스홀더 보정(비어 있을 때)
+         base_clk_p = _nz(base_clk, "UNDEF_CLK")
+         base_rst_p = _nz(base_rst, "UNDEF_RST")
+ 
+         sv = _build_delaycondition_sv_multi(base_clk_p, base_rst_p, sets, unique_ports, width_map)
+         inst_sv = _build_delaycondition_inst_sv_multi(base_clk_p, base_rst_p, unique_ports)
+ 
+         # 파일 저장은 assertion_builder.py에서 수행
+         return [sv, inst_sv]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
