@@ -156,11 +156,11 @@ def _ensure_define_base_clk_rst(wb, module_info: Dict[str, Any]) -> None:
     # try auto-fill from module info
     clk = ""
     for it in (module_info.get("clocks") or []):
-        n = it.get("name"); 
+        n = it.get("name");
         if n: clk = n; break
     rst = ""
     for it in (module_info.get("resets") or []):
-        n = it.get("name"); 
+        n = it.get("name");
         if n: rst = n; break
     if clk and not (ws.cell(row=clk_r, column=clk_c + 1).value):
         ws.cell(row=clk_r, column=clk_c + 1, value=clk)
@@ -301,22 +301,41 @@ def _nz(s: Optional[str], placeholder: str) -> str:
 def _is_simple_ident(s: str) -> bool:
     return bool(re.match(r"^[A-Za-z_][A-Za-z0-9_$]*$", (s or "").strip()))
 
-def _is_dut_port(mod: Dict[str, Any], name: str) -> bool:
-    if not _is_simple_ident(name):
-        return False
-    pools = [
-        mod.get("ports") or [],
-        mod.get("inputs") or [],
-        mod.get("outputs") or [],
-        mod.get("inouts") or [],
-        mod.get("clocks") or [],
-        mod.get("resets") or [],
-    ]
-    for arr in pools:
-        for it in arr:
-            if (it.get("name") or "") == name:
-                return True
-    return False
+# -----------------------------
+# Is Port helpers
+# -----------------------------
+def _all_module_port_names(mod: Dict[str, Any]) -> List[str]:
+    names = []
+    for key in ("inputs", "outputs", "inouts", "clocks", "resets", "ports"):
+        for p in mod.get(key, []) or []:
+            n = (p.get("name") or "").strip()
+            if n:
+                names.append(n)
+    # 중복 제거(순서 보존)
+    seen = set(); out = []
+    for n in names:
+        if n not in seen:
+            seen.add(n); out.append(n)
+    return out
+
+def _collect_expr_ports(mod: Dict[str, Any], expr: str) -> List[str]:
+    """
+    expr 안에서 모듈 포트 이름이 실제로 등장하는 것만 추출.
+    """
+    if not expr or not mod:
+        return []
+    all_names = _all_module_port_names(mod)
+    # 포트명이 특수문자 포함 가능성 대비해서 re.escape 사용, 단어 경계 \b로 안전 매칭
+    if not all_names:
+        return []
+    pat = r'\b(' + '|'.join(re.escape(n) for n in sorted(all_names, key=len, reverse=True)) + r')\b'
+    # 중복 제거(순서 보존)
+    seen = set(); found = []
+    for m in re.finditer(pat, expr):
+        n = m.group(1)
+        if n not in seen:
+            seen.add(n); found.append(n)
+    return found
 
 # ---------------- SV builders (multi-sets) ----------------
 
@@ -472,13 +491,9 @@ class DelayConditionPlugin(BaseAssertionPlugin):
         # 유니크 DUT 포트 수집(모듈 포트 선언용)
         unique_ports: List[str] = []
         def _add_port(name: str):
-            nm = (name or "").strip()
-            if not nm:
-                return
-            if not _is_dut_port(mod, nm):
-                return
-            if nm not in unique_ports:
-                unique_ports.append(nm)
+            for nm in _collect_expr_ports(mod, name or ""):
+                if nm and nm not in unique_ports:
+                    unique_ports.append(nm)
         _add_port(clk)
         _add_port(rst)
         for st in sets_final:
@@ -506,14 +521,14 @@ class DelayConditionPlugin(BaseAssertionPlugin):
          sets: List[Dict[str, str]] = parsed.get("sets", []) or []
          unique_ports: List[str] = parsed.get("unique_ports", []) or []
          width_map: Dict[str, str] = parsed.get("width_map", {}) or {}
- 
+
          # 플레이스홀더 보정(비어 있을 때)
          base_clk_p = _nz(base_clk, "UNDEF_CLK")
          base_rst_p = _nz(base_rst, "UNDEF_RST")
- 
+
          sv = _build_delaycondition_sv_multi(base_clk_p, base_rst_p, sets, unique_ports, width_map)
          inst_sv = _build_delaycondition_inst_sv_multi(base_clk_p, base_rst_p, unique_ports)
- 
+
          # 파일 저장은 assertion_builder.py에서 수행
          return [sv, inst_sv]
 

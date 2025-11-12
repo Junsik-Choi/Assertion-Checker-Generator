@@ -208,12 +208,12 @@ def fill_define_excel_if_needed(excel_path: Path, module_info: Dict[str, Any], o
 def _create_session_excel_copy(reference_excel: Path, target_module: str, out_dir: Path) -> Tuple[Path, Path]:
     """
     Reference 엑셀을 세션 폴더로 복사하고 구조화된 디렉터리를 생성합니다.
-    
+
     Args:
         reference_excel: 원본 엑셀 파일 경로
         target_module: 대상 모듈명
         out_dir: 출력 디렉터리 (일반적으로 out/assertions)
-    
+
     Returns:
         (session_excel_path, session_dir): 복사된 엑셀 경로와 세션 디렉터리 경로
     """
@@ -222,10 +222,10 @@ def _create_session_excel_copy(reference_excel: Path, target_module: str, out_di
     session_name = f"{target_module}-{ts}"
     session_dir = out_dir.parent / "sessions" / session_name
     session_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # 엑셀 파일명: <module>.xlsx
     dest_excel = session_dir / f"{target_module}.xlsx"
-    
+
     try:
         shutil.copy2(reference_excel, dest_excel)
         print(f"✓ Session Excel created: {dest_excel}")
@@ -516,21 +516,20 @@ def run_builder(
     # Port list
     port_lines = []
     for name in agg_ports_order:
-        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
-    ports_block = ",\n".join(port_lines) + ("\n" if port_lines else "")
+        port_lines.append(f"    logic {agg_inputs[name]} {name}")
+    ports_block = ";\n".join(port_lines) + (";\n" if port_lines else "")
 
     sv_text = (
         header_txt
-        + "interface assertion_intf\n(\n"
-        + ports_block
-        + ");\n\n"
-        + (bodies + "\n" if bodies else "// No SV content generated.\n")
+        + "interface assertion_intf();\n"
+        + ports_block + "\n"
+        + (bodies + "\n\n" if bodies else "// No SV content generated.\n")
         + "endinterface\n"
     )
     gen_sv_path.write_text(sv_text, encoding="utf-8")
 
     # Build instantiation file
-    inst_lines = [header_txt.rstrip(), "assertion_intf", "      u_assertion_intf();", ""]
+    inst_lines = [header_txt.rstrip(), "", "assertion_intf", "      u_assertion_intf();", ""]
     for name in agg_ports_order:
         inst_lines.append(f"assign u_assertion_intf.{name} = top.dut.{name};")
     inst_text = "\n".join(inst_lines).rstrip() + "\n"
