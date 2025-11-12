@@ -5687,7 +5687,7 @@ def _generate_preview_content(state: AppState) -> List[str]:
 
 
 def _generate_files(state: AppState) -> str:
-    """Generate interface and/or instance files based on wizard configuration."""
+    """Generate interface and/or instance files using assertion_builder plugins."""
     if not state.gen_filename:
         return "ERROR: Filename not set"
     if not state.gen_file_type:
@@ -5697,7 +5697,9 @@ def _generate_files(state: AppState) -> str:
     
     try:
         import json
+        import re
         from pathlib import Path
+        from assertions import get_registered_plugins  # type: ignore
         
         out_dir = state.out_dir or Path.cwd()
         out_dir = Path(out_dir)
@@ -5709,19 +5711,87 @@ def _generate_files(state: AppState) -> str:
         include_asserts = state.gen_data_source in ('1', '3')
         include_signals = state.gen_data_source in ('2', '3')
         
+        if not include_asserts and not include_signals:
+            return "ERROR: Must include assertions and/or signals"
+        
+        # Build common context for plugins
+        common_context = {
+            "module_info": {
+                "module": state.module_info.module,
+                "clocks": state.module_info.clocks,
+                "resets": state.module_info.resets,
+                "inputs": state.module_info.inputs,
+                "outputs": state.module_info.outputs,
+                "inouts": state.module_info.inouts,
+                "parameters": state.module_info.parameters,
+                "conditions": state.conditions,
+            },
+            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
+            "output_dir": str(out_dir),
+            "session_dir": str(out_dir),
+            "config": {
+                "auto_define_fill": False,
+                "enabled_plugins": None,
+                "emit_json": False,
+            },
+        }
+        
+        # Parse all sheets and generate SV using plugins
+        all_sv_snippets = []
+        all_inst_snippets = []
+        
+        if include_asserts and state.session_excel_path and state.session_excel_path.exists():
+            plugin_types = get_registered_plugins()
+            
+            for pcls in plugin_types:
+                try:
+                    # Parse Excel sheet for this plugin
+                    parsed = pcls().parse(state.session_excel_path)
+                    if not parsed or not parsed.get("blocks"):
+                        continue
+                    
+                    # Generate SV code
+                    ret = pcls().generate_sv(parsed, common_context)
+                    
+                    # Extract SV and instance content
+                    sv_txt, inst_txt = "", ""
+                    if isinstance(ret, dict):
+                        sv_txt = str(ret.get("sv", "") or "")
+                        inst_txt = str(ret.get("sv_inst", "") or "")
+                    elif isinstance(ret, (list, tuple)):
+                        if len(ret) >= 1 and ret[0]:
+                            sv_txt = str(ret[0])
+                        if len(ret) >= 2 and ret[1]:
+                            inst_txt = str(ret[1])
+                    elif isinstance(ret, str):
+                        sv_txt = ret
+                    
+                    if sv_txt.strip():
+                        all_sv_snippets.append((pcls.plugin_name, sv_txt))
+                    if inst_txt.strip():
+                        all_inst_snippets.append((pcls.plugin_name, inst_txt))
+                        
+                except Exception as e:
+                    # Skip plugins that fail
+                    pass
+        
         generated_files = []
         
         # Generate interface file
         if gen_iface:
             iface_path = out_dir / f"{state.gen_filename}.if.sv"
-            iface_content = _generate_interface_content(state, include_asserts, include_signals)
+            iface_content = _generate_interface_from_plugins(
+                state, all_sv_snippets, include_signals
+            )
             iface_path.write_text(iface_content, encoding='utf-8')
             generated_files.append(str(iface_path))
         
         # Generate instance file
         if gen_inst:
             inst_path = out_dir / f"{state.gen_filename}.inst.sv"
-            inst_content = _generate_instance_content(state, include_asserts, include_signals)
+            inst_content = _generate_instance_from_plugins(
+                state, all_inst_snippets, include_signals
+            )
             inst_path.write_text(inst_content, encoding='utf-8')
             generated_files.append(str(inst_path))
         
@@ -5730,73 +5800,186 @@ def _generate_files(state: AppState) -> str:
         return msg
         
     except Exception as e:
-        return f"ERROR generating files: {str(e)[:100]}"
+        import traceback
+        return f"ERROR generating files: {str(e)}\n{traceback.format_exc()[:200]}"
 
 
-def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
-    """Generate interface file content."""
-    lines = []
-    lines.append("// Auto-generated interface file")
-    lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("")
+def _generate_interface_from_plugins(
+    state: AppState, 
+    sv_snippets: List[Tuple[str, str]], 
+    include_signals: bool
+) -> str:
+    """Generate interface file from plugin outputs."""
+    import re
     
-    if include_asserts and state.assertions:
-        lines.append("// ===== ASSERTIONS =====")
-        for i, asrt in enumerate(state.assertions, 1):
-            lines.append(f"// [{i}] {asrt.get('type', 'unknown').upper()} assertion")
-            lines.append(f"//     Name: {asrt.get('name', 'unnamed')}")
-        lines.append("")
+    # Standard UVM header
+    header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     
-    if include_signals and (state.module_info.inputs or state.module_info.outputs):
-        lines.append("// ===== SIGNALS =====")
-        lines.append("// Input signals:")
-        for inp in state.module_info.inputs[:20]:
-            lines.append(f"//   - {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
-        if len(state.module_info.inputs) > 20:
-            lines.append(f"//   ... and {len(state.module_info.inputs) - 20} more")
+    # Aggregate inputs and bodies from all plugins
+    agg_inputs = {}  # name -> width
+    agg_bodies = []
+    
+    # Regex patterns
+    re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
+    re_module = re.compile(r'(?is)^\s*module\b\s+\w+\s*(?:#\s*\(.*?\)\s*)?\(\s*(?P<ports>.*?)\s*\)\s*;\s*(?P<body>.*?)\s*endmodule\b')
+    re_interface = re.compile(r'(?is)^\s*interface\b\s+\w+\s*(?:#\s*\(.*?\)\s*)?\s*;?\s*(?P<body>.*?)\s*endinterface\b')
+    re_input_decl = re.compile(r'^\s*input\s+logic\s+(?:(\[[^\]]+\])\s+)?([A-Za-z_]\w*)', re.MULTILINE)
+    
+    # Process each plugin's SV output
+    for plugin_name, sv_txt in sv_snippets:
+        if not sv_txt.strip():
+            continue
         
-        lines.append("// Output signals:")
-        for out in state.module_info.outputs[:20]:
-            lines.append(f"//   - {out.get('name', '?')} ({out.get('width', '?')} bits)")
-        if len(state.module_info.outputs) > 20:
-            lines.append(f"//   ... and {len(state.module_info.outputs) - 20} more")
-        lines.append("")
-    
-    lines.append("// Please add your interface properties here")
-    return "\n".join(lines)
-
-
-def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
-    """Generate instance file content."""
-    lines = []
-    lines.append("// Auto-generated instance file")
-    lines.append(f"// Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("")
-    
-    if include_asserts and state.assertions:
-        lines.append("// ===== ASSERTIONS =====")
-        for i, asrt in enumerate(state.assertions, 1):
-            lines.append(f"// [{i}] {asrt.get('type', 'unknown').upper()} assertion")
-            lines.append(f"//     Name: {asrt.get('name', 'unnamed')}")
-        lines.append("")
-    
-    if include_signals and (state.module_info.inputs or state.module_info.outputs):
-        lines.append("// ===== SIGNALS =====")
-        lines.append("// Input signals:")
-        for inp in state.module_info.inputs[:20]:
-            lines.append(f"//   - {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
-        if len(state.module_info.inputs) > 20:
-            lines.append(f"//   ... and {len(state.module_info.inputs) - 20} more")
+        # Remove headers
+        core = re_header.sub("", sv_txt)
         
-        lines.append("// Output signals:")
-        for out in state.module_info.outputs[:20]:
-            lines.append(f"//   - {out.get('name', '?')} ({out.get('width', '?')} bits)")
-        if len(state.module_info.outputs) > 20:
-            lines.append(f"//   ... and {len(state.module_info.outputs) - 20} more")
-        lines.append("")
+        # Unwrap interface
+        m_iface = re_interface.search(core)
+        if m_iface:
+            core = m_iface.group("body").strip()
+        
+        # Unwrap module and extract inputs
+        m_mod = re_module.search(core)
+        if m_mod:
+            ports_block = m_mod.group("ports")
+            # Extract input declarations from ports
+            for m in re_input_decl.finditer(ports_block):
+                width = (m.group(1) or "[0:0]").strip()
+                name = m.group(2)
+                if name not in agg_inputs:
+                    agg_inputs[name] = width
+            core = m_mod.group("body").strip()
+        
+        # Extract standalone input declarations
+        for m in re_input_decl.finditer(core):
+            width = (m.group(1) or "[0:0]").strip()
+            name = m.group(2)
+            if name not in agg_inputs:
+                agg_inputs[name] = width
+        
+        # Remove input declarations from body
+        core = re_input_decl.sub("", core).strip()
+        
+        if core:
+            agg_bodies.append(f"// {plugin_name}\n{core}")
     
-    lines.append("// Please add your binding or instance here")
-    return "\n".join(lines)
+    # Build port list
+    port_lines = []
+    for name in sorted(agg_inputs.keys()):
+        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
+    
+    ports_block = ""
+    if port_lines:
+        ports_block = ",\n".join(port_lines) + "\n"
+    
+    # Build body
+    body = "\n\n// ===== Next plugin section =====\n\n".join(agg_bodies)
+    if not body:
+        body = "// No assertion content generated\n"
+    
+    # Add signal information as comments if requested
+    signal_info = ""
+    if include_signals and (state.module_info.inputs or state.module_info.outputs):
+        sig_lines = ["\n// ===== MODULE SIGNALS ====="]
+        sig_lines.append(f"// Inputs: {len(state.module_info.inputs)}")
+        for inp in state.module_info.inputs[:10]:
+            sig_lines.append(f"//   {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
+        if len(state.module_info.inputs) > 10:
+            sig_lines.append(f"//   ... and {len(state.module_info.inputs) - 10} more")
+        
+        sig_lines.append(f"// Outputs: {len(state.module_info.outputs)}")
+        for out in state.module_info.outputs[:10]:
+            sig_lines.append(f"//   {out.get('name', '?')} ({out.get('width', '?')} bits)")
+        if len(state.module_info.outputs) > 10:
+            sig_lines.append(f"//   ... and {len(state.module_info.outputs) - 10} more")
+        signal_info = "\n".join(sig_lines) + "\n\n"
+    
+    # Assemble final interface
+    return (
+        header +
+        signal_info +
+        "interface assertion_intf\n(\n" +
+        ports_block +
+        ");\n\n" +
+        body +
+        "\n\nendinterface\n"
+    )
+
+
+def _generate_instance_from_plugins(
+    state: AppState,
+    inst_snippets: List[Tuple[str, str]],
+    include_signals: bool
+) -> str:
+    """Generate instance file from plugin outputs."""
+    import re
+    
+    # Standard UVM header
+    header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
+    
+    # Aggregate all assign statements
+    all_assigns = []
+    module_names = set()
+    
+    # Regex to extract assigns and module instances
+    re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
+    re_module_inst = re.compile(r'^\s*(\w+)\s+(u_\w+)\s*\(\s*\)\s*;', re.MULTILINE)
+    re_assign = re.compile(r'^\s*assign\s+.*;', re.MULTILINE)
+    
+    # Process each plugin's inst output
+    for plugin_name, inst_txt in inst_snippets:
+        if not inst_txt.strip():
+            continue
+        
+        # Remove headers
+        core = re_header.sub("", inst_txt)
+        
+        # Extract module instances
+        for m in re_module_inst.finditer(core):
+            module_names.add(m.group(1))
+        
+        # Extract assigns
+        for m in re_assign.finditer(core):
+            assign_stmt = m.group(0).strip()
+            if assign_stmt not in all_assigns:
+                all_assigns.append(assign_stmt)
+    
+    # Build instance declarations
+    inst_lines = []
+    if not module_names:
+        # Default to assertion_intf if no modules found
+        inst_lines.append("assertion_intf")
+        inst_lines.append("      u_assertion_intf();")
+    else:
+        for mod_name in sorted(module_names):
+            inst_lines.append(f"{mod_name}")
+            inst_lines.append(f"      u_{mod_name}();")
+    
+    # Add signal information as comments if requested
+    signal_info = ""
+    if include_signals and (state.module_info.inputs or state.module_info.outputs):
+        sig_lines = ["// ===== MODULE SIGNALS ====="]
+        sig_lines.append(f"// Inputs: {len(state.module_info.inputs)}")
+        for inp in state.module_info.inputs[:10]:
+            sig_lines.append(f"//   {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
+        if len(state.module_info.inputs) > 10:
+            sig_lines.append(f"//   ... and {len(state.module_info.inputs) - 10} more")
+        
+        sig_lines.append(f"// Outputs: {len(state.module_info.outputs)}")
+        for out in state.module_info.outputs[:10]:
+            sig_lines.append(f"//   {out.get('name', '?')} ({out.get('width', '?')} bits)")
+        if len(state.module_info.outputs) > 10:
+            sig_lines.append(f"//   ... and {len(state.module_info.outputs) - 10} more")
+        signal_info = "\n".join(sig_lines) + "\n\n"
+    
+    # Assemble final instance file
+    result = header + signal_info
+    result += "\n".join(inst_lines)
+    if all_assigns:
+        result += "\n\n" + "\n".join(all_assigns)
+    result += "\n"
+    
+    return result
 
 
 def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
