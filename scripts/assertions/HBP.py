@@ -131,10 +131,7 @@ def _ensure_hbp_layout(ws) -> Tuple[int, int]:
     if h_row is None:
         h_row, h_col = 1, 1
         ws.cell(row=h_row, column=h_col, value="HBP")
-    labels = ["Count Trigger", "Target Pulse", "Data Enable Signal", "Expected Min Value", "Expected Max Value"]
-    for i, lab in enumerate(labels, start=1):
-        if ws.cell(row=h_row + i, column=h_col).value is None:
-            ws.cell(row=h_row + i, column=h_col, value=lab)
+    # 레이블은 이미 엑셀에 있다고 가정하고 자동 생성하지 않음
     return h_row, h_col
 
 def _read_define_clk_rst(wb) -> Tuple[str, str]:
@@ -214,12 +211,27 @@ class HBPPlugin(BaseAssertionPlugin):
         exp_min = _pick_int("Enter Expected Min Value")
         exp_max = _pick_int("Enter Expected Max Value")
 
-        # 시트 기록
-        ws_w.cell(row=h_row + 1, column=h_col + 1, value=count_trig)
-        ws_w.cell(row=h_row + 2, column=h_col + 1, value=target_pulse)
-        ws_w.cell(row=h_row + 3, column=h_col + 1, value=data_enable_signal)
-        ws_w.cell(row=h_row + 4, column=h_col + 1, value=exp_min)
-        ws_w.cell(row=h_row + 5, column=h_col + 1, value=exp_max)
+        # 시트 기록: 각 레이블 셀을 찾아서 그 다음 행에 값 입력
+        ct_row, ct_col = _find_cell(ws_w, "Count Trigger")
+        if ct_row:
+            ws_w.cell(row=ct_row + 1, column=ct_col, value=count_trig)
+        
+        tp_row, tp_col = _find_cell(ws_w, "Target Pulse")
+        if tp_row:
+            ws_w.cell(row=tp_row + 1, column=tp_col, value=target_pulse)
+        
+        de_row, de_col = _find_cell(ws_w, "Data Enable Signal")
+        if de_row:
+            ws_w.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
+        
+        min_row, min_col = _find_cell(ws_w, "Expected Min Value")
+        if min_row:
+            ws_w.cell(row=min_row + 1, column=min_col, value=exp_min)
+        
+        max_row, max_col = _find_cell(ws_w, "Expected Max Value")
+        if max_row:
+            ws_w.cell(row=max_row + 1, column=max_col, value=exp_max)
+        
         wb_w.save(xls_path)
 
         # 파싱 결과
