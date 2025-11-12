@@ -4,7 +4,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import json
 import os
 import re
-from typing import Set
 
 from openpyxl import load_workbook
 from .base import BaseAssertionPlugin
@@ -150,7 +149,6 @@ def _all_module_port_names(mod: Dict[str, Any]) -> List[str]:
             if n:
                 names.append(n)
     # 중복 제거(순서 보존)
-    
     seen = set(); out = []
     for n in names:
         if n not in seen:
@@ -242,7 +240,7 @@ def _port_width_token(mod: Dict[str, Any], name: str) -> str:
 def _fmt_input_decl(sig: str, width_tok: str) -> str:
     """Format input logic with width; defaults to [0:0] if empty."""
     width_tok = (width_tok or "").strip() or "[0:0]"
-    return f"logic {width_tok} {sig}"
+    return f"input logic {width_tok} {sig}"
 
 def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, Any]) -> int:
     """
@@ -292,8 +290,8 @@ def generate_verilog(info: Dict[str, Any]) -> str:
 
     port_list = []
     declared = set()
-    #if clk : port_list.append(_fmt_input_decl(clk, w_clk)); declared.add(clk)
-    #if rst : port_list.append(_fmt_input_decl(rst, w_rst)); declared.add(rst)
+    if clk : port_list.append(_fmt_input_decl(clk, w_clk)); declared.add(clk)
+    if rst : port_list.append(_fmt_input_decl(rst, w_rst)); declared.add(rst)
 
     for name, w in (info.get("Plus Condition Ports") or []):
         if name not in declared:
@@ -314,41 +312,43 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     ports = ",\n    ".join(port_list)
 
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
-    return header + f"""interface assertion_counter\n
+    return header + f"""module assertion_counter
+(
     {ports}
+);
 
-    reg [31:0] {cnt};
+reg [31:0] {cnt};
 
-    always @(posedge {clk} or negedge {rst}) begin
-        if(!{rst}) begin
-            {cnt} <= 0;
-        end
-        else if({reset_con}) begin
-            {cnt} <= 0;
-        end
-        else if({plus_con}) begin
-            {cnt} <= {cnt}+1;
-        end
-        else begin
-            {cnt} <= {cnt};
-        end
+always @(posedge {clk} or negedge {rst}) begin
+    if(!{rst}) begin
+        {cnt} <= 0;
     end
+    else if({reset_con}) begin
+        {cnt} <= 0;
+    end
+    else if({plus_con}) begin
+        {cnt} <= {cnt}+1;
+    end
+    else begin
+        {cnt} <= {cnt};
+    end
+end
 
-    property p_counter_check;
-        @(posedge {clk}) disable iff(!{rst})
-        {trigger_con} |-> ({cnt} == {exp_cnt_val});
-    endproperty
+property p_counter_check;
+    @(posedge {clk}) disable iff(!{rst})
+    {trigger_con} |-> ({cnt} == {exp_cnt_val});
+endproperty
 
-    assert property (p_counter_check)  else $error("failed at %t", $time);
+assert property (p_counter_check)  else $error("failed at %t", $time);
 
-endinterface
+endmodule
 """
 
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
     clk         = info["Base Clock"]
     rst         = info["Reset"]
 
-    mod = f"assertion_counter_intf assertion_counter_intf"
+    mod = f"assertion_counter"
 
     assign_list = []
     assigned = set()
@@ -494,18 +494,18 @@ Available signals:""", sig_opts, allow_custom=True)
         return {"blocks": blocks}
 
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-        # 파일 생성은 assertion_builder.py에서 처리하도록 변경.
-        # 이 함수는 생성할 SV 문자열 스니펫들만 반환한다.
-        snippets: List[str] = []
+        # 파일 저장은 assertion_builder.py에서 처리. 여기서는 문자열만 반환.
+        sv_parts: List[str] = []
+        inst_parts: List[str] = []
         forced = _get_forced_type()
         for info in parsed.get("blocks", []):
-            #if forced and ("counter" != forced):
-                #continue
-            sv = generate_verilog(info)
-            inst_sv = generate_inst_verilog(info)
-            snippets.append(sv)
-            snippets.append(inst_sv)
-        return snippets
+            if forced and ("counter" != forced):
+                continue
+            sv_parts.append(generate_verilog(info))
+            inst_parts.append(generate_inst_verilog(info))
+        combined_sv = "\n\n".join([s.strip() for s in sv_parts if str(s).strip()]) + ("\n" if sv_parts else "")
+        combined_inst = "\n\n".join([s.strip() for s in inst_parts if str(s).strip()]) + ("\n" if inst_parts else "")
+        return [combined_sv, combined_inst]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
