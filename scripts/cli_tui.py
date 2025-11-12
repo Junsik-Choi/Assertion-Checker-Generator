@@ -5747,7 +5747,24 @@ def _generate_files(state: AppState) -> str:
                 try:
                     # Parse Excel sheet for this plugin
                     parsed = pcls().parse(state.session_excel_path)
-                    if not parsed or not parsed.get("blocks"):
+                    
+                    # Skip if no data (sheet doesn't exist or empty)
+                    if not parsed:
+                        continue
+                    
+                    # Handle both old format (dict with "blocks") and new format (direct dict)
+                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
+                    
+                    # For delayCondition: check "sets" instead of "blocks"
+                    if not blocks and isinstance(parsed, dict):
+                        if parsed.get("sets"):
+                            blocks = parsed.get("sets")
+                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
+                            # delayCondition format: has Base Clock/Reset but no "blocks" key
+                            blocks = [parsed]  # Wrap in list for consistency
+                    
+                    # Skip if truly no data
+                    if not blocks:
                         continue
                     
                     # Generate SV code
@@ -5771,9 +5788,13 @@ def _generate_files(state: AppState) -> str:
                     if inst_txt.strip():
                         all_inst_snippets.append((pcls.plugin_name, inst_txt))
                         
+                except KeyError:
+                    # Sheet doesn't exist - skip this plugin silently
+                    continue
                 except Exception as e:
-                    # Skip plugins that fail
-                    pass
+                    # Log other errors but continue with remaining plugins
+                    import sys
+                    print(f"[Warning] Plugin {pcls.plugin_name} failed: {e}", file=sys.stderr)
         
         generated_files = []
         
@@ -5923,7 +5944,8 @@ def _generate_instance_from_plugins(
     
     # Regex to extract assigns and module instances
     re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
-    re_module_inst = re.compile(r'^\s*(\w+)\s+(u_\w+)\s*\(\s*\)\s*;', re.MULTILINE)
+    # Match both with and without 'u_' prefix: "module_name u_instance_name();" or "module_name instance_name();"
+    re_module_inst = re.compile(r'^\s*([A-Za-z_]\w+)\s+([A-Za-z_]\w+)\s*\(\s*\)\s*;', re.MULTILINE)
     re_assign = re.compile(r'^\s*assign\s+.*;', re.MULTILINE)
     
     # Process each plugin's inst output
@@ -5934,7 +5956,7 @@ def _generate_instance_from_plugins(
         # Remove headers
         core = re_header.sub("", inst_txt)
         
-        # Extract module instances
+        # Extract module instances (module_name from first capture group)
         for m in re_module_inst.finditer(core):
             module_names.add(m.group(1))
         
