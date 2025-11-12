@@ -20,6 +20,7 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
         from . import handshake  # noqa: F401
         from . import pulseWidth # noqa: F401
         from . import HSW # noqa: F401
+        from . import HBP # noqa: F401
     except Exception:
         pass
     return list(PLUGINS)
