@@ -24,6 +24,7 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
         from . import HACT # noqa: F401
         from . import HFP # noqa: F401
         from . import VFP # noqa: F401
+        from . import VSW # noqa: F401
     except Exception:
         pass
     return list(PLUGINS)

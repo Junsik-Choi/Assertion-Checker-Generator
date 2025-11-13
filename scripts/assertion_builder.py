@@ -442,8 +442,8 @@ def run_builder(
                 ret = pcls().generate_sv(parsed, common_context)
                 sv_txt, inst_txt = _collect_return(ret)
                 
-                # VFP, HACT, HFP 플러그인은 완전한 interface를 생성하므로 별도 처리
-                if pcls.plugin_name in ["vfp", "hact", "hfp"]:
+                # VFP, HACT, HFP, VSW 플러그인은 완전한 interface를 생성하므로 별도 처리
+                if pcls.plugin_name in ["vfp", "hact", "hfp", "vsw"]:
                     session_dir_path = Path(common_context["session_dir"])
                     intf_sv_path = session_dir_path / "assertion_intf.sv"
                     intf_inst_path = session_dir_path / "assertion_intf_inst.sv"
@@ -513,8 +513,8 @@ def run_builder(
     gen_sv_path = session_dir_path / "assertion_intf.sv"
     gen_inst_path = session_dir_path / "assertion_intf_inst.sv"
 
-    # VFP, HACT, HFP 플러그인이 이미 파일을 생성했는지 확인
-    intf_generated = ("vfp" in parsed_by_plugin or "hact" in parsed_by_plugin or "hfp" in parsed_by_plugin) and gen_sv_path.exists()
+    # VFP, HACT, HFP, VSW 플러그인이 이미 파일을 생성했는지 확인
+    intf_generated = ("vfp" in parsed_by_plugin or "hact" in parsed_by_plugin or "hfp" in parsed_by_plugin or "vsw" in parsed_by_plugin) and gen_sv_path.exists()
     
     if not intf_generated:
         # VFP가 아닌 다른 플러그인들을 위한 interface 생성
@@ -552,7 +552,7 @@ def run_builder(
 
         print(f"✓ Wrote {gen_sv_path.name} and {gen_inst_path.name}")
     else:
-        print(f"✓ VFP/HACT/HFP plugin already generated {gen_sv_path.name} and {gen_inst_path.name}")
+        print(f"✓ VFP/HACT/HFP/VSW plugin already generated {gen_sv_path.name} and {gen_inst_path.name}")
     
     print(f"\n===== Outputs saved to: {session_dir} =====")
 
