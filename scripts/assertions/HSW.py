@@ -125,18 +125,6 @@ def _fmt_input_decl(sig: str, width_tok: str) -> str:
     tok = (width_tok or "").strip() or "[0:0]"
     return f"input logic {tok} {sig}"
 
-# ===== HSW 시트 처리 =====
-def _ensure_hsw_layout(ws) -> Tuple[int, int]:
-    h_row, h_col = _find_cell(ws, "HSW")
-    if h_row is None:
-        h_row, h_col = 1, 1
-        ws.cell(row=h_row, column=h_col, value="HSW")
-    labels = ["Count Trigger", "Target Pulse", "Expected Min Value", "Expected Max Value"]
-    for i, lab in enumerate(labels, start=1):
-        if ws.cell(row=h_row + i, column=h_col).value is None:
-            ws.cell(row=h_row + i, column=h_col, value=lab)
-    return h_row, h_col
-
 def _read_define_clk_rst(wb) -> Tuple[str, str]:
     try:
         ws = _get_sheet_ci(wb, "Define")
@@ -162,6 +150,21 @@ def _pick_int(title: str) -> str:
             return s
         print("Please enter an integer.", flush=True)
 
+def _pick_int_with_validation(title: str, min_val: Optional[int] = None) -> str:
+    """정수를 입력받되, min_val이 주어지면 그보다 크거나 같은지 검증"""
+    while True:
+        try:
+            s = input(f"{title} (integer) > ").strip()
+        except EOFError:
+            return "0"
+        if s.lstrip("-").isdigit():
+            val = int(s)
+            if min_val is not None and val < min_val:
+                print(f"Value must be >= {min_val}. Try again.", flush=True)
+                continue
+            return s
+        print("Please enter an integer.", flush=True)
+
 # ===== 플러그인 =====
 @register
 class HSWPlugin(BaseAssertionPlugin):
@@ -172,18 +175,23 @@ class HSWPlugin(BaseAssertionPlugin):
         mod = _load_module_define(Path(xls_path))
         wb_w = load_workbook(xls_path)
 
-        # HSW 시트 확보 및 레이아웃
+        # HSW 시트 확인
         try:
-            ws_w = _get_sheet_ci(wb_w, self.sheet_name)
+            ws_hsw = _get_sheet_ci(wb_w, self.sheet_name)
         except KeyError:
-            ws_w = wb_w.create_sheet(title=self.sheet_name)
-        h_row, h_col = _ensure_hsw_layout(ws_w)
+            print(f"ERROR: '{self.sheet_name}' sheet does not exist in the Excel file.", flush=True)
+            raise
 
-        # Define 시트로부터 Base Clock/Reset
+        # Base Clock/Reset은 Define 시트에서 직접 읽기 (수식 참조 문제 방지)
         base_clk, base_rst = _read_define_clk_rst(wb_w)
-        count_trig = base_clk
+        if not base_clk:
+            print("ERROR: Base Clock value is empty in Define sheet.", flush=True)
+            raise ValueError("Base Clock value is empty")
+        if not base_rst:
+            print("ERROR: Base Reset value is empty in Define sheet.", flush=True)
+            raise ValueError("Base Reset value is empty")
 
-        # Target Pulse 후보: i_hsync 포함(대소문자 무시)
+        # 모든 포트 수집
         all_ports: List[str] = []
         for it in (mod.get("inputs") or []):
             n = it.get("name")
@@ -193,39 +201,83 @@ class HSWPlugin(BaseAssertionPlugin):
             n = it.get("name")
             if n and n not in all_ports:
                 all_ports.append(n)
+
+        # Hsync Signal 확인 및 입력
+        hs_row, hs_col = _find_cell(ws_hsw, "Hsync Signal")
+        if hs_row is None:
+            print("ERROR: 'Hsync Signal' cell not found in HSW sheet.", flush=True)
+            raise ValueError("Hsync Signal cell not found")
+        
         hs_candidates = [n for n in all_ports if "i_hsync" in n.lower()]
         if not hs_candidates:
-            target_pulse = _pick_from(all_ports, "Select Target Pulse (no i_hsync found)", allow_custom=True)
+            print("ERROR: No port containing 'i_hsync' found in RTL.", flush=True)
+            raise ValueError("i_hsync port not found")
         elif len(hs_candidates) == 1:
-            target_pulse = hs_candidates[0]
+            hsync_signal = hs_candidates[0]
         else:
-            target_pulse = _pick_from(hs_candidates, "Select Target Pulse (matched i_hsync)", allow_custom=False)
+            hsync_signal = _pick_from(hs_candidates, "Select Hsync Signal (matched i_hsync)", allow_custom=False)
+        ws_hsw.cell(row=hs_row + 1, column=hs_col, value=hsync_signal)
 
-        # Expected Min/Max 입력
+        # Data Enable Signal 확인 및 입력
+        de_row, de_col = _find_cell(ws_hsw, "Data Enable Signal")
+        if de_row is None:
+            print("ERROR: 'Data Enable Signal' cell not found in HSW sheet.", flush=True)
+            raise ValueError("Data Enable Signal cell not found")
+        
+        de_candidates = [n for n in all_ports if "i_de" in n.lower()]
+        if not de_candidates:
+            print("ERROR: No port containing 'i_de' found in RTL.", flush=True)
+            raise ValueError("i_de port not found")
+        elif len(de_candidates) == 1:
+            data_enable_signal = de_candidates[0]
+        else:
+            data_enable_signal = _pick_from(de_candidates, "Select Data Enable Signal (matched i_de)", allow_custom=False)
+        ws_hsw.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
+
+        # Expected Min Value 확인 및 입력
+        min_row, min_col = _find_cell(ws_hsw, "Expected Min Value")
+        if min_row is None:
+            print("ERROR: 'Expected Min Value' cell not found in HSW sheet.", flush=True)
+            raise ValueError("Expected Min Value cell not found")
         exp_min = _pick_int("Enter Expected Min Value")
-        exp_max = _pick_int("Enter Expected Max Value")
+        ws_hsw.cell(row=min_row + 1, column=min_col, value=exp_min)
 
-        # 시트 기록
-        ws_w.cell(row=h_row + 1, column=h_col + 1, value=count_trig)
-        ws_w.cell(row=h_row + 2, column=h_col + 1, value=target_pulse)
-        ws_w.cell(row=h_row + 3, column=h_col + 1, value=exp_min)
-        ws_w.cell(row=h_row + 4, column=h_col + 1, value=exp_max)
+        # Expected Max Value 확인 및 입력 (Min보다 크거나 같아야 함)
+        max_row, max_col = _find_cell(ws_hsw, "Expected Max Value")
+        if max_row is None:
+            print("ERROR: 'Expected Max Value' cell not found in HSW sheet.", flush=True)
+            raise ValueError("Expected Max Value cell not found")
+        exp_max = _pick_int_with_validation("Enter Expected Max Value", min_val=int(exp_min))
+        ws_hsw.cell(row=max_row + 1, column=max_col, value=exp_max)
+
+        # HSW 시트의 Base Clock/Reset 셀에도 Define에서 읽은 값 기록 (수식이 아닌 실제 값)
+        clk_row, clk_col = _find_cell(ws_hsw, "Base Clock")
+        if clk_row:
+            ws_hsw.cell(row=clk_row, column=clk_col + 1, value=base_clk)
+        
+        rst_row, rst_col = _find_cell(ws_hsw, "Base Reset")
+        if rst_row:
+            ws_hsw.cell(row=rst_row, column=rst_col + 1, value=base_rst)
+
         wb_w.save(xls_path)
 
-        # 파싱 결과
+        # 포트 너비 추출
         w_clk = _port_width_token(mod, base_clk)
         w_rst = _port_width_token(mod, base_rst)
-        w_tp  = _port_width_token(mod, target_pulse)
+        w_hs = _port_width_token(mod, hsync_signal)
+        w_de = _port_width_token(mod, data_enable_signal)
+
         blocks = [{
             "Base Clock": base_clk,
             "Base Reset": base_rst,
-            "Count Trigger": count_trig,
-            "Target Pulse": target_pulse,
+            "Hsync Signal": hsync_signal,
+            "Data Enable Signal": data_enable_signal,
             "Expected Min Value": exp_min,
             "Expected Max Value": exp_max,
             "Base Clock Width": w_clk,
             "Base Reset Width": w_rst,
-            "Target Pulse Width": w_tp,
+            "Hsync Signal Width": w_hs,
+            "Data Enable Signal Width": w_de,
         }]
         return {"blocks": blocks}
 
@@ -233,46 +285,60 @@ class HSWPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No HSW assertions generated.\n", ""]
+        
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
-        target_pulse = b.get("Target Pulse", "") or "i_hsync"
+        hsync_signal = b.get("Hsync Signal", "") or "i_hsync"
+        data_enable_signal = b.get("Data Enable Signal", "") or "i_de"
         exp_min = b.get("Expected Min Value", "") or "0"
         exp_max = b.get("Expected Max Value", "") or "0"
         w_clk = b.get("Base Clock Width", "[0:0]")
         w_rst = b.get("Base Reset Width", "[0:0]")
-        w_tp  = b.get("Target Pulse Width", "[0:0]")
+        w_hs = b.get("Hsync Signal Width", "[0:0]")
+        w_de = b.get("Data Enable Signal Width", "[0:0]")
 
-        # 모듈 래퍼(빌더가 포트/본문 분리 집계)
+        # interface 코드 생성 (포트 없는 interface, 내부에 logic 선언)
         lines: List[str] = []
-        lines.append("module assertion_hsw")
-        lines.append("(")
-        lines.append(f"    {_fmt_input_decl(base_clk, w_clk)},")
-        lines.append(f"    {_fmt_input_decl(base_rst, w_rst)},")
-        lines.append(f"    {_fmt_input_decl(target_pulse, w_tp)}")
-        lines.append(");")
+        lines.append("`include \"uvm_macros.svh\"")
+        lines.append("import uvm_pkg::*;")
+        lines.append("")
+        lines.append("interface assertion_intf();")
+        lines.append("")
+        lines.append(f"logic {w_clk} {base_clk};")
+        lines.append(f"logic {w_rst} {base_rst};")
+        lines.append(f"logic {w_hs} {hsync_signal};")
+        lines.append(f"logic {w_de} {data_enable_signal};")
         lines.append("")
         lines.append("property p_hsw;")
         lines.append("    int value_count;")
         lines.append(f"    @(posedge {base_clk}) disable iff(!{base_rst})")
-        lines.append(f"    $rose({target_pulse}) |-> (1, value_count  = 0)")
-        lines.append(f"    ##1 ({target_pulse}, value_count = value_count + 1)[*0:$]")
-        lines.append(f"    ##1 (!{target_pulse}, value_count = value_count + 1)")
+        lines.append(f"    $rose({hsync_signal}) |-> (1, value_count  = 0)")
+        lines.append(f"    ##1 ({hsync_signal}, value_count = value_count + 1)[*0:$]")
+        lines.append(f"    ##1 (!{hsync_signal}, value_count = value_count + 1)")
         lines.append(f"    ##0 ({exp_min} <= value_count && value_count <= {exp_max});")
         lines.append("endproperty")
         lines.append("")
-        lines.append("assert property (p_hsw)  else $error(\"failed at %t\", $time);")
+        lines.append(f"assert property (p_hsw) else $error(\"failed at %t\", $time);")
         lines.append("")
-        lines.append("endmodule")
+        lines.append("endinterface")
         lines.append("")
         sv_text = "\n".join(lines)
 
-        # 인스턴스: 빌더가 헤더/선언 생성 → assign만 반환
+        # 인스턴스 파일 생성
         inst_lines: List[str] = []
-        inst_lines.append(f"assign u_assertion_gen.{base_clk} = top.dut.{base_clk};")
-        inst_lines.append(f"assign u_assertion_gen.{base_rst} = top.dut.{base_rst};")
-        inst_lines.append(f"assign u_assertion_gen.{target_pulse} = top.dut.{target_pulse};")
+        inst_lines.append("`include \"uvm_macros.svh\"")
+        inst_lines.append("import uvm_pkg::*;")
+        inst_lines.append("")
+        inst_lines.append("assertion_intf")
+        inst_lines.append("u_assertion_intf();")
+        inst_lines.append("")
+        inst_lines.append(f"assign u_assertion_intf.{base_clk} = top.dut.{base_clk};")
+        inst_lines.append(f"assign u_assertion_intf.{base_rst} = top.dut.{base_rst};")
+        inst_lines.append(f"assign u_assertion_intf.{hsync_signal} = top.dut.{hsync_signal};")
+        inst_lines.append(f"assign u_assertion_intf.{data_enable_signal} = top.dut.{data_enable_signal};")
         inst_text = "\n".join(inst_lines) + "\n"
+        
         return [sv_text, inst_text]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
