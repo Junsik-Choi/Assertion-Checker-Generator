@@ -26,6 +26,7 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
         from . import VFP # noqa: F401
         from . import VSW # noqa: F401
         from . import VBP # noqa: F401        
+        from . import VACT # noqa: F401        
     except Exception:
         pass
     return list(PLUGINS)
