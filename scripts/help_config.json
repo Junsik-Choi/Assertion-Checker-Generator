@@ -9,6 +9,8 @@
         { "cmd": "<number>", "example": "2", "desc": "Load previous session by its number", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "help | h", "example": "help", "desc": "Open/close help overlay (this)", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
         { "cmd": "quit | q", "example": "q", "desc": "Exit the TUI", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
+        { "cmd": "del ms <name>", "example": "del ms valid", "desc": "Delete MS signal", "cmd_color": "red", "example_color": "red", "desc_color": "white" },
+        { "cmd": "del assertion <#>", "example": "del assertion 3", "desc": "Delete assertion by index", "cmd_color": "red", "example_color": "red", "desc_color": "white" },
         { "cmd": "f <substr>", "example": "f den", "desc": "Filter ports or modules (contains)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "F", "example": "F", "desc": "Clear filter", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" },
         { "cmd": "n / N", "example": "n", "desc": "Next / previous page (wrap)", "cmd_color": "cyan", "example_color": "cyan", "desc_color": "white" }
@@ -20,6 +22,8 @@
       "items": [
         { "cmd": "ms name = expr", "example": "ms valid = (i1||i2)&&i3", "desc": "Create condition signal. '=' optional.", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
         { "cmd": "param name=val", "example": "param WIDTH=8", "desc": "Add/override module parameter", "cmd_color": "magenta", "example_color": "magenta", "desc_color": "white" },
+        { "cmd": "del ms <name>", "example": "del ms valid", "desc": "Delete MS signal by name", "cmd_color": "red", "example_color": "red", "desc_color": "white" },
+        { "cmd": "del assertion <#>", "example": "del assertion 3", "desc": "Delete assertion by index number", "cmd_color": "red", "example_color": "red", "desc_color": "white" },
         { "cmd": "───────────────", "example": "─────────────────────────", "desc": "─────────────────────────────────────────────", "cmd_color": "white", "example_color": "white", "desc_color": "white" },
         { "cmd": "INPUT signals", "example": "i1, i2, i3, ...", "desc": "Reference input port by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },
         { "cmd": "OUTPUT signals", "example": "o1, o2, o3, ...", "desc": "Reference output port by index", "cmd_color": "cyan", "example_color": "green", "desc_color": "white" },

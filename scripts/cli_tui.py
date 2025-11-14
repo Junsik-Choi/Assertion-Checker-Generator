@@ -412,6 +412,8 @@ class AppState:
     assertion_signal_list: List[Tuple[int, str, str, Dict[str, Any]]] = field(default_factory=list)  # (idx, name, type, port_dict)
     # New: Track when waiting for custom number input (for exp_cnt_val [0] option)
     assertion_waiting_custom_number: bool = False
+    # New: Track when waiting for custom expression input (for signal fields [0] option)
+    assertion_waiting_custom_expr: bool = False
     
     # File generation wizard state
     gen_wizard_active: bool = False
@@ -2818,6 +2820,14 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             _set_help_filter_cmd("ms")
             _set_error_message("Invalid input: name/expr missing")
             return "Invalid input. See ms help.", True
+        
+        # Check for duplicate MS signal name - if exists, we'll update it later
+        existing_ms_idx = None
+        for idx, cond in enumerate(state.conditions):
+            if cond.get("name", "") == name:
+                existing_ms_idx = idx
+                break
+        
         ok, err = _validate_condition_expr(expr, state)
         if not ok:
             _highlight_ms_help()
@@ -2876,19 +2886,30 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 # No operators or just comparison -> 1 bit
                 width = 1
         
-        # Store and refresh UI (show as name (Nbits))
-        state.conditions.append({"name": name, "expr": expr_cleaned, "width": width})
+        # Store or update MS signal
+        if existing_ms_idx is not None:
+            # Update existing MS signal
+            old_expr = state.conditions[existing_ms_idx].get('expr', '?')
+            old_width = state.conditions[existing_ms_idx].get('width', '?')
+            state.conditions[existing_ms_idx]['expr'] = expr_cleaned
+            state.conditions[existing_ms_idx]['width'] = width
+            action_msg = f"updated: {name} ({old_width}bits) -> ({width}bits)"
+        else:
+            # Add new MS signal
+            state.conditions.append({"name": name, "expr": expr_cleaned, "width": width})
+            action_msg = f"added: {name} ({width}bits)"
+        
         _save_session_snapshot(state)
         
         # Update Define sheet in session Excel
         try:
             if state.session_excel_path and state.session_excel_path.exists():
                 _update_define_sheet(state)
-                return f"✓ Condition added: {name} ({width}bits) - Define sheet updated", False
+                return f"✓ MS signal {action_msg} - Define sheet updated", False
         except Exception as e:
-            return f"✓ Condition added: {name} ({width}bits) - Define sheet update failed: {e}", False
+            return f"✓ MS signal {action_msg} - Define sheet update failed: {e}", False
         
-        return f"Condition added: {name} ({width}bits)", False
+        return f"MS signal {action_msg}", False
 
     if cmd == "param":
         # Syntax: param <name>=<default> or param <name> <default>
@@ -2923,12 +2944,26 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
             except ValueError:
                 default_val = default_str  # Keep as string
         
-        # Add to parameters
-        state.module_info.parameters.append({
-            'name': name,
-            'default': default_val,
-            'width': None
-        })
+        # Check for duplicate parameter - update if exists
+        existing_param = None
+        for idx, param in enumerate(state.module_info.parameters):
+            if param.get('name', '') == name:
+                existing_param = idx
+                break
+        
+        if existing_param is not None:
+            # Update existing parameter
+            old_val = state.module_info.parameters[existing_param].get('default', '?')
+            state.module_info.parameters[existing_param]['default'] = default_val
+            action_msg = f"updated from {old_val} to {default_val}"
+        else:
+            # Add new parameter
+            state.module_info.parameters.append({
+                'name': name,
+                'default': default_val,
+                'width': None
+            })
+            action_msg = f"added: {name}={default_val}"
         
         _save_session_snapshot(state)
         
@@ -2936,11 +2971,116 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
         try:
             if state.session_excel_path and state.session_excel_path.exists():
                 _update_define_sheet(state)
-                return f"✓ Parameter added: {name}={default_val} - Define sheet updated", False
+                return f"✓ Parameter {action_msg} - Define sheet updated", False
         except Exception as e:
-            return f"✓ Parameter added: {name}={default_val} - Define sheet update failed: {e}", False
+            return f"✓ Parameter {action_msg} - Define sheet update failed: {e}", False
         
-        return f"Parameter added: {name}={default_val}", False
+        return f"Parameter {action_msg}", False
+
+    if cmd == "del":
+        # Syntax: del ms <name> or del assertion <index>
+        if not args:
+            return "Usage: del ms <name> | del assertion <index>", False
+        
+        target_type = args[0].lower()
+        
+        if target_type == "ms":
+            # Delete MS signal: del ms <name>
+            if len(args) < 2:
+                return "Usage: del ms <name>", False
+            
+            signal_name = " ".join(args[1:]).strip()
+            
+            # Find and remove the MS signal
+            original_count = len(state.conditions)
+            state.conditions = [cond for cond in state.conditions if cond.get("name", "") != signal_name]
+            
+            if len(state.conditions) == original_count:
+                _set_error_message(f"MS signal '{signal_name}' not found")
+                return f"ERROR: MS signal '{signal_name}' not found", False
+            
+            _save_session_snapshot(state)
+            
+            # Update Define sheet in session Excel
+            try:
+                if state.session_excel_path and state.session_excel_path.exists():
+                    _update_define_sheet(state)
+                    return f"✓ MS signal '{signal_name}' deleted - Define sheet updated", False
+            except Exception as e:
+                return f"✓ MS signal '{signal_name}' deleted - Define sheet update failed: {e}", False
+            
+            return f"✓ MS signal '{signal_name}' deleted", False
+        
+        elif target_type == "assertion":
+            # Delete assertion: del assertion <index>
+            if len(args) < 2:
+                return "Usage: del assertion <index>", False
+            
+            try:
+                idx = int(args[1])
+            except ValueError:
+                return "ERROR: Index must be a number", False
+            
+            # Check if session Excel exists
+            if not state.session_excel_path or not state.session_excel_path.exists():
+                return "ERROR: No session Excel found. Create session first with 'new'", False
+            
+            try:
+                from openpyxl import load_workbook
+                
+                wb = load_workbook(state.session_excel_path)
+                
+                # Find all assertion sheets (numbered sheets like "1", "2", "3", etc.)
+                assertion_sheets = []
+                for sheet_name in wb.sheetnames:
+                    if sheet_name.isdigit():
+                        assertion_sheets.append((int(sheet_name), sheet_name))
+                
+                assertion_sheets.sort(key=lambda x: x[0])
+                
+                if not assertion_sheets:
+                    return "ERROR: No assertions found in session Excel", False
+                
+                # Check if index is valid
+                if idx < 1 or idx > len(assertion_sheets):
+                    return f"ERROR: Index out of range. Valid range: 1-{len(assertion_sheets)}", False
+                
+                # Get the sheet name to delete
+                sheet_num, sheet_name_to_delete = assertion_sheets[idx - 1]
+                
+                # Store assertion info for confirmation message
+                ws = wb[sheet_name_to_delete]
+                assertion_type = ws.cell(2, 2).value or "Unknown"
+                assertion_name = ws.cell(3, 2).value or "Unnamed"
+                
+                # Delete the sheet
+                del wb[sheet_name_to_delete]
+                
+                # Renumber remaining sheets
+                remaining_sheets = [(int(name), name) for name in wb.sheetnames if name.isdigit()]
+                remaining_sheets.sort(key=lambda x: x[0])
+                
+                # Renumber sheets sequentially
+                for new_idx, (old_num, old_name) in enumerate(remaining_sheets, start=1):
+                    if old_num > sheet_num:
+                        ws = wb[old_name]
+                        ws.title = str(new_idx)
+                
+                # Save the workbook
+                wb.save(state.session_excel_path)
+                wb.close()
+                
+                _save_session_snapshot(state)
+                
+                return f"✓ Assertion #{idx} deleted ({assertion_type}: {assertion_name})", False
+                
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                return f"ERROR: Failed to delete assertion: {e}\n{tb[:200]}", False
+        
+        else:
+            return f"Unknown delete target: {target_type}. Use 'ms' or 'assertion'", False
 
     if cmd == "f" or raw_cmd == "F":
         # f <substr> to set filter; F (upper) or 'f' without args to clear
@@ -4404,7 +4544,12 @@ def _validate_condition_expr(expr: str, state: AppState) -> Tuple[bool, str]:
             if _is_identifier(tok):
                 name = tok
                 if name not in refs:
-                    return False, f"unknown signal '{name}'"
+                    # Provide more helpful error message
+                    available_signals = list(refs.keys())[:10]  # Show first 10 signals as hint
+                    signal_hint = ", ".join(available_signals)
+                    if len(refs) > 10:
+                        signal_hint += f", ... (total {len(refs)} signals available)"
+                    return False, f"Signal '{name}' not found. Available signals: {signal_hint}"
                 # Optional selection: [ ... ]
                 j = i + 1
                 if j < len(tokens) and tokens[j] == "[":
@@ -4412,17 +4557,17 @@ def _validate_condition_expr(expr: str, state: AppState) -> Tuple[bool, str]:
                     while k < len(tokens) and tokens[k] != "]":
                         k += 1
                     if k >= len(tokens):
-                        return False, "unmatched ']'"
+                        return False, "Unmatched ']' in bit selection"
                     i = k + 1
                 else:
                     i = j
                 continue
-            return False, f"unexpected token '{tok}'"
+            return False, f"Unexpected token '{tok}'"
         if stack:
-            return False, "unclosed '('"
+            return False, "Unclosed '(' parenthesis"
         return True, ""
     except Exception as e:
-        return False, str(e)
+        return False, f"Syntax error: {str(e)}"
 
 
 # ---------------------- Path completion utilities --------------------------
@@ -4554,6 +4699,14 @@ def _get_plugin_description(plugin_name: str) -> str:
         'handshake': 'Generate 2-phase or 4-phase handshake protocol assertions',
         'sequence': 'Generate temporal sequence assertions',
         'pulseWidth': 'Verify pulse width constraints within min/max clock cycle range',
+        'hact': 'Horizontal Active Pixel Count - Verify active pixels per line within min/max range',
+        'hsw': 'Horizontal Sync Width - Verify horizontal sync pulse width',
+        'hbp': 'Horizontal Back Porch - Verify timing between hsync and data enable start',
+        'hfp': 'Horizontal Front Porch - Verify timing between data enable end and hsync',
+        'vbp': 'Vertical Back Porch - Verify lines between vsync and first active line',
+        'vfp': 'Vertical Front Porch - Verify lines between last active line and vsync',
+        'vsw': 'Vertical Sync Width - Verify vertical sync pulse width in lines',
+        'delayCondition': 'Generate delay-based condition assertions with configurable timing',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -4730,6 +4883,272 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'title': 'Maximum Pulse Width',
                 'description': 'Enter maximum width (number or parameter like p1, p2)\nExample: 20 or MAX_COUNT',
                 'example': '20 or MAX_COUNT',
+                'required': True,
+            },
+        ],
+        'hact': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal (typically i_hsync)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal (typically i_de)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 1920',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 1920',
+                'required': True,
+            },
+        ],
+        'hsw': [
+            {
+                'name': 'count_trigger',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Count Trigger',
+                'description': 'Select the signal that triggers counting',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'target_pulse',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Target Pulse',
+                'description': 'Select the pulse signal to monitor',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 100',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 200',
+                'required': True,
+            },
+        ],
+        'hbp': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 50',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 100',
+                'required': True,
+            },
+        ],
+        'hfp': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 20',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 50',
+                'required': True,
+            },
+        ],
+        'vbp': [
+            {
+                'name': 'vsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Vsync Signal',
+                'description': 'Select the vertical sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 10',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 20',
+                'required': True,
+            },
+        ],
+        'vfp': [
+            {
+                'name': 'vsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Vsync Signal',
+                'description': 'Select the vertical sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 5',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 15',
+                'required': True,
+            },
+        ],
+        'vsw': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal (for line counting)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'vsync_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Vsync Signal',
+                'description': 'Select the vertical sync signal to monitor',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 2',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 5',
                 'required': True,
             },
         ],
@@ -5013,14 +5432,13 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                     all_signals = []  # (idx, name, type, port_dict)
                     idx = 0
                     
-                    # Special option for reset_con field: "Only Base Reset"
-                    if field_name == 'reset_con':
-                        all_signals.append((idx, '<Only Base Reset>', 'special', {}))
-                        idx += 1
-                    
                     # Special option for exp_cnt_val field: "Custom Number Input"
                     if field_name == 'exp_cnt_val':
                         all_signals.append((idx, '<Custom Number Input>', 'special', {}))
+                        idx += 1
+                    # Special option [0] for ALL signal fields: "Custom Expression"
+                    else:
+                        all_signals.append((idx, '<Custom Expression (e.g., "(i_sram_rd1 && i_sram_rd2) | i_sram_rd3")>', 'special', {}))
                         idx += 1
                     
                     # Input signals - ALL of them
@@ -5035,6 +5453,13 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                         for out in state.module_info.outputs:
                             out_name = out.get('name', '')
                             all_signals.append((idx, out_name, 'output', out))
+                            idx += 1
+                    
+                    # Parameters - ALL of them
+                    if state.module_info and state.module_info.parameters:
+                        for param in state.module_info.parameters:
+                            param_name = param.get('name', '')
+                            all_signals.append((idx, param_name, 'parameter', param))
                             idx += 1
                     
                     # MS Signals (user-defined) - ALL of them
@@ -5078,6 +5503,13 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                             elif sig_type == 'output':
                                 color = _PAIR_BY_NAME.get("yellow", 0)
                                 prefix = "[O]"
+                            elif sig_type == 'parameter':
+                                color = _PAIR_BY_NAME.get("blue", 0)
+                                prefix = "[P]"
+                                # Add parameter value if available
+                                param_val = port_dict.get('default', '')
+                                if param_val:
+                                    name = f"{name} (={param_val})"
                             elif sig_type == 'special':
                                 color = _PAIR_BY_NAME.get("green", 0)
                                 prefix = "[*]"
@@ -5137,17 +5569,16 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
         
         if state.assertion_waiting_custom_number:
             inst = "Enter number value | 'q' to cancel"
+        elif state.assertion_waiting_custom_expr:
+            inst = "Enter expression (e.g., 'i1 & i2', 'o1 | rst', '(a & b) | c') | 'q' to cancel"
         elif current_field['type'] == 'choice':
             inst = "Enter [1-9] to select | 'prev'/'p' for previous | 'q' to cancel"
         elif current_field['type'] == 'signal':
             # Special instruction for exp_cnt_val field
             if field_name == 'exp_cnt_val':
                 inst = "Enter [0-N], number, or expression (e.g. 'i1 - 1') | n/N page | 'prev'/'p' | 'q'"
-            # Special instruction for reset_con field
-            elif field_name == 'reset_con':
-                inst = "Enter [0-N] (0=Only Base Reset) | n/N page | 'prev'/'p' for previous | 'q' to cancel"
             else:
-                inst = "Enter signal [1-N], number, or expression (e.g. 'i1 - 1') | n/N page | 'prev'/'p' | 'q'"
+                inst = "Enter [0] custom expr, [1-N] signal | n/N page | 'prev'/'p' | 'q'"
         else:  # string
             inst = "Enter value | 'prev'/'p' for previous | 'q' to cancel"
         
@@ -5605,6 +6036,139 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
         lines.append(f"  FAIL: pulse_width is outside {min_width}-{max_width} range")
         lines.append("")
     
+    elif plugin_name == 'hact':
+        hsync = data.get('hsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("HORIZONTAL ACTIVE PIXEL COUNT (HACT)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Pixels: {min_val}")
+        lines.append(f"Expected Max Pixels: {max_val}")
+        lines.append("")
+        lines.append("Verifies active pixel count per horizontal line")
+        lines.append(f"Count range: {min_val} to {max_val} pixels")
+        lines.append("")
+    
+    elif plugin_name == 'hsw':
+        count_trigger = data.get('count_trigger', '?')
+        target = data.get('target_pulse', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("HORIZONTAL SYNC WIDTH (HSW)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Count Trigger: {count_trigger}")
+        lines.append(f"Target Pulse: {target}")
+        lines.append(f"Expected Min Width: {min_val}")
+        lines.append(f"Expected Max Width: {max_val}")
+        lines.append("")
+        lines.append("Verifies horizontal sync pulse width")
+        lines.append(f"Width range: {min_val} to {max_val} cycles")
+        lines.append("")
+    
+    elif plugin_name == 'hbp':
+        hsync = data.get('hsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("HORIZONTAL BACK PORCH (HBP)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Cycles: {min_val}")
+        lines.append(f"Expected Max Cycles: {max_val}")
+        lines.append("")
+        lines.append("Verifies back porch timing (hsync to data enable)")
+        lines.append(f"Cycles range: {min_val} to {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'hfp':
+        hsync = data.get('hsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("HORIZONTAL FRONT PORCH (HFP)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Cycles: {min_val}")
+        lines.append(f"Expected Max Cycles: {max_val}")
+        lines.append("")
+        lines.append("Verifies front porch timing (data enable end to hsync)")
+        lines.append(f"Cycles range: {min_val} to {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'vbp':
+        vsync = data.get('vsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("VERTICAL BACK PORCH (VBP)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Vsync Signal: {vsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Lines: {min_val}")
+        lines.append(f"Expected Max Lines: {max_val}")
+        lines.append("")
+        lines.append("Verifies vertical back porch (vsync to first active line)")
+        lines.append(f"Lines range: {min_val} to {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'vfp':
+        vsync = data.get('vsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("VERTICAL FRONT PORCH (VFP)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Vsync Signal: {vsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Lines: {min_val}")
+        lines.append(f"Expected Max Lines: {max_val}")
+        lines.append("")
+        lines.append("Verifies vertical front porch (last active line to vsync)")
+        lines.append(f"Lines range: {min_val} to {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'vsw':
+        hsync = data.get('hsync_signal', '?')
+        vsync = data.get('vsync_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("VERTICAL SYNC WIDTH (VSW)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync} (for line counting)")
+        lines.append(f"Vsync Signal: {vsync}")
+        lines.append(f"Expected Min Lines: {min_val}")
+        lines.append(f"Expected Max Lines: {max_val}")
+        lines.append("")
+        lines.append("Verifies vertical sync pulse width in lines")
+        lines.append(f"Lines range: {min_val} to {max_val}")
+        lines.append("")
+    
     else:
         lines.append(f"Assertion Type: {plugin_name}")
         lines.append("Configuration:")
@@ -5659,6 +6223,150 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
         pass
+
+
+def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
+    """Generate interface content for preview (simplified version)."""
+    try:
+        from pathlib import Path
+        from assertions import get_registered_plugins  # type: ignore
+        
+        # Build common context for plugins
+        common_context = {
+            "module_info": {
+                "module": state.module_info.module,
+                "clocks": state.module_info.clocks,
+                "resets": state.module_info.resets,
+                "inputs": state.module_info.inputs,
+                "outputs": state.module_info.outputs,
+                "inouts": state.module_info.inouts,
+                "parameters": state.module_info.parameters,
+                "conditions": state.conditions,
+            },
+            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
+            "output_dir": "",
+            "session_dir": "",
+            "config": {
+                "auto_define_fill": False,
+                "enabled_plugins": None,
+                "emit_json": False,
+            },
+        }
+        
+        # Parse all sheets and generate SV using plugins
+        all_sv_snippets = []
+        
+        if include_asserts and state.session_excel_path and state.session_excel_path.exists():
+            plugin_types = get_registered_plugins()
+            
+            for pcls in plugin_types:
+                try:
+                    parsed = pcls().parse(state.session_excel_path)
+                    if not parsed:
+                        continue
+                    
+                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
+                    if not blocks and isinstance(parsed, dict):
+                        if parsed.get("sets"):
+                            blocks = parsed.get("sets")
+                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
+                            blocks = [parsed]
+                    
+                    if not blocks:
+                        continue
+                    
+                    ret = pcls().generate_sv(parsed, common_context)
+                    
+                    sv_txt = ""
+                    if isinstance(ret, dict):
+                        sv_txt = str(ret.get("sv", "") or "")
+                    elif isinstance(ret, (list, tuple)) and len(ret) >= 1:
+                        sv_txt = str(ret[0])
+                    elif isinstance(ret, str):
+                        sv_txt = ret
+                    
+                    if sv_txt.strip():
+                        all_sv_snippets.append((pcls.plugin_name, sv_txt))
+                        
+                except Exception:
+                    continue
+        
+        # Generate interface from plugins
+        return _generate_interface_from_plugins(state, all_sv_snippets, include_signals)
+        
+    except Exception as e:
+        return f"// Error generating interface preview: {e}\n"
+
+
+def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
+    """Generate instance content for preview (simplified version)."""
+    try:
+        from pathlib import Path
+        from assertions import get_registered_plugins  # type: ignore
+        
+        # Build common context for plugins
+        common_context = {
+            "module_info": {
+                "module": state.module_info.module,
+                "clocks": state.module_info.clocks,
+                "resets": state.module_info.resets,
+                "inputs": state.module_info.inputs,
+                "outputs": state.module_info.outputs,
+                "inouts": state.module_info.inouts,
+                "parameters": state.module_info.parameters,
+                "conditions": state.conditions,
+            },
+            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
+            "output_dir": "",
+            "session_dir": "",
+            "config": {
+                "auto_define_fill": False,
+                "enabled_plugins": None,
+                "emit_json": False,
+            },
+        }
+        
+        # Parse all sheets and generate instance code using plugins
+        all_inst_snippets = []
+        
+        if include_asserts and state.session_excel_path and state.session_excel_path.exists():
+            plugin_types = get_registered_plugins()
+            
+            for pcls in plugin_types:
+                try:
+                    parsed = pcls().parse(state.session_excel_path)
+                    if not parsed:
+                        continue
+                    
+                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
+                    if not blocks and isinstance(parsed, dict):
+                        if parsed.get("sets"):
+                            blocks = parsed.get("sets")
+                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
+                            blocks = [parsed]
+                    
+                    if not blocks:
+                        continue
+                    
+                    ret = pcls().generate_sv(parsed, common_context)
+                    
+                    inst_txt = ""
+                    if isinstance(ret, dict):
+                        inst_txt = str(ret.get("sv_inst", "") or "")
+                    elif isinstance(ret, (list, tuple)) and len(ret) >= 2:
+                        inst_txt = str(ret[1])
+                    
+                    if inst_txt.strip():
+                        all_inst_snippets.append((pcls.plugin_name, inst_txt))
+                        
+                except Exception:
+                    continue
+        
+        # Generate instance from plugins
+        return _generate_instance_from_plugins(state, all_inst_snippets, include_signals)
+        
+    except Exception as e:
+        return f"// Error generating instance preview: {e}\n"
 
 
 def _generate_preview_content(state: AppState) -> List[str]:
@@ -6027,6 +6735,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         state.assertion_signal_ports.clear()
         state.assertion_current_field_idx = 0
         state.assertion_waiting_custom_number = False
+        state.assertion_waiting_custom_expr = False
         return "Cancelled", True
     
     # Stage 1: Select Type
@@ -6090,6 +6799,53 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                     return "\nAll steps complete. Review and press Enter to create.", False
             
             return "Error processing custom number", False
+        
+        # Special handling: If waiting for custom expression input (signal field [0] selected)
+        if state.assertion_waiting_custom_expr:
+            # Allow empty to cancel
+            if cmd == '':
+                return "Please enter an expression or 'q' to cancel", False
+            
+            # Validate the expression using existing validation
+            is_valid, err_msg = _validate_condition_expr(cmd, state)
+            if not is_valid:
+                # Set error message in red color
+                _set_error_message(f"Error: {err_msg}")
+                return "Invalid expression. Please re-enter:", False
+            
+            # Clear any previous error message on success
+            _set_error_message("")
+            
+            # Get current field name to store the expression
+            plugins = _get_assertion_plugins_info()
+            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+            if plugin:
+                all_fields = plugin.get('fields', [])
+                fields = _get_visible_fields(all_fields, state.assertion_input_data)
+                
+                if state.assertion_current_field_idx < len(fields):
+                    current_field = fields[state.assertion_current_field_idx]
+                    field_name = current_field['name']
+                    
+                    # Save the custom expression
+                    state.assertion_input_data[field_name] = cmd
+                    state.assertion_signal_ports[field_name] = {}  # No single port for expression
+                    state.assertion_waiting_custom_expr = False
+                    
+                    # Auto-advance to next field or confirmation
+                    if state.assertion_current_field_idx < len(fields) - 1:
+                        state.assertion_current_field_idx += 1
+                        next_field = fields[state.assertion_current_field_idx]
+                        step = state.assertion_current_field_idx + 1
+                        msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                        msg += next_field.get('description', '')
+                        return msg, False
+                    else:
+                        # All fields done, move to confirm
+                        state.assertion_wizard_stage = 'confirm'
+                        return "\nAll steps complete. Review and press Enter to create.", False
+            
+            return "Error processing custom expression", False
         
         plugins = _get_assertion_plugins_info()
         plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
@@ -6215,10 +6971,17 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 # This could be: [1] signal index, or plain number like "5"
                 idx = int(cmd)
                 
-                # Special handling for exp_cnt_val field: [0] = Custom Number Input
-                if field_name == 'exp_cnt_val' and idx == 0:
-                    state.assertion_waiting_custom_number = True
-                    return "Enter custom number value for expected count:", False
+                # Special handling for fields that expect numbers: [0] = Custom Number/Expression Input
+                # exp_cnt_val, expected_min_value, expected_max_value use custom number/expression
+                if field_name in ('exp_cnt_val', 'expected_min_value', 'expected_max_value') and idx == 0:
+                    state.assertion_waiting_custom_expr = True
+                    return "Enter custom value (number, parameter name, or expression like 'PARAM+10'):", False
+                
+                # Special handling for ALL other signal fields: [0] = Custom Expression Input
+                if field_name not in ('exp_cnt_val', 'expected_min_value', 'expected_max_value') and idx == 0:
+                    _set_error_message("")  # Clear any previous error
+                    state.assertion_waiting_custom_expr = True
+                    return "Enter custom expression using actual signal names (e.g., '(i_sram_rd1 && i_sram_rd2) | i_sram_rd3'):", False
                 
                 # Check if this index exists in signal map (small number = index)
                 # If index >= 100, likely a plain number value
@@ -6313,6 +7076,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             state.assertion_signal_ports.clear()
             state.assertion_current_field_idx = 0
             state.assertion_waiting_custom_number = False
+            state.assertion_waiting_custom_expr = False
             return result, True
         
         elif cmd in ('prev', 'p', 'back', 'b'):
