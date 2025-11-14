@@ -125,15 +125,6 @@ def _fmt_input_decl(sig: str, width_tok: str) -> str:
     tok = (width_tok or "").strip() or "[0:0]"
     return f"input logic {tok} {sig}"
 
-# ===== HBP 시트 처리 =====
-def _ensure_hbp_layout(ws) -> Tuple[int, int]:
-    h_row, h_col = _find_cell(ws, "HBP")
-    if h_row is None:
-        h_row, h_col = 1, 1
-        ws.cell(row=h_row, column=h_col, value="HBP")
-    # 레이블은 이미 엑셀에 있다고 가정하고 자동 생성하지 않음
-    return h_row, h_col
-
 def _read_define_clk_rst(wb) -> Tuple[str, str]:
     try:
         ws = _get_sheet_ci(wb, "Define")
@@ -159,6 +150,21 @@ def _pick_int(title: str) -> str:
             return s
         print("Please enter an integer.", flush=True)
 
+def _pick_int_with_validation(title: str, min_val: Optional[int] = None) -> str:
+    """정수를 입력받되, min_val이 주어지면 그보다 크거나 같은지 검증"""
+    while True:
+        try:
+            s = input(f"{title} (integer) > ").strip()
+        except EOFError:
+            return "0"
+        if s.lstrip("-").isdigit():
+            val = int(s)
+            if min_val is not None and val < min_val:
+                print(f"Value must be >= {min_val}. Try again.", flush=True)
+                continue
+            return s
+        print("Please enter an integer.", flush=True)
+
 # ===== 플러그인 =====
 @register
 class HBPPlugin(BaseAssertionPlugin):
@@ -169,18 +175,23 @@ class HBPPlugin(BaseAssertionPlugin):
         mod = _load_module_define(Path(xls_path))
         wb_w = load_workbook(xls_path)
 
-        # HBP 시트 확보 및 레이아웃
+        # HBP 시트 확인
         try:
-            ws_w = _get_sheet_ci(wb_w, self.sheet_name)
+            ws_hbp = _get_sheet_ci(wb_w, self.sheet_name)
         except KeyError:
-            ws_w = wb_w.create_sheet(title=self.sheet_name)
-        h_row, h_col = _ensure_hbp_layout(ws_w)
+            print(f"ERROR: '{self.sheet_name}' sheet does not exist in the Excel file.", flush=True)
+            raise
 
-        # Define 시트로부터 Base Clock/Reset
+        # Base Clock/Reset은 Define 시트에서 직접 읽기 (수식 참조 문제 방지)
         base_clk, base_rst = _read_define_clk_rst(wb_w)
-        count_trig = base_clk
+        if not base_clk:
+            print("ERROR: Base Clock value is empty in Define sheet.", flush=True)
+            raise ValueError("Base Clock value is empty")
+        if not base_rst:
+            print("ERROR: Base Reset value is empty in Define sheet.", flush=True)
+            raise ValueError("Base Reset value is empty")
 
-        # Target Pulse 후보: i_hsync 포함(대소문자 무시)
+        # 모든 포트 수집
         all_ports: List[str] = []
         for it in (mod.get("inputs") or []):
             n = it.get("name")
@@ -190,66 +201,101 @@ class HBPPlugin(BaseAssertionPlugin):
             n = it.get("name")
             if n and n not in all_ports:
                 all_ports.append(n)
+
+        # Hsync Signal 확인 및 입력
+        hs_row, hs_col = _find_cell(ws_hbp, "Hsync Signal")
+        if hs_row is None:
+            print("ERROR: 'Hsync Signal' cell not found in HBP sheet.", flush=True)
+            raise ValueError("Hsync Signal cell not found")
+        
         hs_candidates = [n for n in all_ports if "i_hsync" in n.lower()]
         if not hs_candidates:
-            target_pulse = _pick_from(all_ports, "Select Target Pulse (no i_hsync found)", allow_custom=True)
+            print("ERROR: No port containing 'i_hsync' found in RTL.", flush=True)
+            raise ValueError("i_hsync port not found")
         elif len(hs_candidates) == 1:
-            target_pulse = hs_candidates[0]
+            hsync_signal = hs_candidates[0]
         else:
-            target_pulse = _pick_from(hs_candidates, "Select Target Pulse (matched i_hsync)", allow_custom=False)
+            hsync_signal = _pick_from(hs_candidates, "Select Hsync Signal (matched i_hsync)", allow_custom=False)
+        ws_hbp.cell(row=hs_row + 1, column=hs_col, value=hsync_signal)
 
-        # Data Enable Signal 후보: i_de 포함(대소문자 무시)
+        # Vsync Signal 확인 및 입력
+        vs_row, vs_col = _find_cell(ws_hbp, "Vsync Signal")
+        if vs_row is None:
+            print("ERROR: 'Vsync Signal' cell not found in HBP sheet.", flush=True)
+            raise ValueError("Vsync Signal cell not found")
+        
+        vs_candidates = [n for n in all_ports if "i_vsync" in n.lower()]
+        if not vs_candidates:
+            print("ERROR: No port containing 'i_vsync' found in RTL.", flush=True)
+            raise ValueError("i_vsync port not found")
+        elif len(vs_candidates) == 1:
+            vsync_signal = vs_candidates[0]
+        else:
+            vsync_signal = _pick_from(vs_candidates, "Select Vsync Signal (matched i_vsync)", allow_custom=False)
+        ws_hbp.cell(row=vs_row + 1, column=vs_col, value=vsync_signal)
+
+        # Data Enable Signal 확인 및 입력
+        de_row, de_col = _find_cell(ws_hbp, "Data Enable Signal")
+        if de_row is None:
+            print("ERROR: 'Data Enable Signal' cell not found in HBP sheet.", flush=True)
+            raise ValueError("Data Enable Signal cell not found")
+        
         de_candidates = [n for n in all_ports if "i_de" in n.lower()]
         if not de_candidates:
-            data_enable_signal = _pick_from(all_ports, "Select Data Enable Signal (no i_de found)", allow_custom=True)
+            print("ERROR: No port containing 'i_de' found in RTL.", flush=True)
+            raise ValueError("i_de port not found")
         elif len(de_candidates) == 1:
             data_enable_signal = de_candidates[0]
         else:
             data_enable_signal = _pick_from(de_candidates, "Select Data Enable Signal (matched i_de)", allow_custom=False)
+        ws_hbp.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
 
-        # Expected Min/Max 입력
+        # Expected Min Value 확인 및 입력
+        min_row, min_col = _find_cell(ws_hbp, "Expected Min Value")
+        if min_row is None:
+            print("ERROR: 'Expected Min Value' cell not found in HBP sheet.", flush=True)
+            raise ValueError("Expected Min Value cell not found")
         exp_min = _pick_int("Enter Expected Min Value")
-        exp_max = _pick_int("Enter Expected Max Value")
+        ws_hbp.cell(row=min_row + 1, column=min_col, value=exp_min)
 
-        # 시트 기록: 각 레이블 셀을 찾아서 그 다음 행에 값 입력
-        ct_row, ct_col = _find_cell(ws_w, "Count Trigger")
-        if ct_row:
-            ws_w.cell(row=ct_row + 1, column=ct_col, value=count_trig)
+        # Expected Max Value 확인 및 입력 (Min보다 크거나 같아야 함)
+        max_row, max_col = _find_cell(ws_hbp, "Expected Max Value")
+        if max_row is None:
+            print("ERROR: 'Expected Max Value' cell not found in HBP sheet.", flush=True)
+            raise ValueError("Expected Max Value cell not found")
+        exp_max = _pick_int_with_validation("Enter Expected Max Value", min_val=int(exp_min))
+        ws_hbp.cell(row=max_row + 1, column=max_col, value=exp_max)
+
+        # HBP 시트의 Base Clock/Reset 셀에도 Define에서 읽은 값 기록 (수식이 아닌 실제 값)
+        clk_row, clk_col = _find_cell(ws_hbp, "Base Clock")
+        if clk_row:
+            ws_hbp.cell(row=clk_row, column=clk_col + 1, value=base_clk)
         
-        tp_row, tp_col = _find_cell(ws_w, "Target Pulse")
-        if tp_row:
-            ws_w.cell(row=tp_row + 1, column=tp_col, value=target_pulse)
-        
-        de_row, de_col = _find_cell(ws_w, "Data Enable Signal")
-        if de_row:
-            ws_w.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
-        
-        min_row, min_col = _find_cell(ws_w, "Expected Min Value")
-        if min_row:
-            ws_w.cell(row=min_row + 1, column=min_col, value=exp_min)
-        
-        max_row, max_col = _find_cell(ws_w, "Expected Max Value")
-        if max_row:
-            ws_w.cell(row=max_row + 1, column=max_col, value=exp_max)
-        
+        rst_row, rst_col = _find_cell(ws_hbp, "Base Reset")
+        if rst_row:
+            ws_hbp.cell(row=rst_row, column=rst_col + 1, value=base_rst)
+
         wb_w.save(xls_path)
 
-        # 파싱 결과
+        # 포트 너비 추출
         w_clk = _port_width_token(mod, base_clk)
         w_rst = _port_width_token(mod, base_rst)
-        w_tp  = _port_width_token(mod, target_pulse)
-        w_de  = _port_width_token(mod, data_enable_signal)
+        w_hs = _port_width_token(mod, hsync_signal)
+        w_vs = _port_width_token(mod, vsync_signal)
+        w_de = _port_width_token(mod, data_enable_signal)
+
         blocks = [{
             "Base Clock": base_clk,
             "Base Reset": base_rst,
-            "Count Trigger": count_trig,
-            "Target Pulse": target_pulse,
+            "Hsync Signal": hsync_signal,
+            "Vsync Signal": vsync_signal,
             "Data Enable Signal": data_enable_signal,
             "Expected Min Value": exp_min,
             "Expected Max Value": exp_max,
             "Base Clock Width": w_clk,
             "Base Reset Width": w_rst,
-            "Target Pulse Width": w_tp,
+            "Hsync Signal Width": w_hs,
+            "Vsync Signal Width": w_vs,
             "Data Enable Signal Width": w_de,
         }]
         return {"blocks": blocks}
@@ -258,50 +304,64 @@ class HBPPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No HBP assertions generated.\n", ""]
+        
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
-        target_pulse = b.get("Target Pulse", "") or "i_hsync"
+        hsync_signal = b.get("Hsync Signal", "") or "i_hsync"
+        vsync_signal = b.get("Vsync Signal", "") or "i_vsync"
         data_enable_signal = b.get("Data Enable Signal", "") or "i_de"
         exp_min = b.get("Expected Min Value", "") or "0"
         exp_max = b.get("Expected Max Value", "") or "0"
         w_clk = b.get("Base Clock Width", "[0:0]")
         w_rst = b.get("Base Reset Width", "[0:0]")
-        w_tp  = b.get("Target Pulse Width", "[0:0]")
-        w_de  = b.get("Data Enable Signal Width", "[0:0]")
+        w_hs = b.get("Hsync Signal Width", "[0:0]")
+        w_vs = b.get("Vsync Signal Width", "[0:0]")
+        w_de = b.get("Data Enable Signal Width", "[0:0]")
 
-        # 모듈 래퍼(빌더가 포트/본문 분리 집계)
+        # interface 코드 생성 (포트 없는 interface, 내부에 logic 선언)
         lines: List[str] = []
-        lines.append("interface assertion_hbp")
-        lines.append("(")
-        lines.append(f"    {_fmt_input_decl(base_clk, w_clk)},")
-        lines.append(f"    {_fmt_input_decl(base_rst, w_rst)},")
-        lines.append(f"    {_fmt_input_decl(target_pulse, w_tp)},")
-        lines.append(f"    {_fmt_input_decl(data_enable_signal, w_de)}")
-        lines.append(");")
+        lines.append("`include \"uvm_macros.svh\"")
+        lines.append("import uvm_pkg::*;")
+        lines.append("")
+        lines.append("interface assertion_intf();")
+        lines.append("")
+        lines.append(f"logic {w_clk} {base_clk};")
+        lines.append(f"logic {w_rst} {base_rst};")
+        lines.append(f"logic {w_hs} {hsync_signal};")
+        lines.append(f"logic {w_vs} {vsync_signal};")
+        lines.append(f"logic {w_de} {data_enable_signal};")
         lines.append("")
         lines.append("property p_hbp;")
         lines.append("    int value_count;")
         lines.append(f"    @(posedge {base_clk}) disable iff(!{base_rst})")
-        lines.append(f"    $fell({target_pulse}) |-> (1, value_count  = 0)")
+        lines.append(f"    $fell({hsync_signal}) |-> (1, value_count  = 0)")
         lines.append(f"    ##1 ({data_enable_signal}, value_count = value_count + 1)[*0:$]")
         lines.append(f"    ##1 (!{data_enable_signal}, value_count = value_count + 1)")
         lines.append(f"    ##0 ({exp_min} <= value_count && value_count <= {exp_max});")
         lines.append("endproperty")
         lines.append("")
-        lines.append("assert property (p_hbp)  else $error(\"failed at %t\", $time);")
+        lines.append(f"assert property (p_hbp) else $error(\"failed at %t\", $time);")
         lines.append("")
         lines.append("endinterface")
         lines.append("")
         sv_text = "\n".join(lines)
 
-        # 인스턴스: 빌더가 헤더/선언 생성 → assign만 반환
+        # 인스턴스 파일 생성
         inst_lines: List[str] = []
-        inst_lines.append(f"assign u_assertion_inst.{base_clk} = top.dut.{base_clk};")
-        inst_lines.append(f"assign u_assertion_inst.{base_rst} = top.dut.{base_rst};")
-        inst_lines.append(f"assign u_assertion_inst.{target_pulse} = top.dut.{target_pulse};")
-        inst_lines.append(f"assign u_assertion_inst.{data_enable_signal} = top.dut.{data_enable_signal};")
+        inst_lines.append("`include \"uvm_macros.svh\"")
+        inst_lines.append("import uvm_pkg::*;")
+        inst_lines.append("")
+        inst_lines.append("assertion_intf")
+        inst_lines.append("u_assertion_intf();")
+        inst_lines.append("")
+        inst_lines.append(f"assign u_assertion_intf.{base_clk} = top.dut.{base_clk};")
+        inst_lines.append(f"assign u_assertion_intf.{base_rst} = top.dut.{base_rst};")
+        inst_lines.append(f"assign u_assertion_intf.{hsync_signal} = top.dut.{hsync_signal};")
+        inst_lines.append(f"assign u_assertion_intf.{vsync_signal} = top.dut.{vsync_signal};")
+        inst_lines.append(f"assign u_assertion_intf.{data_enable_signal} = top.dut.{data_enable_signal};")
         inst_text = "\n".join(inst_lines) + "\n"
+        
         return [sv_text, inst_text]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
