@@ -259,17 +259,13 @@
     {
       "name": "SUM_WIDTH",
       "default": "WEIGHT_WIDTH + DATA_WIDTH"
-    },
-    {
-      "name": "VBLANK",
-      "default": 12,
-      "width": null
-    },
-    {
-      "name": "HBLANK",
-      "default": 16,
-      "width": null
     }
   ],
-  "conditions": []
+  "conditions": [
+    {
+      "name": "i_enable",
+      "expr": "i_blur_mode_cap && i_den",
+      "width": 1
+    }
+  ]
 }
