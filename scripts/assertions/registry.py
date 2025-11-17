@@ -28,6 +28,7 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
         from . import VACT # noqa: F401     
         from . import VFP # noqa: F401   
         from . import synchronizer # noqa: F401       
+        from . import clockDivider # noqa: F401     
     except Exception:
         pass
     return list(PLUGINS)
