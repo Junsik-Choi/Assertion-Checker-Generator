@@ -442,8 +442,8 @@ def run_builder(
                 ret = pcls().generate_sv(parsed, common_context)
                 sv_txt, inst_txt = _collect_return(ret)
                 
-                # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSyncAll 플러그인은 완전한 interface를 생성하므로 별도 처리
-                if pcls.plugin_name in ["vfp", "hact", "hfp", "vsw", "vbp", "vact", "hsw", "hbp", "videosyncall"]:
+                # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSync 플러그인은 완전한 interface를 생성하므로 별도 처리
+                if pcls.plugin_name in ["vfp", "hact", "hfp", "vsw", "vbp", "vact", "hsw", "hbp", "videosync"]:
                     session_dir_path = Path(common_context["session_dir"])
                     intf_sv_path = session_dir_path / "assertion_intf.sv"
                     intf_inst_path = session_dir_path / "assertion_intf_inst.sv"
@@ -470,7 +470,7 @@ def run_builder(
         _import_all_plugins()
         all_types = get_registered_plugins()
         names = [p.plugin_name for p in all_types]
-        picks = _pick_multi("Select plugins (or 'all')", names)
+        picks = _pick_multi("Select plugins", names)
         next_types = [p for p in all_types if p.plugin_name in set(picks)]
         # Handshake 타입 선택 지원
         handshake_cls = next((p for p in all_types if p.plugin_name == "handshake"), None)
@@ -513,8 +513,8 @@ def run_builder(
     gen_sv_path = session_dir_path / "assertion_intf.sv"
     gen_inst_path = session_dir_path / "assertion_intf_inst.sv"
 
-    # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSyncAll 플러그인이 이미 파일을 생성했는지 확인
-    intf_generated = ("vfp" in parsed_by_plugin or "hact" in parsed_by_plugin or "hfp" in parsed_by_plugin or "vsw" in parsed_by_plugin or "vbp" in parsed_by_plugin or "vact" in parsed_by_plugin or "hsw" in parsed_by_plugin or "hbp" in parsed_by_plugin or "videosyncall" in parsed_by_plugin) and gen_sv_path.exists()
+    # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSync 플러그인이 이미 파일을 생성했는지 확인
+    intf_generated = ("vfp" in parsed_by_plugin or "hact" in parsed_by_plugin or "hfp" in parsed_by_plugin or "vsw" in parsed_by_plugin or "vbp" in parsed_by_plugin or "vact" in parsed_by_plugin or "hsw" in parsed_by_plugin or "hbp" in parsed_by_plugin or "videosync" in parsed_by_plugin) and gen_sv_path.exists()
     
     if not intf_generated:
         # VFP가 아닌 다른 플러그인들을 위한 interface 생성
@@ -552,7 +552,7 @@ def run_builder(
 
         print(f"✓ Wrote {gen_sv_path.name} and {gen_inst_path.name}")
     else:
-        print(f"✓ VFP/HACT/HFP/VSW/VBP/VACT/HSW/HBP/VideoSyncAll plugin already generated {gen_sv_path.name} and {gen_inst_path.name}")
+        print(f"✓ VFP/HACT/HFP/VSW/VBP/VACT/HSW/HBP/VideoSync plugin already generated {gen_sv_path.name} and {gen_inst_path.name}")
     
     print(f"\n===== Outputs saved to: {session_dir} =====")
 
@@ -667,7 +667,7 @@ def interactive_wizard():
     _import_all_plugins()
     plugin_types = get_registered_plugins()
     plugin_names = [p.plugin_name for p in plugin_types]
-    enabled = _pick_multi("Select plugins (or 'all')", plugin_names)
+    enabled = _pick_multi("Select plugins", plugin_names)
 
     # handshake 플러그인이 포함되면 ready_valid까지 포함한 타입을 미리 선택(플러그인 기본값으로 전달)
     handshake_cfg = {}
