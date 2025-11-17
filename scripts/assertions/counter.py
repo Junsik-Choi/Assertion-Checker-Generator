@@ -285,37 +285,40 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     exp_cnt_val = info["Expect Count Value"]
     cnt         = info["Target"]
 
-    w_clk           = info.get("Base Clock Width", "")
-    w_rst           = info.get("Reset Width", "")
+    w_clk           = info.get("Base Clock Width", "") or "[0:0]"
+    w_rst           = info.get("Reset Width", "") or "[0:0]"
 
-    port_list = []
+    logic_list = []
     declared = set()
-    if clk : port_list.append(_fmt_input_decl(clk, w_clk)); declared.add(clk)
-    if rst : port_list.append(_fmt_input_decl(rst, w_rst)); declared.add(rst)
+    if clk : logic_list.append(f"logic {w_clk} {clk};"); declared.add(clk)
+    if rst : logic_list.append(f"logic {w_rst} {rst};"); declared.add(rst)
 
     for name, w in (info.get("Plus Condition Ports") or []):
         if name not in declared:
-            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+            width = w or "[0:0]"
+            logic_list.append(f"logic {width} {name};"); declared.add(name)
 
     for name, w in (info.get("Reset Condition Ports") or []):
         if name not in declared:
-            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+            width = w or "[0:0]"
+            logic_list.append(f"logic {width} {name};"); declared.add(name)
 
     for name, w in (info.get("Trigger Condition Ports") or []):
         if name not in declared:
-            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+            width = w or "[0:0]"
+            logic_list.append(f"logic {width} {name};"); declared.add(name)
 
     for name, w in (info.get("Expect Count Value Ports") or []):
         if name not in declared:
-            port_list.append(_fmt_input_decl(name, w)); declared.add(name)
+            width = w or "[0:0]"
+            logic_list.append(f"logic {width} {name};"); declared.add(name)
 
-    ports = ",\n    ".join(port_list)
+    logics = "\n".join(logic_list)
 
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
-    return header + f"""module assertion_counter
-(
-    {ports}
-);
+    return header + f"""interface assertion_intf();
+
+{logics}
 
 reg [31:0] {cnt};
 
@@ -339,45 +342,42 @@ property p_counter_check;
     {trigger_con} |-> ({cnt} == {exp_cnt_val});
 endproperty
 
-assert property (p_counter_check)  else $error("failed at %t", $time);
+assert property (p_counter_check) else `uvm_error("ASSERTION", "Counter check failed")
 
-endmodule
+endinterface
 """
 
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
     clk         = info["Base Clock"]
     rst         = info["Reset"]
 
-    mod = f"assertion_counter"
-
     assign_list = []
     assigned = set()
-    if clk : assign_list.append(f"assign u_{mod}.{clk} = top.dut.{clk};"); assigned.add(clk)
-    if rst : assign_list.append(f"assign u_{mod}.{rst} = top.dut.{rst};"); assigned.add(rst)
+    if clk : assign_list.append(f"assign u_assertion_intf.{clk} = top.dut.{clk};"); assigned.add(clk)
+    if rst : assign_list.append(f"assign u_assertion_intf.{rst} = top.dut.{rst};"); assigned.add(rst)
 
     for name, w in (info.get("Plus Condition Ports") or []):
         if name not in assigned:
-            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+            assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
 
     for name, w in (info.get("Reset Condition Ports") or []):
         if name not in assigned:
-            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+            assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
 
     for name, w in (info.get("Trigger Condition Ports") or []):
         if name not in assigned:
-            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+            assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
 
     for name, w in (info.get("Expect Count Value Ports") or []):
         if name not in assigned:
-            assign_list.append(f"assign u_{mod}.{name} = top.dut.{name};"); assigned.add(name)
+            assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
     assigns = "\n".join(assign_list)
 
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
 
     # inst 파일은 모듈 래퍼 없이 인스턴스와 assign만 생성
     return header + (
-        f"{mod}\n"
-        f" u_{mod} ();\n\n"
+        f"assertion_intf u_assertion_intf();\n\n"
         f"{assigns}\n"
     )
 

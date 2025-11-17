@@ -18,15 +18,17 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
     try:
         from . import counter  # noqa: F401
         from . import handshake  # noqa: F401
-        from . import pulseWidth # noqa: F401
+        from . import videoSyncAll # noqa: F401    
         from . import HSW # noqa: F401
         from . import HBP # noqa: F401
         from . import HACT # noqa: F401
         from . import HFP # noqa: F401
-        from . import VFP # noqa: F401
         from . import VSW # noqa: F401
-        from . import VBP # noqa: F401        
-        from . import VACT # noqa: F401        
+        from . import VBP # noqa: F401      
+        from . import VACT # noqa: F401     
+        from . import VFP # noqa: F401   
+        from . import synchronizer # noqa: F401       
+        from . import clockDivider # noqa: F401     
     except Exception:
         pass
     return list(PLUGINS)
