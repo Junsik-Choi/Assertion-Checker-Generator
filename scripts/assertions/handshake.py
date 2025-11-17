@@ -223,38 +223,36 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
     s = info["Sender"]; r = info["Receiver"]
     # width tokens (always emitted; 1-bit => [0:0])
-    w_clk = info.get("Base Clock Width", "")
-    w_rst = info.get("Reset Width", "")
-    w_s   = info.get("Sender Width", "")
-    w_r   = info.get("Receiver Width", "")
+    w_clk = info.get("Base Clock Width", "") or "[0:0]"
+    w_rst = info.get("Reset Width", "") or "[0:0]"
+    w_s   = info.get("Sender Width", "") or "[0:0]"
+    w_r   = info.get("Receiver Width", "") or "[0:0]"
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     # ready_valid
     if info["phase_type"] == "ready_valid":
-        return header + f"""module assertion_gen
-(
-    {_fmt_input_decl(clk, w_clk)},
-    {_fmt_input_decl(rst, w_rst)},
-    {_fmt_input_decl(s,   w_s)},
-    {_fmt_input_decl(r,   w_r)}
-);
+        return header + f"""interface assertion_intf();
+
+logic {w_clk} {clk};
+logic {w_rst} {rst};
+logic {w_s} {s};
+logic {w_r} {r};
 
 property p_ready_valid_check(ready, valid);
     @(posedge {clk}) disable iff(!{rst})
     valid && !ready |-> ##[1:$] (ready || (valid && !ready));
 endproperty
 
-assert_rv_0 : assert property (p_ready_valid_check({s}, {r})) else $error("failed at %t", $time);
+assert property (p_ready_valid_check({s}, {r})) else `uvm_error("ASSERTION", "Ready-Valid check failed")
 
-endmodule
+endinterface
 """
     if info["phase_type"] == "4phase":
-        return header + f"""module assertion_gen
- (
-     {_fmt_input_decl(clk, w_clk)},
-     {_fmt_input_decl(rst, w_rst)},
-     {_fmt_input_decl(s,   w_s)},
-     {_fmt_input_decl(r,   w_r)}
- );
+        return header + f"""interface assertion_intf();
+
+logic {w_clk} {clk};
+logic {w_rst} {rst};
+logic {w_s} {s};
+logic {w_r} {r};
 
 property p_4ph_check_0(req,ack);
     @(posedge {clk}) disable iff(!{rst})
@@ -271,20 +269,19 @@ property p_4ph_check_2(req,ack);
     (req & ~ack) |-> ##1 ((req & ~ack) or (~req & ~ack) or (req & ack));
 endproperty
 
-assert_4ph_0 : assert property (p_4ph_check_0({s}, {r})) else $error("failed at %t", $time);
-assert_4ph_1 : assert property (p_4ph_check_1({s}, {r})) else $error("failed at %t", $time);
-assert_4ph_2 : assert property (p_4ph_check_2({s}, {r})) else $error("failed at %t", $time);
+assert property (p_4ph_check_0({s}, {r})) else `uvm_error("ASSERTION", "4-phase check 0 failed")
+assert property (p_4ph_check_1({s}, {r})) else `uvm_error("ASSERTION", "4-phase check 1 failed")
+assert property (p_4ph_check_2({s}, {r})) else `uvm_error("ASSERTION", "4-phase check 2 failed")
 
-endmodule
+endinterface
 """
     else:
-        return header + f"""module assertion_gen
- (
-     {_fmt_input_decl(clk, w_clk)},
-     {_fmt_input_decl(rst, w_rst)},
-     {_fmt_input_decl(s,   w_s)},
-     {_fmt_input_decl(r,   w_r)}
- );
+        return header + f"""interface assertion_intf();
+
+logic {w_clk} {clk};
+logic {w_rst} {rst};
+logic {w_s} {s};
+logic {w_r} {r};
 
 property p_2phase_check_0(req, ack);
   @(posedge {clk}) disable iff (!{rst})
@@ -306,27 +303,25 @@ property p_2phase_check_3(req, ack);
   (req & ack) |-> ##1 ((~req & ack) or (~req & ~ack) or (req & ack));
 endproperty
 
-assert_2ph_0 : assert property (p_2phase_check_0({s}, {r})) else $error("failed at %t", $time);
-assert_2ph_1 : assert property (p_2phase_check_1({s}, {r})) else $error("failed at %t", $time);
-assert_2ph_2 : assert property (p_2phase_check_2({s}, {r})) else $error("failed at %t", $time);
-assert_2ph_3 : assert property (p_2phase_check_3({s}, {r})) else $error("failed at %t", $time);
+assert property (p_2phase_check_0({s}, {r})) else `uvm_error("ASSERTION", "2-phase check 0 failed")
+assert property (p_2phase_check_1({s}, {r})) else `uvm_error("ASSERTION", "2-phase check 1 failed")
+assert property (p_2phase_check_2({s}, {r})) else `uvm_error("ASSERTION", "2-phase check 2 failed")
+assert property (p_2phase_check_3({s}, {r})) else `uvm_error("ASSERTION", "2-phase check 3 failed")
 
-endmodule
+endinterface
 """
 
 def generate_inst_verilog(info: Dict[str, Any]) -> str:
     clk = info["Base Clock"]; rst = info["Reset"]
     s = info["Sender"]; r = info["Receiver"]
-    mod = "assertion_gen"
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     # inst 파일은 모듈 래퍼 없이 인스턴스와 assign만 생성
     return header + (
-        f"{mod}\n"
-        f"      u_{mod} ();\n\n"
-        f"assign u_{mod}.{clk} = top.dut.{clk};\n"
-        f"assign u_{mod}.{rst} = top.dut.{rst};\n"
-        f"assign u_{mod}.{s} = top.dut.{s};\n"
-        f"assign u_{mod}.{r} = top.dut.{r};\n"
+        f"assertion_intf u_assertion_intf();\n\n"
+        f"assign u_assertion_intf.{clk} = top.dut.{clk};\n"
+        f"assign u_assertion_intf.{rst} = top.dut.{rst};\n"
+        f"assign u_assertion_intf.{s} = top.dut.{s};\n"
+        f"assign u_assertion_intf.{r} = top.dut.{r};\n"
     )
 
 def _get_forced_type() -> Optional[str]:

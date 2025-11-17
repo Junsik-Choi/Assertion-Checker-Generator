@@ -442,16 +442,13 @@ def run_builder(
                 ret = pcls().generate_sv(parsed, common_context)
                 sv_txt, inst_txt = _collect_return(ret)
                 
-                # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSync 플러그인은 완전한 interface를 생성하므로 별도 처리
-                if pcls.plugin_name in ["vfp", "hact", "hfp", "vsw", "vbp", "vact", "hsw", "hbp", "videosync"]:
-                    session_dir_path = Path(common_context["session_dir"])
-                    intf_sv_path = session_dir_path / "assertion_intf.sv"
-                    intf_inst_path = session_dir_path / "assertion_intf_inst.sv"
-                    intf_sv_path.write_text(sv_txt, encoding="utf-8")
-                    intf_inst_path.write_text(inst_txt, encoding="utf-8")
-                    print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
-                else:
-                    _strip_and_collect(sv_txt, pcls.plugin_name)
+                # 모든 플러그인이 완전한 interface를 생성하므로 직접 파일 작성
+                session_dir_path = Path(common_context["session_dir"])
+                intf_sv_path = session_dir_path / "assertion_intf.sv"
+                intf_inst_path = session_dir_path / "assertion_intf_inst.sv"
+                intf_sv_path.write_text(sv_txt, encoding="utf-8")
+                intf_inst_path.write_text(inst_txt, encoding="utf-8")
+                print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
             except Exception as e:
                 print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
 
@@ -513,46 +510,11 @@ def run_builder(
     gen_sv_path = session_dir_path / "assertion_intf.sv"
     gen_inst_path = session_dir_path / "assertion_intf_inst.sv"
 
-    # VFP, HACT, HFP, VSW, VBP, VACT, HSW, HBP, VideoSync 플러그인이 이미 파일을 생성했는지 확인
-    intf_generated = ("vfp" in parsed_by_plugin or "hact" in parsed_by_plugin or "hfp" in parsed_by_plugin or "vsw" in parsed_by_plugin or "vbp" in parsed_by_plugin or "vact" in parsed_by_plugin or "hsw" in parsed_by_plugin or "hbp" in parsed_by_plugin or "videosync" in parsed_by_plugin) and gen_sv_path.exists()
-    
-    if not intf_generated:
-        # VFP가 아닌 다른 플러그인들을 위한 interface 생성
-        # 최상단 헤더: import 다음 include 1회만, 그 외 헤더는 그 아래에 한번만
-        extra_headers = "\n".join(h for h in agg_headers if not _is_std_header_line(h))
-        header_txt = STD_IMPORT + "\n" + STD_INCLUDE + "\n"
-        if extra_headers.strip():
-            header_txt += extra_headers.strip() + "\n"
-        header_txt += "\n"
-
-        body_sep = "\n\n// ===== Next plugin section =====\n\n"
-        bodies = body_sep.join([b for b in agg_bodies if b.strip()])
-
-        # Port list
-        port_lines = []
-        for name in agg_ports_order:
-            port_lines.append(f"    logic {agg_inputs[name]} {name}")
-        ports_block = ";\n".join(port_lines) + (";\n" if port_lines else "")
-
-        sv_text = (
-            header_txt
-            + "interface assertion_intf();\n"
-            + ports_block + "\n"
-            + (bodies + "\n\n" if bodies else "// No SV content generated.\n")
-            + "endinterface\n"
-        )
-        gen_sv_path.write_text(sv_text, encoding="utf-8")
-
-        # Build instantiation file
-        inst_lines = [header_txt.rstrip(), "", "assertion_intf", "      u_assertion_intf();", ""]
-        for name in agg_ports_order:
-            inst_lines.append(f"assign u_assertion_intf.{name} = top.dut.{name};")
-        inst_text = "\n".join(inst_lines).rstrip() + "\n"
-        gen_inst_path.write_text(inst_text, encoding="utf-8")
-
-        print(f"✓ Wrote {gen_sv_path.name} and {gen_inst_path.name}")
+    # 모든 플러그인이 완전한 interface를 생성하므로 파일이 존재하는지만 확인
+    if gen_sv_path.exists():
+        print(f"✓ Generated {gen_sv_path.name} and {gen_inst_path.name}")
     else:
-        print(f"✓ VFP/HACT/HFP/VSW/VBP/VACT/HSW/HBP/VideoSync plugin already generated {gen_sv_path.name} and {gen_inst_path.name}")
+        print(f"[Warn] No assertion files were generated")
     
     print(f"\n===== Outputs saved to: {session_dir} =====")
 
