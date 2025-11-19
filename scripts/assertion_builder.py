@@ -433,7 +433,168 @@ def run_builder(
         if core:
             agg_bodies.append(f"// {plugin_name}\n{core}")
 
-    def _run_generation(p_types: List[Type[BaseAssertionPlugin]]):
+    def _merge_interface_code(existing_sv: str, new_sv: str, plugin_name: str) -> str:
+        """
+        기존 interface 코드와 새 코드를 병합
+        - 헤더 (`include, import) 중복 제거
+        - interface 선언 통합
+        - logic 선언 중복 제거
+        - 본문(property, sequence 등) 추가
+        """
+        # 1. 헤더 추출 (중복 제거)
+        header_pattern = re.compile(r'^\s*(`include\s+"[^"]+"|import\s+\w+::\*;)\s*$', re.MULTILINE)
+        
+        existing_headers = set(header_pattern.findall(existing_sv))
+        new_headers = set(header_pattern.findall(new_sv))
+        all_headers = sorted(existing_headers | new_headers)
+        
+        # 2. 기존 코드에서 interface 내부 추출
+        existing_no_header = header_pattern.sub("", existing_sv).strip()
+        new_no_header = header_pattern.sub("", new_sv).strip()
+        
+        # 3. interface 내부 본문 추출
+        interface_pattern = re.compile(
+            r'interface\s+assertion_intf\s*\(\s*\)\s*;(.*?)endinterface',
+            re.DOTALL | re.IGNORECASE
+        )
+        
+        existing_match = interface_pattern.search(existing_no_header)
+        new_match = interface_pattern.search(new_no_header)
+        
+        if not existing_match or not new_match:
+            # interface 패턴이 없으면 그냥 추가
+            return existing_sv.rstrip() + f"\n\n// ===== {plugin_name} (Additional) =====\n\n" + new_sv
+        
+        existing_body = existing_match.group(1).strip()
+        new_body = new_match.group(1).strip()
+        
+        # 4. logic 선언 추출 및 병합
+        logic_pattern = re.compile(r'^\s*logic\s+(\[[^\]]+\])?\s*([A-Za-z_]\w*)\s*;', re.MULTILINE)
+        
+        existing_logics = {}  # {name: full_declaration}
+        for m in logic_pattern.finditer(existing_body):
+            width = m.group(1) or ""
+            name = m.group(2)
+            existing_logics[name] = m.group(0).strip()
+        
+        new_logics = {}
+        new_logic_lines = []
+        for m in logic_pattern.finditer(new_body):
+            width = m.group(1) or ""
+            name = m.group(2)
+            decl = m.group(0).strip()
+            if name not in existing_logics:
+                new_logics[name] = decl
+                new_logic_lines.append(decl)
+        
+        # 5. logic 선언 제거한 본문 추출
+        existing_body_no_logic = logic_pattern.sub("", existing_body).strip()
+        new_body_no_logic = logic_pattern.sub("", new_body).strip()
+        
+        # 6. parameter 추출 및 병합
+        param_pattern = re.compile(r'^\s*parameter\s+\w+\s*=\s*[^;]+;', re.MULTILINE)
+        
+        existing_params = set(param_pattern.findall(existing_body_no_logic))
+        new_params = set(param_pattern.findall(new_body_no_logic))
+        all_params = existing_params | new_params
+        
+        existing_body_no_param = param_pattern.sub("", existing_body_no_logic).strip()
+        new_body_no_param = param_pattern.sub("", new_body_no_logic).strip()
+        
+        # 7. 최종 병합
+        merged_headers = "\n".join(all_headers)
+        
+        # logic 선언 재구성
+        all_logic_lines = [existing_logics[name] for name in sorted(existing_logics.keys())]
+        all_logic_lines.extend(new_logic_lines)
+        merged_logics = "\n".join(all_logic_lines) if all_logic_lines else ""
+        
+        # parameter 재구성
+        merged_params = "\n".join(sorted(all_params)) if all_params else ""
+        
+        # 본문 병합
+        merged_body_parts = []
+        if existing_body_no_param.strip():
+            merged_body_parts.append(existing_body_no_param.strip())
+        if new_body_no_param.strip():
+            merged_body_parts.append(f"// ===== {plugin_name} (Additional) =====\n" + new_body_no_param.strip())
+        merged_body = "\n\n".join(merged_body_parts)
+        
+        # 최종 조립
+        result_parts = [merged_headers, "", "interface assertion_intf();", ""]
+        
+        if merged_logics:
+            result_parts.append(merged_logics)
+            result_parts.append("")
+        
+        if merged_params:
+            result_parts.append(merged_params)
+            result_parts.append("")
+        
+        if merged_body:
+            result_parts.append(merged_body)
+            result_parts.append("")
+        
+        result_parts.append("endinterface")
+        result_parts.append("")
+        
+        return "\n".join(result_parts)
+
+    def _merge_inst_code(existing_inst: str, new_inst: str, plugin_name: str) -> str:
+        """
+        inst 파일 병합
+        - 헤더 중복 제거
+        - u_assertion_intf 인스턴스는 한 번만
+        - assign 문 중복 제거
+        """
+        # 1. 헤더 추출
+        header_pattern = re.compile(r'^\s*(`include\s+"[^"]+"|import\s+\w+::\*;)\s*$', re.MULTILINE)
+        
+        existing_headers = set(header_pattern.findall(existing_inst))
+        new_headers = set(header_pattern.findall(new_inst))
+        all_headers = sorted(existing_headers | new_headers)
+        
+        # 2. 헤더 제거
+        existing_no_header = header_pattern.sub("", existing_inst).strip()
+        new_no_header = header_pattern.sub("", new_inst).strip()
+        
+        # 3. 인스턴스 선언 추출 (한 번만)
+        inst_pattern = re.compile(r'^\s*(assertion_intf\s+u_assertion_intf\s*\(\s*\)\s*;)', re.MULTILINE)
+        inst_match = inst_pattern.search(existing_no_header)
+        inst_decl = inst_match.group(1) if inst_match else "assertion_intf u_assertion_intf();"
+        
+        # 4. assign 문 추출 및 병합
+        assign_pattern = re.compile(r'^\s*assign\s+u_assertion_intf\.(\w+)\s*=\s*([^;]+);', re.MULTILINE)
+        
+        existing_assigns = {}  # {signal_name: full_assign_statement}
+        for m in assign_pattern.finditer(existing_no_header):
+            sig = m.group(1)
+            existing_assigns[sig] = m.group(0).strip()
+        
+        new_assigns = []
+        for m in assign_pattern.finditer(new_no_header):
+            sig = m.group(1)
+            stmt = m.group(0).strip()
+            if sig not in existing_assigns:
+                new_assigns.append(stmt)
+                existing_assigns[sig] = stmt
+        
+        # 5. 최종 조립
+        result_parts = []
+        if all_headers:
+            result_parts.append("\n".join(all_headers))
+            result_parts.append("")
+        
+        result_parts.append(inst_decl)
+        result_parts.append("")
+        
+        all_assign_lines = [existing_assigns[sig] for sig in sorted(existing_assigns.keys())]
+        if all_assign_lines:
+            result_parts.append("\n".join(all_assign_lines))
+        
+        return "\n".join(result_parts) + "\n"
+
+    def _run_generation(p_types: List[Type[BaseAssertionPlugin]], append_mode: bool = False):
         for pcls in p_types:
             parsed = parsed_by_plugin.get(pcls.plugin_name)
             if not parsed:
@@ -446,9 +607,24 @@ def run_builder(
                 session_dir_path = Path(common_context["session_dir"])
                 intf_sv_path = session_dir_path / "assertion_intf.sv"
                 intf_inst_path = session_dir_path / "assertion_intf_inst.sv"
-                intf_sv_path.write_text(sv_txt, encoding="utf-8")
-                intf_inst_path.write_text(inst_txt, encoding="utf-8")
-                print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
+                
+                if append_mode and intf_sv_path.exists():
+                    # 추가 모드: 중복 제거하며 병합
+                    existing_sv = intf_sv_path.read_text(encoding="utf-8")
+                    existing_inst = intf_inst_path.read_text(encoding="utf-8") if intf_inst_path.exists() else ""
+                    
+                    # 지능형 병합
+                    combined_sv = _merge_interface_code(existing_sv, sv_txt, pcls.plugin_name)
+                    combined_inst = _merge_inst_code(existing_inst, inst_txt, pcls.plugin_name)
+                    
+                    intf_sv_path.write_text(combined_sv, encoding="utf-8")
+                    intf_inst_path.write_text(combined_inst, encoding="utf-8")
+                    print(f"✓ {pcls.plugin_name.upper()}: Merged to {intf_sv_path.name} and {intf_inst_path.name}")
+                else:
+                    # 첫 생성 또는 덮어쓰기 모드
+                    intf_sv_path.write_text(sv_txt, encoding="utf-8")
+                    intf_inst_path.write_text(inst_txt, encoding="utf-8")
+                    print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
             except Exception as e:
                 print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
 
@@ -479,7 +655,7 @@ def run_builder(
                 parsed_by_plugin[pcls.plugin_name] = pcls().parse(session_excel)
             except Exception as e:
                 print(f"[Warn] Plugin {pcls.plugin_name} parse failed: {e}")
-        _run_generation(non_hs_types)
+        _run_generation(non_hs_types, append_mode=True)  # 추가 모드로 실행
         # handshake가 선택된 경우, 타입(복수 선택 가능)별로 개별 실행
         if chosen_has_handshake and handshake_cls is not None:
             hs_options = ["2phase", "4phase", "ready_valid"]
