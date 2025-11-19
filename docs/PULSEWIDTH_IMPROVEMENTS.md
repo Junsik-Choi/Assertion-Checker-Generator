@@ -43,29 +43,37 @@
 | Column | Name | Description |
 |--------|------|-------------|
 | C (3) | Type | hpulse 또는 vpulse |
-| D (4) | Count_Trigger | hpulse: base clock명 (예: I_CLK)<br>vpulse: trigger 신호명 (예: i_trigger) |
-| E (5) | Target_Pulse | 측정할 대상 신호 |
-| F (6) | Expected_Min_Value | 최소 폭 (숫자 또는 파라미터) |
-| G (7) | Expected_Max_Value | 최대 폭 (숫자 또는 파라미터) |
+| D (4) | Count_Trigger | **참조 클럭/트리거 신호**<br>• hpulse: 카운팅에 사용할 base clock (예: I_CLK, sys_clk)<br>  - 각 rising edge마다 내부 카운터 증가<br>  - Target_Pulse의 HIGH 기간 동안 클럭 수를 셈<br>• vpulse: 펄스 측정을 시작/종료할 edge 신호 (예: i_frame_start)<br>  - Rising edge에서 펄스 폭 측정 시작<br>  - Falling edge에서 측정 종료하고 검증<br>  - 프레임/라인 경계 같은 이벤트 감지용 |
+| E (5) | Target_Pulse | 측정할 대상 신호 (폭을 검증할 펄스) |
+| F (6) | Expected_Min_Value | 최소 폭 (클럭 사이클 수 또는 파라미터) |
+| G (7) | Expected_Max_Value | 최대 폭 (클럭 사이클 수 또는 파라미터) |
 
 ### 예시 데이터
 
-#### hpulse 예시
+#### hpulse 예시 (Clock-Based Pulse Width)
 ```
 Type: hpulse
-Count_Trigger: I_CLK
-Target_Pulse: o_hsync
-Min: 10
-Max: 20
+Count_Trigger: I_CLK          ← 참조 클럭 (클럭 사이클 카운트)
+Target_Pulse: o_hsync         ← 측정할 펄스 신호
+Min: 10                       ← 최소 10 클럭 사이클
+Max: 20                       ← 최대 20 클럭 사이클
+
+의미: o_hsync가 HIGH인 기간이 I_CLK 기준으로 10~20 사이클인지 검증
+사용 예: 비디오 Hsync 펄스가 44 클럭 사이클 지속되는지 확인
 ```
 
-#### vpulse 예시
+#### vpulse 예시 (Event-Based Pulse Width)
 ```
 Type: vpulse
-Count_Trigger: i_trigger
-Target_Pulse: o_data_valid
-Min: DATA_WIDTH
-Max: PARAM_WIDTH
+Count_Trigger: i_frame_start  ← 트리거 신호 (이벤트 감지)
+Target_Pulse: o_data_valid    ← 측정할 펄스 신호
+Min: DATA_WIDTH               ← 최소 폭 (파라미터 사용)
+Max: PARAM_WIDTH              ← 최대 폭 (파라미터 사용)
+
+의미: i_frame_start rising edge부터 falling edge까지
+      o_data_valid의 HIGH 기간을 측정하여 검증
+사용 예: 프레임 시작 신호 기준으로 데이터 유효 기간 측정
+      (프레임당 전송되는 데이터 양 검증)
 ```
 
 ## 사용 방법

@@ -163,10 +163,22 @@ Max: 1920
 ### 2. Check Horizontal Sync Width
 ```bash
 > new hsw
-Count Trigger: i_clk
-Target Pulse: i_hsync
-Min: 44
-Max: 44
+# Step 1: Count Trigger (Reference Clock)
+#   - Select clock signal for counting
+#   - For video timing: usually line clock (i_hsync for vertical, i_clk for horizontal)
+#   - Each rising edge increments counter
+Count Trigger: i_clk      ← System clock to count cycles
+
+# Step 2: Target Pulse
+#   - Select the pulse signal to measure
+Target Pulse: i_hsync     ← Horizontal sync pulse to verify
+
+# Step 3-4: Expected Width Range
+#   - Min/Max in clock cycles (based on Count Trigger)
+Min: 44                   ← Hsync should be HIGH for at least 44 cycles
+Max: 44                   ← Hsync should be HIGH for at most 44 cycles (exact)
+
+# Result: Verifies i_hsync pulse is exactly 44 i_clk cycles wide
 ```
 
 ### 3. Validate Vertical Back Porch

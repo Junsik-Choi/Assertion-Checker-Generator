@@ -4438,16 +4438,34 @@ def _is_identifier(tok: str) -> bool:
 
 
 def _resolve_signal_refs(state: AppState) -> Dict[str, Dict[str, Any]]:
-    # Build a dictionary of known signals including ports and existing conditions
+    # Build a dictionary of known signals including clocks, resets, ports and existing conditions
     refs: Dict[str, Dict[str, Any]] = {}
+    
+    # Add clocks
+    for clk in state.module_info.clocks:
+        name = clk.get("name", "")
+        if name:
+            refs[name] = clk
+    
+    # Add resets
+    for rst in state.module_info.resets:
+        name = rst.get("name", "")
+        if name:
+            refs[name] = rst
+    
+    # Add ports (inputs, outputs, inouts)
     all_ports = state.module_info.inputs + state.module_info.outputs + state.module_info.inouts
     for p in all_ports:
         name = p.get("name", "")
         if name:
             refs[name] = p
-    # Numeric aliases: 1,2,3... map to concatenated list order
-    for idx, p in enumerate(all_ports, start=1):
-        refs[str(idx)] = p
+    
+    # Numeric aliases: 1,2,3... map to concatenated list order (clocks + resets + ports)
+    all_signals = state.module_info.clocks + state.module_info.resets + all_ports
+    for idx, sig in enumerate(all_signals, start=1):
+        refs[str(idx)] = sig
+    
+    # Add user-defined conditions
     for c in state.conditions:
         nm = c.get("name", "")
         if nm:
@@ -4703,10 +4721,14 @@ def _get_plugin_description(plugin_name: str) -> str:
         'hsw': 'Horizontal Sync Width - Verify horizontal sync pulse width',
         'hbp': 'Horizontal Back Porch - Verify timing between hsync and data enable start',
         'hfp': 'Horizontal Front Porch - Verify timing between data enable end and hsync',
+        'vact': 'Vertical Active Line Count - Verify active lines per frame within min/max range',
         'vbp': 'Vertical Back Porch - Verify lines between vsync and first active line',
         'vfp': 'Vertical Front Porch - Verify lines between last active line and vsync',
         'vsw': 'Vertical Sync Width - Verify vertical sync pulse width in lines',
+        'clockDivider': 'Clock Divider Verification - Verify clock divider ratio and output',
+        'synchronizer': 'Synchronizer Verification - Verify CDC synchronizer depth and correctness',
         'delayCondition': 'Generate delay-based condition assertions with configurable timing',
+        'videosyncall': 'Video Sync All - Comprehensive video timing verification (all parameters)',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -4785,8 +4807,8 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'signal',
                 'step': 4,
                 'title': 'Check Condition (Trigger)',
-                'description': 'Select when to perform the assertion check',
-                'example': 'Select from available signals',
+                'description': 'Select the signal that triggers the counter check\n  - Rising edge: Check counter value when this signal goes HIGH\n  - Example: i_frame_end checks count at end of each frame\n  - Example: i_line_valid checks count during active video line\n  - Typical use: Frame end, line end, or specific control signal',
+                'example': 'i_frame_end (checks count when frame completes)',
                 'required': True,
             },
             {
@@ -4852,9 +4874,9 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'name': 'trigger_signal',
                 'type': 'signal',
                 'step': 2,
-                'title': 'Trigger Signal',
-                'description': 'Select trigger signal for edge detection (only for vpulse)',
-                'example': 'Select from available signals',
+                'title': 'Trigger Signal (Edge Detector)',
+                'description': 'Select the signal whose edges trigger pulse measurement (vpulse only)\n  - Rising edge: Starts counting the pulse width\n  - Falling edge: Stops counting and checks width\n  - Example: i_frame_start triggers on frame boundaries\n  - Example: i_line_valid triggers on each video line\n  - Used to detect and measure pulse duration',
+                'example': 'i_frame_start (measures pulse between frame edges)',
                 'required': True,
                 'show_if': {'pulse_type': 'vpulse'},
             },
@@ -4929,9 +4951,9 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'name': 'count_trigger',
                 'type': 'signal',
                 'step': 1,
-                'title': 'Count Trigger',
-                'description': 'Select the signal that triggers counting',
-                'example': 'Select from available signals',
+                'title': 'Count Trigger (Reference Clock)',
+                'description': 'Select the clock/signal used as counting reference\n  - For video: Usually horizontal sync (i_hsync) to count lines\n  - For general: System clock or trigger edge signal\n  - Each rising edge increments an internal counter\n  - Example: i_hsync counts number of horizontal lines\n  - Example: i_clk counts clock cycles for pulse width',
+                'example': 'i_hsync (counts horizontal lines) or i_clk (counts cycles)',
                 'required': True,
             },
             {
@@ -5149,6 +5171,205 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'title': 'Expected Max Value',
                 'description': 'Select signal/parameter or enter number (0 for custom expression)',
                 'example': 'Select signal, parameter, or enter number like 5',
+                'required': True,
+            },
+        ],
+        'vact': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal (for line counting)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'vsync_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Vsync Signal',
+                'description': 'Select the vertical sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal (typically i_de)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'expected_min_value',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Expected Min Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 1080',
+                'required': True,
+            },
+            {
+                'name': 'expected_max_value',
+                'type': 'signal',
+                'step': 5,
+                'title': 'Expected Max Value',
+                'description': 'Select signal/parameter or enter number (0 for custom expression)',
+                'example': 'Select signal, parameter, or enter number like 1080',
+                'required': True,
+            },
+        ],
+        'clockDivider': [
+            {
+                'name': 'reference_clock',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Reference Clock',
+                'description': 'Select the reference clock signal for divider',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'max_value',
+                'type': 'string',
+                'step': 2,
+                'title': 'MAX Value',
+                'description': 'Enter maximum divider ratio value',
+                'example': '100',
+                'required': True,
+            },
+            {
+                'name': 'divratio',
+                'type': 'signal',
+                'step': 3,
+                'title': 'DIVRATIO Signal',
+                'description': 'Select the divider ratio control signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'clkout',
+                'type': 'signal',
+                'step': 4,
+                'title': 'CLKOUT Signal',
+                'description': 'Select the divided clock output signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'start_flag',
+                'type': 'signal',
+                'step': 5,
+                'title': 'START FLAG Signal',
+                'description': 'Select the start flag signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'disable',
+                'type': 'signal',
+                'step': 6,
+                'title': 'DISABLE Signal',
+                'description': 'Select the disable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'synchronizer': [
+            {
+                'name': 'depth_sync_value',
+                'type': 'string',
+                'step': 1,
+                'title': 'Depth Sync Value',
+                'description': 'Enter synchronizer depth (e.g., 2 for 2-stage, 3 for 3-stage)',
+                'example': '2',
+                'required': True,
+            },
+            {
+                'name': 'enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Enable Signal',
+                'description': 'Select the enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'input_signal',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Input Signal',
+                'description': 'Select the input signal to synchronize',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'output_signal',
+                'type': 'signal',
+                'step': 4,
+                'title': 'Output Signal',
+                'description': 'Select the synchronized output signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'delayCondition': [
+            {
+                'name': 'trigger_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Trigger Signal',
+                'description': 'Select the signal that triggers the delay',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'delay_cycles',
+                'type': 'string',
+                'step': 2,
+                'title': 'Delay Cycles',
+                'description': 'Enter number of clock cycles to delay',
+                'example': '10',
+                'required': True,
+            },
+            {
+                'name': 'expected_signal',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Expected Signal',
+                'description': 'Select the signal to check after delay',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'videosyncall': [
+            {
+                'name': 'hsync_signal',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Hsync Signal',
+                'description': 'Select the horizontal sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'vsync_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Vsync Signal',
+                'description': 'Select the vertical sync signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'data_enable_signal',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Data Enable Signal',
+                'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
                 'required': True,
             },
         ],
@@ -5441,6 +5662,20 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                         all_signals.append((idx, '<Custom Expression (e.g., "(i_sram_rd1 && i_sram_rd2) | i_sram_rd3")>', 'special', {}))
                         idx += 1
                     
+                    # Clock signals - ALL of them
+                    if state.module_info and state.module_info.clocks:
+                        for clk in state.module_info.clocks:
+                            clk_name = clk.get('name', '')
+                            all_signals.append((idx, clk_name, 'clock', clk))
+                            idx += 1
+                    
+                    # Reset signals - ALL of them
+                    if state.module_info and state.module_info.resets:
+                        for rst in state.module_info.resets:
+                            rst_name = rst.get('name', '')
+                            all_signals.append((idx, rst_name, 'reset', rst))
+                            idx += 1
+                    
                     # Input signals - ALL of them
                     if state.module_info and state.module_info.inputs:
                         for inp in state.module_info.inputs:
@@ -5497,7 +5732,13 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                             marker = "✓" if name == current_val else " "
                             
                             # Color by signal type
-                            if sig_type == 'input':
+                            if sig_type == 'clock':
+                                color = _PAIR_BY_NAME.get("green", 0)
+                                prefix = "[C]"
+                            elif sig_type == 'reset':
+                                color = _PAIR_BY_NAME.get("green", 0)
+                                prefix = "[R]"
+                            elif sig_type == 'input':
                                 color = _PAIR_BY_NAME.get("cyan", 0)
                                 prefix = "[I]"
                             elif sig_type == 'output':
@@ -6167,6 +6408,111 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
         lines.append("")
         lines.append("Verifies vertical sync pulse width in lines")
         lines.append(f"Lines range: {min_val} to {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'vact':
+        hsync = data.get('hsync_signal', '?')
+        vsync = data.get('vsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        min_val = data.get('expected_min_value', '?')
+        max_val = data.get('expected_max_value', '?')
+        
+        lines.append("=" * 60)
+        lines.append("VERTICAL ACTIVE LINE COUNT (VACT)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync} (for line counting)")
+        lines.append(f"Vsync Signal: {vsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append(f"Expected Min Lines: {min_val}")
+        lines.append(f"Expected Max Lines: {max_val}")
+        lines.append("")
+        lines.append("Verifies active line count per frame")
+        lines.append(f"Count range: {min_val} to {max_val} lines")
+        lines.append("")
+    
+    elif plugin_name == 'clockDivider':
+        ref_clk = data.get('reference_clock', '?')
+        max_val = data.get('max_value', '?')
+        divratio = data.get('divratio', '?')
+        clkout = data.get('clkout', '?')
+        start_flag = data.get('start_flag', '?')
+        disable = data.get('disable', '?')
+        
+        lines.append("=" * 60)
+        lines.append("CLOCK DIVIDER VERIFICATION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Reference Clock: {ref_clk}")
+        lines.append(f"MAX Value: {max_val}")
+        lines.append(f"DIVRATIO: {divratio}")
+        lines.append(f"CLKOUT: {clkout}")
+        lines.append(f"START FLAG: {start_flag}")
+        lines.append(f"DISABLE: {disable}")
+        lines.append("")
+        lines.append("Verifies clock divider ratio and output")
+        lines.append(f"Max divider ratio: {max_val}")
+        lines.append("")
+    
+    elif plugin_name == 'synchronizer':
+        depth = data.get('depth_sync_value', '?')
+        enable = data.get('enable_signal', '?')
+        input_sig = data.get('input_signal', '?')
+        output_sig = data.get('output_signal', '?')
+        
+        lines.append("=" * 60)
+        lines.append("SYNCHRONIZER VERIFICATION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Depth Sync Value: {depth} stages")
+        lines.append(f"Enable Signal: {enable}")
+        lines.append(f"Input Signal: {input_sig}")
+        lines.append(f"Output Signal: {output_sig}")
+        lines.append("")
+        lines.append(f"Verifies {depth}-stage CDC synchronizer")
+        lines.append(f"Output should match input after {depth} clock cycles")
+        lines.append("")
+    
+    elif plugin_name == 'delayCondition':
+        trigger = data.get('trigger_signal', '?')
+        delay = data.get('delay_cycles', '?')
+        expected = data.get('expected_signal', '?')
+        
+        lines.append("=" * 60)
+        lines.append("DELAY CONDITION ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Trigger Signal: {trigger}")
+        lines.append(f"Delay Cycles: {delay}")
+        lines.append(f"Expected Signal: {expected}")
+        lines.append("")
+        lines.append(f"Verifies signal condition after {delay} cycles")
+        lines.append(f"When {trigger} triggers, check {expected} after {delay} cycles")
+        lines.append("")
+    
+    elif plugin_name == 'videosyncall':
+        hsync = data.get('hsync_signal', '?')
+        vsync = data.get('vsync_signal', '?')
+        data_en = data.get('data_enable_signal', '?')
+        
+        lines.append("=" * 60)
+        lines.append("VIDEO SYNC ALL (COMPREHENSIVE)")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Hsync Signal: {hsync}")
+        lines.append(f"Vsync Signal: {vsync}")
+        lines.append(f"Data Enable: {data_en}")
+        lines.append("")
+        lines.append("Comprehensive video timing verification")
+        lines.append("Includes all video sync parameters:")
+        lines.append("  - Horizontal Active (HACT)")
+        lines.append("  - Horizontal Sync Width (HSW)")
+        lines.append("  - Horizontal Back Porch (HBP)")
+        lines.append("  - Horizontal Front Porch (HFP)")
+        lines.append("  - Vertical Active (VACT)")
+        lines.append("  - Vertical Sync Width (VSW)")
+        lines.append("  - Vertical Back Porch (VBP)")
+        lines.append("  - Vertical Front Porch (VFP)")
         lines.append("")
     
     else:
