@@ -4731,6 +4731,8 @@ def _get_plugin_description(plugin_name: str) -> str:
         'basicAssertion': 'Custom Logic: Creates user-defined \033[92mProperty\033[0m (trigger→result) or \033[92mSequence\033[0m (temporal pattern) with custom \033[92m[Clock]\033[0m, \033[92m[Disable]\033[0m, and \033[92m[Logic]\033[0m expressions',
         'delayCondition': 'Delay Verification: Validates that \033[92m[Expected Signal]\033[0m matches expected condition after \033[92m[Delay Cycles]\033[0m from \033[92m[Trigger Signal]\033[0m activation',
         'videosyncall': 'Complete Video Timing: Verifies all 8 video timing parameters (HACT, HSW, HBP, HFP, VACT, VSW, VBP, VFP) using \033[92m[HSYNC]\033[0m, \033[92m[VSYNC]\033[0m, and \033[92m[DE]\033[0m signals in a single assertion',
+        'AHB_M': 'AHB Master Protocol: Verifies AMBA AHB bus master transactions - monitors \033[92m[HADDR]\033[0m, \033[92m[HTRANS]\033[0m, \033[92m[HWRITE]\033[0m, \033[92m[HWDATA]\033[0m, \033[92m[HRDATA]\033[0m, \033[92m[HREADY]\033[0m, \033[92m[HRESP]\033[0m signals to ensure proper bus protocol compliance including address/data phases and response handling',
+        'AHB_S': 'AHB Slave Protocol: Verifies AMBA AHB bus slave responses - monitors \033[92m[HADDR]\033[0m, \033[92m[HTRANS]\033[0m, \033[92m[HWRITE]\033[0m, \033[92m[HWDATA]\033[0m, \033[92m[HRDATA]\033[0m, \033[92m[HREADY]\033[0m, \033[92m[HRESP]\033[0m signals to validate slave behavior, ready control, and response generation',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -5491,6 +5493,190 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'step': 3,
                 'title': 'Data Enable Signal',
                 'description': 'Select the data enable signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'AHB_M': [
+            {
+                'name': 'HADDR',
+                'type': 'signal',
+                'step': 1,
+                'title': 'HADDR - Address Bus',
+                'description': 'Select AHB address bus signal\n  - Master drives address during address phase\n  - Typically 32-bit wide\n  - Valid when HTRANS indicates transfer',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HBURST',
+                'type': 'signal',
+                'step': 2,
+                'title': 'HBURST - Burst Type',
+                'description': 'Select AHB burst type signal\n  - Indicates burst length and type\n  - 3-bit: SINGLE, INCR, WRAP4, INCR4, WRAP8, INCR8, WRAP16, INCR16\n  - Remains constant during burst',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HSIZE',
+                'type': 'signal',
+                'step': 3,
+                'title': 'HSIZE - Transfer Size',
+                'description': 'Select AHB transfer size signal\n  - Indicates width of transfer: 8, 16, 32, 64, 128, 256, 512, 1024 bits\n  - 3-bit encoded: 000=byte, 001=halfword, 010=word, etc.\n  - Must be less than or equal to bus width',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HTRANS',
+                'type': 'signal',
+                'step': 4,
+                'title': 'HTRANS - Transfer Type',
+                'description': 'Select AHB transfer type signal\n  - 2-bit: IDLE (00), BUSY (01), NONSEQ (10), SEQ (11)\n  - IDLE: No transfer\n  - BUSY: Master inserts wait state in burst\n  - NONSEQ: Single transfer or first of burst\n  - SEQ: Remaining transfers in burst',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HWRITE',
+                'type': 'signal',
+                'step': 5,
+                'title': 'HWRITE - Write Enable',
+                'description': 'Select AHB write enable signal\n  - 1: Write transfer\n  - 0: Read transfer\n  - Valid during address phase, remains stable during data phase',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HWDATA',
+                'type': 'signal',
+                'step': 6,
+                'title': 'HWDATA - Write Data Bus',
+                'description': 'Select AHB write data bus signal\n  - Master drives write data during data phase\n  - Valid one cycle after address phase\n  - Width matches bus width (typically 32 or 64 bits)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HPROT',
+                'type': 'signal',
+                'step': 7,
+                'title': 'HPROT - Protection Control',
+                'description': 'Select AHB protection control signal\n  - 4-bit or 7-bit protection attributes\n  - [0]: Data(1) or Opcode(0)\n  - [1]: Privileged(1) or User(0)\n  - [2]: Bufferable(1) or Non-bufferable(0)\n  - [3]: Cacheable(1) or Non-cacheable(0)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HRDATA',
+                'type': 'signal',
+                'step': 8,
+                'title': 'HRDATA - Read Data Bus',
+                'description': 'Select AHB read data bus signal\n  - Slave drives read data during data phase\n  - Valid when HREADY is HIGH and HRESP is OKAY\n  - Width matches bus width (typically 32 or 64 bits)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HRESP',
+                'type': 'signal',
+                'step': 9,
+                'title': 'HRESP - Transfer Response',
+                'description': 'Select AHB transfer response signal\n  - 1-bit or 2-bit response from slave\n  - OKAY (0): Transfer successful\n  - ERROR (1): Transfer failed\n  - Valid when HREADY is asserted',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HREADY',
+                'type': 'signal',
+                'step': 10,
+                'title': 'HREADY - Transfer Done',
+                'description': 'Select AHB ready signal\n  - 1: Transfer complete, can proceed to next\n  - 0: Slave inserts wait states, extend data phase\n  - All masters and slaves use this signal for flow control',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+        ],
+        'AHB_S': [
+            {
+                'name': 'HADDR',
+                'type': 'signal',
+                'step': 1,
+                'title': 'HADDR - Address Bus',
+                'description': 'Select AHB address bus signal\n  - Slave receives address during address phase\n  - Decode this address to determine if selected\n  - Typically 32-bit wide',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HBURST',
+                'type': 'signal',
+                'step': 2,
+                'title': 'HBURST - Burst Type',
+                'description': 'Select AHB burst type signal\n  - Slave receives burst information from master\n  - 3-bit: SINGLE, INCR, WRAP4, INCR4, WRAP8, INCR8, WRAP16, INCR16\n  - Use for burst boundary checking',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HSIZE',
+                'type': 'signal',
+                'step': 3,
+                'title': 'HSIZE - Transfer Size',
+                'description': 'Select AHB transfer size signal\n  - Slave receives size information from master\n  - 3-bit encoded: 000=byte, 001=halfword, 010=word, etc.\n  - Use for data alignment and byte lane control',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HTRANS',
+                'type': 'signal',
+                'step': 4,
+                'title': 'HTRANS - Transfer Type',
+                'description': 'Select AHB transfer type signal\n  - Slave receives transfer type from master\n  - 2-bit: IDLE, BUSY, NONSEQ, SEQ\n  - Slave must only respond to NONSEQ and SEQ when selected',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HWRITE',
+                'type': 'signal',
+                'step': 5,
+                'title': 'HWRITE - Write Enable',
+                'description': 'Select AHB write enable signal\n  - Slave receives direction from master\n  - 1: Write transfer (slave accepts data)\n  - 0: Read transfer (slave provides data)\n  - Use to control internal read/write logic',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HWDATA',
+                'type': 'signal',
+                'step': 6,
+                'title': 'HWDATA - Write Data Bus',
+                'description': 'Select AHB write data bus signal\n  - Slave receives write data during data phase\n  - Valid one cycle after address phase\n  - Store data when HREADY=1 and transfer accepted',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HPROT',
+                'type': 'signal',
+                'step': 7,
+                'title': 'HPROT - Protection Control',
+                'description': 'Select AHB protection control signal\n  - Slave receives protection attributes\n  - Use for access permission checking\n  - Can reject transfers based on protection level',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HRDATA',
+                'type': 'signal',
+                'step': 8,
+                'title': 'HRDATA - Read Data Bus',
+                'description': 'Select AHB read data bus signal\n  - Slave drives read data during data phase\n  - Must be valid when HREADY asserts for read transfers\n  - Width matches bus width (typically 32 or 64 bits)',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HRESP',
+                'type': 'signal',
+                'step': 9,
+                'title': 'HRESP - Transfer Response',
+                'description': 'Select AHB transfer response signal\n  - Slave drives response status\n  - OKAY (0): Transfer successful\n  - ERROR (1): Transfer failed (address error, protection violation, etc.)\n  - Must drive with HREADY signal',
+                'example': 'Select from available signals',
+                'required': True,
+            },
+            {
+                'name': 'HREADY',
+                'type': 'signal',
+                'step': 10,
+                'title': 'HREADY - Transfer Done',
+                'description': 'Select AHB ready signal\n  - Slave drives to control transfer completion\n  - 1: Transfer complete\n  - 0: Insert wait states (extend data phase)\n  - Use for slow memory/peripheral access',
                 'example': 'Select from available signals',
                 'required': True,
             },
@@ -6697,6 +6883,128 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
         lines.append("  - Vertical Sync Width (VSW)")
         lines.append("  - Vertical Back Porch (VBP)")
         lines.append("  - Vertical Front Porch (VFP)")
+        lines.append("")
+    
+    elif plugin_name == 'AHB_M':
+        haddr = data.get('HADDR', '?')
+        hburst = data.get('HBURST', '?')
+        hsize = data.get('HSIZE', '?')
+        htrans = data.get('HTRANS', '?')
+        hwrite = data.get('HWRITE', '?')
+        hwdata = data.get('HWDATA', '?')
+        hprot = data.get('HPROT', '?')
+        hrdata = data.get('HRDATA', '?')
+        hresp = data.get('HRESP', '?')
+        hready = data.get('HREADY', '?')
+        
+        # Get base clock and reset from module_info
+        base_clk = '?'
+        base_rst = '?'
+        if state.module_info.clocks:
+            base_clk = state.module_info.clocks[0].get('name', '?')
+        if state.module_info.resets:
+            base_rst = state.module_info.resets[0].get('name', '?')
+        
+        lines.append("=" * 60)
+        lines.append("AHB MASTER PROTOCOL ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append("AMBA AHB Bus Master Verification")
+        lines.append("")
+        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Base Reset: {base_rst}")
+        lines.append("")
+        lines.append("AHB Master Signals:")
+        lines.append(f"  HADDR  : {haddr}   (Address Bus)")
+        lines.append(f"  HBURST : {hburst}  (Burst Type)")
+        lines.append(f"  HSIZE  : {hsize}   (Transfer Size)")
+        lines.append(f"  HTRANS : {htrans}  (Transfer Type)")
+        lines.append(f"  HWRITE : {hwrite}  (Write Enable)")
+        lines.append(f"  HWDATA : {hwdata}  (Write Data)")
+        lines.append(f"  HPROT  : {hprot}   (Protection)")
+        lines.append(f"  HRDATA : {hrdata}  (Read Data)")
+        lines.append(f"  HRESP  : {hresp}   (Response)")
+        lines.append(f"  HREADY : {hready}  (Ready)")
+        lines.append("")
+        lines.append("Timing Diagram (Write Transaction):")
+        lines.append("-" * 60)
+        lines.append("        Address Phase    Data Phase")
+        lines.append("HCLK:   ___|‾‾‾|___|‾‾‾|___|‾‾‾|___")
+        lines.append("HADDR:  ====< ADDR >===========")
+        lines.append("HTRANS: ====< NONSEQ >==========")
+        lines.append("HWRITE: ========< 1 >===========")
+        lines.append("HWDATA: =========< DATA >======")
+        lines.append("HREADY: ‾‾‾‾‾‾‾‾‾‾‾‾|___|‾‾‾‾‾")
+        lines.append("HRESP:  ‾‾‾‾‾‾‾‾‾‾‾‾< OK >‾‾‾‾")
+        lines.append("")
+        lines.append("Verified Conditions:")
+        lines.append("  ✓ Address phase: HTRANS=NONSEQ/SEQ with valid HADDR")
+        lines.append("  ✓ Data phase: HWDATA valid 1 cycle after address")
+        lines.append("  ✓ Ready control: HREADY=0 inserts wait states")
+        lines.append("  ✓ Response: HRESP with HREADY indicates completion")
+        lines.append("  ✓ Burst: HBURST type maintained through transaction")
+        lines.append("  ✓ Size alignment: HSIZE matches data width")
+        lines.append("")
+    
+    elif plugin_name == 'AHB_S':
+        haddr = data.get('HADDR', '?')
+        hburst = data.get('HBURST', '?')
+        hsize = data.get('HSIZE', '?')
+        htrans = data.get('HTRANS', '?')
+        hwrite = data.get('HWRITE', '?')
+        hwdata = data.get('HWDATA', '?')
+        hprot = data.get('HPROT', '?')
+        hrdata = data.get('HRDATA', '?')
+        hresp = data.get('HRESP', '?')
+        hready = data.get('HREADY', '?')
+        
+        # Get base clock and reset from module_info
+        base_clk = '?'
+        base_rst = '?'
+        if state.module_info.clocks:
+            base_clk = state.module_info.clocks[0].get('name', '?')
+        if state.module_info.resets:
+            base_rst = state.module_info.resets[0].get('name', '?')
+        
+        lines.append("=" * 60)
+        lines.append("AHB SLAVE PROTOCOL ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append("AMBA AHB Bus Slave Verification")
+        lines.append("")
+        lines.append(f"Base Clock: {base_clk}")
+        lines.append(f"Base Reset: {base_rst}")
+        lines.append("")
+        lines.append("AHB Slave Signals:")
+        lines.append(f"  HADDR  : {haddr}   (Address Bus)")
+        lines.append(f"  HBURST : {hburst}  (Burst Type)")
+        lines.append(f"  HSIZE  : {hsize}   (Transfer Size)")
+        lines.append(f"  HTRANS : {htrans}  (Transfer Type)")
+        lines.append(f"  HWRITE : {hwrite}  (Write Enable)")
+        lines.append(f"  HWDATA : {hwdata}  (Write Data)")
+        lines.append(f"  HPROT  : {hprot}   (Protection)")
+        lines.append(f"  HRDATA : {hrdata}  (Read Data)")
+        lines.append(f"  HRESP  : {hresp}   (Response)")
+        lines.append(f"  HREADY : {hready}  (Ready)")
+        lines.append("")
+        lines.append("Timing Diagram (Read Transaction):")
+        lines.append("-" * 60)
+        lines.append("        Address Phase    Data Phase")
+        lines.append("HCLK:   ___|‾‾‾|___|‾‾‾|___|‾‾‾|___")
+        lines.append("HADDR:  ====< ADDR >===========")
+        lines.append("HTRANS: ====< NONSEQ >==========")
+        lines.append("HWRITE: ========< 0 >===========")
+        lines.append("HRDATA: =========< DATA >======")
+        lines.append("HREADY: ‾‾‾‾‾‾‾‾‾‾‾‾|___|‾‾‾‾‾")
+        lines.append("HRESP:  ‾‾‾‾‾‾‾‾‾‾‾‾< OK >‾‾‾‾")
+        lines.append("")
+        lines.append("Verified Conditions:")
+        lines.append("  ✓ Address decode: Slave selected based on HADDR")
+        lines.append("  ✓ Response generation: HRESP=OKAY or ERROR")
+        lines.append("  ✓ Ready control: Slave can insert wait states")
+        lines.append("  ✓ Read data: HRDATA valid with HREADY for reads")
+        lines.append("  ✓ Write data: Accept HWDATA when HWRITE=1")
+        lines.append("  ✓ Protection check: HPROT validates access rights")
         lines.append("")
     
     else:
