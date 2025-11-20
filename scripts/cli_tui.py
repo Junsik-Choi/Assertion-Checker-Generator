@@ -4713,22 +4713,24 @@ def _get_assertion_plugins_info() -> List[Dict[str, Any]]:
 def _get_plugin_description(plugin_name: str) -> str:
     """Get description for each plugin type."""
     descriptions = {
-        'counter': 'Generate counter-based assertions with increment/decrement/reset conditions',
-        'handshake': 'Generate 2-phase or 4-phase handshake protocol assertions',
-        'sequence': 'Generate temporal sequence assertions',
-        'pulseWidth': 'Verify pulse width constraints within min/max clock cycle range',
-        'hact': 'Horizontal Active Pixel Count - Verify active pixels per line within min/max range',
-        'hsw': 'Horizontal Sync Width - Verify horizontal sync pulse width',
-        'hbp': 'Horizontal Back Porch - Verify timing between hsync and data enable start',
-        'hfp': 'Horizontal Front Porch - Verify timing between data enable end and hsync',
-        'vact': 'Vertical Active Line Count - Verify active lines per frame within min/max range',
-        'vbp': 'Vertical Back Porch - Verify lines between vsync and first active line',
-        'vfp': 'Vertical Front Porch - Verify lines between last active line and vsync',
-        'vsw': 'Vertical Sync Width - Verify vertical sync pulse width in lines',
-        'clockDivider': 'Clock Divider Verification - Verify clock divider ratio and output',
-        'synchronizer': 'Synchronizer Verification - Verify CDC synchronizer depth and correctness',
-        'delayCondition': 'Generate delay-based condition assertions with configurable timing',
-        'videosyncall': 'Video Sync All - Comprehensive video timing verification (all parameters)',
+        'counter': '\033[92mCounter\033[0m-based verification: Monitors \033[92m[Target Signal]\033[0m increment on \033[92m[Increment Condition]\033[0m, reset on \033[92m[Reset Condition]\033[0m, and verifies count value at \033[92m[Trigger]\033[0m matches expected value',
+        'handshake': 'Protocol verification: Validates handshake between \033[92m[Sender]\033[0m and \033[92m[Receiver]\033[0m signals using 2-phase, 4-phase, or ready-valid protocol patterns',
+        'sequence': 'Temporal pattern verification: Defines and verifies custom signal sequences with timing relationships',
+        'hact': 'Horizontal Active Pixels: Counts active pixels (when \033[92m[DE]\033[0m is HIGH) per line (between \033[92m[HSYNC]\033[0m pulses) and verifies count is within min/max range',
+        'hsw': 'Horizontal Sync Width: Measures \033[92m[HSYNC]\033[0m pulse width using \033[92m[Clock/Trigger]\033[0m and verifies it matches expected width (in cycles or events)',
+        'hbp': 'Horizontal Back Porch: Measures time from \033[92m[HSYNC]\033[0m falling edge to \033[92m[DE]\033[0m rising edge using \033[92m[Clock]\033[0m, verifies back porch timing is within range',
+        'hfp': 'Horizontal Front Porch: Measures time from \033[92m[DE]\033[0m falling edge to next \033[92m[HSYNC]\033[0m rising edge using \033[92m[Clock]\033[0m, verifies front porch timing is within range',
+        'vact': 'Vertical Active Lines: Counts active lines (when \033[92m[DE]\033[0m is HIGH during \033[92m[HSYNC]\033[0m) per frame (between \033[92m[VSYNC]\033[0m pulses) and verifies count is within min/max range',
+        'vbp': 'Vertical Back Porch: Counts \033[92m[HSYNC]\033[0m pulses from \033[92m[VSYNC]\033[0m falling to first active line (\033[92m[DE]\033[0m HIGH), verifies back porch line count is within range',
+        'vfp': 'Vertical Front Porch: Counts \033[92m[HSYNC]\033[0m pulses from last active line (\033[92m[DE]\033[0m LOW) to next \033[92m[VSYNC]\033[0m, verifies front porch line count is within range',
+        'vsw': 'Vertical Sync Width: Counts \033[92m[HSYNC]\033[0m pulses during \033[92m[VSYNC]\033[0m pulse, verifies sync width (in lines) matches expected value',
+        'clockDivider': 'Clock Divider: Verifies \033[92m[CLKOUT]\033[0m frequency matches \033[92m[Reference Clock]\033[0m divided by \033[92m[DIVRATIO]\033[0m, validates divider ratio from 1 to \033[92m[MAX]\033[0m',
+        'clockGate': 'Clock Gating: Monitors \033[92m[Enable Signal]\033[0m and verifies \033[92m[Clock Output]\033[0m is gated (stopped/enabled) after \033[92m[Depth Sync]\033[0m cycles with proper synchronization',
+        'synchronizer': 'CDC Synchronizer: Validates \033[92m[Output]\033[0m matches \033[92m[Input]\033[0m delayed by \033[92m[Depth Sync]\033[0m stages when \033[92m[Enable]\033[0m is active, ensures proper clock domain crossing',
+        'pulseWidth': 'Pulse Width: Measures \033[92m[Target Signal]\033[0m pulse width using \033[92m[Base Clock]\033[0m (hpulse) or \033[92m[Trigger Signal]\033[0m (vpulse), verifies width is between \033[92m[Min]\033[0m and \033[92m[Max]\033[0m',
+        'basicAssertion': 'Custom Logic: Creates user-defined \033[92mProperty\033[0m (trigger→result) or \033[92mSequence\033[0m (temporal pattern) with custom \033[92m[Clock]\033[0m, \033[92m[Disable]\033[0m, and \033[92m[Logic]\033[0m expressions',
+        'delayCondition': 'Delay Verification: Validates that \033[92m[Expected Signal]\033[0m matches expected condition after \033[92m[Delay Cycles]\033[0m from \033[92m[Trigger Signal]\033[0m activation',
+        'videosyncall': 'Complete Video Timing: Verifies all 8 video timing parameters (HACT, HSW, HBP, HFP, VACT, VSW, VBP, VFP) using \033[92m[HSYNC]\033[0m, \033[92m[VSYNC]\033[0m, and \033[92m[DE]\033[0m signals in a single assertion',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -4856,17 +4858,17 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'choice',
                 'step': 1,
                 'title': 'Pulse Type',
-                'description': 'Select pulse type:\n  hpulse: Uses base clock for counting\n  vpulse: Uses trigger signal for edge detection',
+                'description': 'Select pulse type:\n  hpulse: Clock-based counting (counts clock cycles)\n  vpulse: Event-based counting (counts trigger events)',
                 'options': ['hpulse', 'vpulse'],
                 'required': True,
             },
             {
                 'name': 'base_clock',
-                'type': 'choice',
+                'type': 'signal',
                 'step': 2,
-                'title': 'Base Clock Signal',
-                'description': 'Select base clock for counting (only for hpulse)',
-                'options': [],  # Will be populated from state.clocks
+                'title': 'Base Clock (for hpulse)',
+                'description': 'Select base clock for cycle counting (hpulse only)\n  - Each clock cycle increments the counter\n  - Used to measure pulse duration in clock cycles',
+                'example': 'i_clk',
                 'required': True,
                 'show_if': {'pulse_type': 'hpulse'},
             },
@@ -4874,9 +4876,9 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'name': 'trigger_signal',
                 'type': 'signal',
                 'step': 2,
-                'title': 'Trigger Signal (Edge Detector)',
-                'description': 'Select the signal whose edges trigger pulse measurement (vpulse only)\n  - Rising edge: Starts counting the pulse width\n  - Falling edge: Stops counting and checks width\n  - Example: i_frame_start triggers on frame boundaries\n  - Example: i_line_valid triggers on each video line\n  - Used to detect and measure pulse duration',
-                'example': 'i_frame_start (measures pulse between frame edges)',
+                'title': 'Trigger Signal (for vpulse)',
+                'description': 'Select trigger signal for event counting (vpulse only)\n  - Each trigger event increments the counter\n  - Used to measure pulse duration in events',
+                'example': 'i_hsync',
                 'required': True,
                 'show_if': {'pulse_type': 'vpulse'},
             },
@@ -4885,26 +4887,146 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'signal',
                 'step': 3,
                 'title': 'Target Pulse Signal',
-                'description': 'Select which signal to monitor for pulse width check',
-                'example': 'Select from available signals',
+                'description': 'Select the signal whose pulse width to verify',
+                'example': 'i_vsync',
                 'required': True,
             },
             {
                 'name': 'min_width',
                 'type': 'string',
                 'step': 4,
-                'title': 'Minimum Pulse Width',
-                'description': 'Enter minimum width (number or parameter like p1, p2)\nExample: 10 or PARAM_WIDTH',
-                'example': '10 or PARAM_WIDTH',
+                'title': 'Minimum Width',
+                'description': 'Enter minimum pulse width (number or parameter)\n  - For hpulse: clock cycles\n  - For vpulse: event count',
+                'example': '10 or PARAM_MIN',
                 'required': True,
             },
             {
                 'name': 'max_width',
                 'type': 'string',
                 'step': 5,
-                'title': 'Maximum Pulse Width',
-                'description': 'Enter maximum width (number or parameter like p1, p2)\nExample: 20 or MAX_COUNT',
-                'example': '20 or MAX_COUNT',
+                'title': 'Maximum Width',
+                'description': 'Enter maximum pulse width (number or parameter)\n  - For hpulse: clock cycles\n  - For vpulse: event count',
+                'example': '20 or PARAM_MAX',
+                'required': True,
+            },
+        ],
+        'basicAssertion': [
+            {
+                'name': 'property_or_sequence',
+                'type': 'choice',
+                'step': 1,
+                'title': 'Type Selection',
+                'description': 'Create a Property or Sequence?\n  Property: Complete assertion with trigger and expected behavior\n  Sequence: Reusable temporal pattern',
+                'options': ['property', 'sequence'],
+                'required': True,
+            },
+            {
+                'name': 'prop_name',
+                'type': 'string',
+                'step': 2,
+                'title': 'Property Name',
+                'description': 'Enter property name (e.g., p_my_check)',
+                'example': 'p_data_valid',
+                'required': True,
+                'show_if': {'property_or_sequence': 'property'},
+            },
+            {
+                'name': 'clock_condition',
+                'type': 'string',
+                'step': 3,
+                'title': 'Clock Condition',
+                'description': 'Enter clock condition (e.g., posedge clk)\n  - Used in @(...) for property timing',
+                'example': 'posedge clk',
+                'required': True,
+                'show_if': {'property_or_sequence': 'property'},
+            },
+            {
+                'name': 'disable_condition',
+                'type': 'string',
+                'step': 4,
+                'title': 'Disable Condition',
+                'description': 'Enter disable condition (e.g., !rst_n)\n  - Assertion disabled when this is true',
+                'example': '!rst_n',
+                'required': True,
+                'show_if': {'property_or_sequence': 'property'},
+            },
+            {
+                'name': 'trigger_condition',
+                'type': 'string',
+                'step': 5,
+                'title': 'Trigger Condition',
+                'description': 'Enter trigger condition (when assertion starts checking)\n  - Example: valid && ready\n  - Example: $rose(start)',
+                'example': 'valid && ready',
+                'required': True,
+                'show_if': {'property_or_sequence': 'property'},
+            },
+            {
+                'name': 'expected_result',
+                'type': 'string',
+                'step': 6,
+                'title': 'Expected Result',
+                'description': 'Enter expected behavior after trigger\n  - Example: ##1 data == expected_data\n  - Example: ##[1:5] done',
+                'example': '##1 data == expected_data',
+                'required': True,
+                'show_if': {'property_or_sequence': 'property'},
+            },
+            {
+                'name': 'seq_name',
+                'type': 'string',
+                'step': 2,
+                'title': 'Sequence Name',
+                'description': 'Enter sequence name (e.g., s_handshake)',
+                'example': 's_data_transfer',
+                'required': True,
+                'show_if': {'property_or_sequence': 'sequence'},
+            },
+            {
+                'name': 'seq_clock_condition',
+                'type': 'string',
+                'step': 3,
+                'title': 'Sequence Clock',
+                'description': 'Enter clock for sequence timing',
+                'example': 'posedge clk',
+                'required': True,
+                'show_if': {'property_or_sequence': 'sequence'},
+            },
+            {
+                'name': 'sequence_definition',
+                'type': 'string',
+                'step': 4,
+                'title': 'Sequence Definition',
+                'description': 'Enter sequence pattern\n  - Example: valid ##1 ready ##1 done\n  - Example: req ##[1:$] ack',
+                'example': 'valid ##1 ready ##1 done',
+                'required': True,
+                'show_if': {'property_or_sequence': 'sequence'},
+            },
+        ],
+        'clockGate': [
+            {
+                'name': 'depth_sync',
+                'type': 'signal',
+                'step': 1,
+                'title': 'Depth Sync Signal',
+                'description': 'Select depth sync counter signal\n  - Defines how many cycles to wait before gating takes effect',
+                'example': 'depth_sync_cnt',
+                'required': True,
+            },
+            {
+                'name': 'enable_signal',
+                'type': 'signal',
+                'step': 2,
+                'title': 'Enable Signal',
+                'description': 'Select clock gate enable signal\n  - When high: clock passes through\n  - When low: clock is gated',
+                'example': 'cg_enable',
+                'required': True,
+            },
+            {
+                'name': 'clock_out',
+                'type': 'signal',
+                'step': 3,
+                'title': 'Clock Output Signal',
+                'description': 'Select gated clock output signal\n  - The clock signal after gating logic',
+                'example': 'clk_gated',
                 'required': True,
             },
         ],
@@ -6490,6 +6612,68 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
         lines.append(f"When {trigger} triggers, check {expected} after {delay} cycles")
         lines.append("")
     
+    elif plugin_name == 'clockGate':
+        depth_sync = data.get('depth_sync', '?')
+        enable_sig = data.get('enable_signal', '?')
+        clk_out = data.get('clock_out', '?')
+        
+        lines.append("=" * 60)
+        lines.append("CLOCK GATE VERIFICATION")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Depth Sync: {depth_sync}")
+        lines.append(f"Enable Signal: {enable_sig}")
+        lines.append(f"Clock Output: {clk_out}")
+        lines.append("")
+        lines.append("Verifies clock gating behavior:")
+        lines.append(f"  - When enable=0: Clock passes after {depth_sync} cycles")
+        lines.append(f"  - When enable=1: Clock gated after {depth_sync} cycles")
+        lines.append("")
+    
+    elif plugin_name == 'basicAssertion':
+        prop_or_seq = data.get('property_or_sequence', '?')
+        
+        lines.append("=" * 60)
+        lines.append("CUSTOM ASSERTION")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        if prop_or_seq == 'property':
+            prop_name = data.get('prop_name', '?')
+            clk_cond = data.get('clock_condition', '?')
+            dis_cond = data.get('disable_condition', '?')
+            trig_cond = data.get('trigger_condition', '?')
+            result = data.get('expected_result', '?')
+            
+            lines.append(f"Type: Custom Property")
+            lines.append(f"Name: {prop_name}")
+            lines.append("")
+            lines.append(f"property {prop_name}();")
+            lines.append(f"    @({clk_cond}) disable iff({dis_cond})")
+            lines.append(f"    {trig_cond}")
+            lines.append(f"    |-> {result};")
+            lines.append(f"endproperty")
+            lines.append("")
+            lines.append("User-defined assertion logic")
+        
+        elif prop_or_seq == 'sequence':
+            seq_name = data.get('seq_name', '?')
+            seq_clk = data.get('seq_clock_condition', '?')
+            seq_def = data.get('sequence_definition', '?')
+            
+            lines.append(f"Type: Custom Sequence")
+            lines.append(f"Name: {seq_name}")
+            lines.append("")
+            lines.append(f"sequence {seq_name}();")
+            lines.append(f"    @({seq_clk})")
+            lines.append(f"    {seq_def}")
+            lines.append(f"endsequence")
+            lines.append("")
+            lines.append("Reusable temporal pattern")
+        else:
+            lines.append("Type: Not yet selected")
+        lines.append("")
+    
     elif plugin_name == 'videosyncall':
         hsync = data.get('hsync_signal', '?')
         vsync = data.get('vsync_signal', '?')
@@ -6574,71 +6758,67 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
 def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
     """Generate interface content for preview (simplified version)."""
     try:
-        from pathlib import Path
-        from assertions import get_registered_plugins  # type: ignore
+        # Generate a simple template preview without parsing
+        lines = []
+        lines.append("`include \"uvm_macros.svh\"")
+        lines.append("import uvm_pkg::*;")
+        lines.append("")
         
-        # Build common context for plugins
-        common_context = {
-            "module_info": {
-                "module": state.module_info.module,
-                "clocks": state.module_info.clocks,
-                "resets": state.module_info.resets,
-                "inputs": state.module_info.inputs,
-                "outputs": state.module_info.outputs,
-                "inouts": state.module_info.inouts,
-                "parameters": state.module_info.parameters,
-                "conditions": state.conditions,
-            },
-            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
-            "output_dir": "",
-            "session_dir": "",
-            "config": {
-                "auto_define_fill": False,
-                "enabled_plugins": None,
-                "emit_json": False,
-            },
-        }
+        if include_signals:
+            lines.append("// Signal Information:")
+            if state.module_info:
+                if state.module_info.clocks:
+                    lines.append("// Clocks:")
+                    for clk in state.module_info.clocks[:5]:
+                        lines.append(f"//   - {clk.get('name', '')}")
+                if state.module_info.resets:
+                    lines.append("// Resets:")
+                    for rst in state.module_info.resets[:5]:
+                        lines.append(f"//   - {rst.get('name', '')}")
+                if state.module_info.inputs:
+                    lines.append(f"// Inputs: {len(state.module_info.inputs)} signals")
+                if state.module_info.outputs:
+                    lines.append(f"// Outputs: {len(state.module_info.outputs)} signals")
+            lines.append("")
         
-        # Parse all sheets and generate SV using plugins
-        all_sv_snippets = []
+        lines.append("interface assertion_intf")
+        lines.append("(")
         
-        if include_asserts and state.session_excel_path and state.session_excel_path.exists():
-            plugin_types = get_registered_plugins()
-            
-            for pcls in plugin_types:
-                try:
-                    parsed = pcls().parse(state.session_excel_path)
-                    if not parsed:
-                        continue
-                    
-                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
-                    if not blocks and isinstance(parsed, dict):
-                        if parsed.get("sets"):
-                            blocks = parsed.get("sets")
-                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
-                            blocks = [parsed]
-                    
-                    if not blocks:
-                        continue
-                    
-                    ret = pcls().generate_sv(parsed, common_context)
-                    
-                    sv_txt = ""
-                    if isinstance(ret, dict):
-                        sv_txt = str(ret.get("sv", "") or "")
-                    elif isinstance(ret, (list, tuple)) and len(ret) >= 1:
-                        sv_txt = str(ret[0])
-                    elif isinstance(ret, str):
-                        sv_txt = ret
-                    
-                    if sv_txt.strip():
-                        all_sv_snippets.append((pcls.plugin_name, sv_txt))
-                        
-                except Exception:
-                    continue
+        # Add some sample ports
+        if state.module_info and state.module_info.clocks:
+            clk = state.module_info.clocks[0]
+            lines.append(f"    input logic {clk.get('name', 'clk')},")
+        if state.module_info and state.module_info.resets:
+            rst = state.module_info.resets[0]
+            lines.append(f"    input logic {rst.get('name', 'rst_n')}")
+        else:
+            lines[-1] = lines[-1].rstrip(',')
         
-        # Generate interface from plugins
-        return _generate_interface_from_plugins(state, all_sv_snippets, include_signals)
+        lines.append(");")
+        lines.append("")
+        
+        if include_asserts:
+            lines.append("// Assertions will be generated here")
+            lines.append("// Based on Excel sheet configuration:")
+            if state.session_excel_path:
+                lines.append(f"//   Excel: {state.session_excel_path.name}")
+            lines.append("//")
+            lines.append("// property p_example;")
+            lines.append("//     @(posedge clk) disable iff(!rst_n)")
+            lines.append("//     condition |-> expected_behavior;")
+            lines.append("// endproperty")
+            lines.append("//")
+            lines.append("// assert property (p_example)")
+            lines.append("//     else `uvm_error(\"ASSERTION\", \"Assertion failed\")")
+        
+        lines.append("")
+        lines.append("endinterface")
+        lines.append("")
+        lines.append("// NOTE: This is a preview. Actual content will be generated")
+        lines.append("// by parsing Excel sheets and running assertion plugins.")
+        lines.append("// Press Enter to generate the actual files.")
+        
+        return "\n".join(lines)
         
     except Exception as e:
         return f"// Error generating interface preview: {e}\n"
@@ -6647,69 +6827,41 @@ def _generate_interface_content(state: AppState, include_asserts: bool, include_
 def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
     """Generate instance content for preview (simplified version)."""
     try:
-        from pathlib import Path
-        from assertions import get_registered_plugins  # type: ignore
+        # Generate a simple template preview without parsing
+        lines = []
+        lines.append("`include \"uvm_macros.svh\"")
+        lines.append("import uvm_pkg::*;")
+        lines.append("")
+        lines.append("// Assertion Interface Instance")
+        lines.append("assertion_intf u_assertion_intf")
+        lines.append("(")
         
-        # Build common context for plugins
-        common_context = {
-            "module_info": {
-                "module": state.module_info.module,
-                "clocks": state.module_info.clocks,
-                "resets": state.module_info.resets,
-                "inputs": state.module_info.inputs,
-                "outputs": state.module_info.outputs,
-                "inouts": state.module_info.inouts,
-                "parameters": state.module_info.parameters,
-                "conditions": state.conditions,
-            },
-            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
-            "output_dir": "",
-            "session_dir": "",
-            "config": {
-                "auto_define_fill": False,
-                "enabled_plugins": None,
-                "emit_json": False,
-            },
-        }
+        # Add some sample connections
+        if state.module_info and state.module_info.clocks:
+            clk = state.module_info.clocks[0]
+            lines.append(f"    .{clk.get('name', 'clk')}({clk.get('name', 'clk')}),")
+        if state.module_info and state.module_info.resets:
+            rst = state.module_info.resets[0]
+            lines.append(f"    .{rst.get('name', 'rst_n')}({rst.get('name', 'rst_n')})")
+        else:
+            lines[-1] = lines[-1].rstrip(',')
         
-        # Parse all sheets and generate instance code using plugins
-        all_inst_snippets = []
+        lines.append(");")
+        lines.append("")
         
-        if include_asserts and state.session_excel_path and state.session_excel_path.exists():
-            plugin_types = get_registered_plugins()
-            
-            for pcls in plugin_types:
-                try:
-                    parsed = pcls().parse(state.session_excel_path)
-                    if not parsed:
-                        continue
-                    
-                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
-                    if not blocks and isinstance(parsed, dict):
-                        if parsed.get("sets"):
-                            blocks = parsed.get("sets")
-                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
-                            blocks = [parsed]
-                    
-                    if not blocks:
-                        continue
-                    
-                    ret = pcls().generate_sv(parsed, common_context)
-                    
-                    inst_txt = ""
-                    if isinstance(ret, dict):
-                        inst_txt = str(ret.get("sv_inst", "") or "")
-                    elif isinstance(ret, (list, tuple)) and len(ret) >= 2:
-                        inst_txt = str(ret[1])
-                    
-                    if inst_txt.strip():
-                        all_inst_snippets.append((pcls.plugin_name, inst_txt))
-                        
-                except Exception:
-                    continue
+        if include_signals:
+            lines.append("// Signal connections will be generated here")
+            lines.append(f"// Total signals to connect: {len(state.module_info.inputs) + len(state.module_info.outputs) if state.module_info else 0}")
+            lines.append("//")
+            lines.append("// Example:")
+            lines.append("// assign u_assertion_intf.signal_name = top.dut.signal_name;")
         
-        # Generate instance from plugins
-        return _generate_instance_from_plugins(state, all_inst_snippets, include_signals)
+        lines.append("")
+        lines.append("// NOTE: This is a preview. Actual content will be generated")
+        lines.append("// by parsing Excel sheets and running assertion plugins.")
+        lines.append("// Press Enter to generate the actual files.")
+        
+        return "\n".join(lines)
         
     except Exception as e:
         return f"// Error generating instance preview: {e}\n"
