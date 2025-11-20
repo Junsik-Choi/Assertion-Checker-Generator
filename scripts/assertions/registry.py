@@ -31,6 +31,8 @@ def get_registered_plugins() -> List[Type[BaseAssertionPlugin]]:
         from . import clockDivider # noqa: F401     
         from . import clockGate # noqa: F401             
         from . import pulseWidth # noqa: F401  
+        from . import AHB_M # noqa: F401  
+        from . import AHB_S # noqa: F401  
     except Exception:
         pass
     return list(PLUGINS)
