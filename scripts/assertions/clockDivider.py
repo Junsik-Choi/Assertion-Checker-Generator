@@ -391,7 +391,7 @@ class ClockDividerPlugin(BaseAssertionPlugin):
         lines.append("")
         lines.append("    property p_clkdiv_check0;")
         lines.append("        int h_cnt, l_cnt;")
-        lines.append(f"        @(posedge {ref_clk} or negedge {ref_clk}) disable iff (!{base_rst} || {disable})")
+        lines.append(f"        @(posedge {ref_clk}) disable iff (!{base_rst} || {disable})")
         lines.append(f"        $rose({start_flag})")
         lines.append("        |-> first_match(s_clkdiv_counter(h_cnt, l_cnt))")
         lines.append(f"        |-> ((h_cnt == ({divratio} + 1)) && (l_cnt == ({divratio} + 1)))")
