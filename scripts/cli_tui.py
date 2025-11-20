@@ -1117,8 +1117,22 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         
         elif state.gen_wizard_active:
             # File generation wizard rendering
+            try:
+                stdscr.erase()  # Clear screen at the start
+            except:
+                pass
+            
             _render_gen_wizard(stdscr, state)
             max_y, max_x = stdscr.getmaxyx()
+            
+            # Status message display
+            if status_msg:
+                try:
+                    color = _PAIR_BY_NAME.get("green" if "success" in status_msg.lower() or "generated" in status_msg.lower() else "red", 0)
+                    stdscr.addnstr(max_y - 4, 2, _truncate(status_msg, max_x - 4), max_x - 4, 
+                                  curses.A_BOLD | curses.color_pair(color))
+                except curses.error:
+                    pass
             
             # Hints for file generation wizard
             if state.gen_wizard_stage == 'filename':
@@ -1144,9 +1158,15 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             edit_w = max_x - len(prompt) - 1
             current = "".join(input_buf)
             try:
+                # Clear prompt line completely
+                stdscr.move(max_y - 1, 0)
+                stdscr.clrtoeol()
                 stdscr.addnstr(max_y - 1, 0, prompt, len(prompt))
                 stdscr.addnstr(max_y - 1, len(prompt), _truncate(current, edit_w), edit_w)
-                curses.curs_set(1)
+                try:
+                    curses.curs_set(1)
+                except:
+                    pass
                 stdscr.move(max_y - 1, len(prompt) + min(cursor_pos, edit_w))
             except curses.error:
                 pass
@@ -1155,8 +1175,86 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             
             # Handle input
             ch = stdscr.getch()
+            
             if ch in (curses.KEY_RESIZE,):
                 continue
+            
+            # SPECIAL HANDLING FOR PREVIEW STAGE - Direct key actions
+            if state.gen_wizard_stage == 'preview':
+                # These keys work immediately without Enter
+                if ch == ord('n'):  # Next page
+                    state.gen_preview_page += 1
+                    status_msg = "Scrolled down"
+                    continue
+                elif ch == ord('N'):  # Previous page
+                    state.gen_preview_page = max(0, state.gen_preview_page - 1)
+                    status_msg = "Scrolled up"
+                    continue
+                elif ch == ord('f') and len(input_buf) == 0:  # Switch file (only if no input)
+                    if state.gen_file_type == 3:  # Both files
+                        state.gen_preview_file_idx = 1 - state.gen_preview_file_idx
+                        state.gen_preview_page = 0
+                        state.gen_preview_lines = _generate_preview_content(state)
+                        file_name = ["Interface (.if.sv)", "Instance (.inst.sv)"][state.gen_preview_file_idx]
+                        status_msg = f"Switched to {file_name}"
+                    else:
+                        status_msg = "Only one file type selected"
+                    continue
+                elif ch == ord('b') and len(input_buf) == 0:  # Back (only if no input)
+                    state.gen_wizard_stage = 'data_source'
+                    status_msg = "Returned to data source selection"
+                    input_buf.clear()
+                    cursor_pos = 0
+                    continue
+                elif ch in (ord('q'), ord('Q')) and len(input_buf) == 0:  # Quit (only if no input)
+                    state.gen_wizard_active = False
+                    status_msg = "File generation cancelled"
+                    continue
+                elif ch in (10, 13) and len(input_buf) == 0:  # Enter with empty buffer = GENERATE
+                    # Show generating message immediately
+                    try:
+                        stdscr.erase()
+                        max_y, max_x = stdscr.getmaxyx()
+                        stdscr.addnstr(max_y // 2, (max_x - 30) // 2, "Generating files...", 30, 
+                                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+                        stdscr.refresh()
+                    except:
+                        pass
+                    
+                    # Generate files
+                    try:
+                        msg = _generate_files(state)
+                        status_msg = msg
+                        state.gen_wizard_active = False
+                    except Exception as e:
+                        import traceback
+                        status_msg = f"ERROR: {str(e)}\n{traceback.format_exc()[:500]}"
+                        state.gen_wizard_active = False
+                    
+                    # Show result and wait for key
+                    try:
+                        stdscr.erase()
+                        max_y, max_x = stdscr.getmaxyx()
+                        
+                        # Show result message
+                        lines = status_msg.split('\n')
+                        y = max_y // 2 - len(lines) // 2
+                        for line in lines[:10]:  # Show max 10 lines
+                            if y < max_y - 2:
+                                color = _PAIR_BY_NAME.get("green" if "Generated" in line else "red", 0)
+                                stdscr.addnstr(y, 2, line[:max_x-4], max_x-4, 
+                                              curses.A_BOLD | curses.color_pair(color))
+                                y += 1
+                        
+                        # Show instruction
+                        stdscr.addnstr(max_y - 2, 2, "Press any key to continue...", max_x-4, curses.A_DIM)
+                        stdscr.refresh()
+                        stdscr.getch()  # Wait for key
+                    except:
+                        pass
+                    
+                    continue
+            
             if ch in (curses.KEY_BACKSPACE, 127, 8):
                 if cursor_pos > 0:
                     del input_buf[cursor_pos - 1]
@@ -1177,17 +1275,24 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 if state.gen_wizard_stage == 'filename':
                     if not cmdline:
                         status_msg = "ERROR: Filename cannot be empty"
-                        continue
-                    state.gen_filename = cmdline
-                    state.gen_wizard_stage = 'file_type'
-                    state.gen_file_type = None
+                    else:
+                        state.gen_filename = cmdline
+                        state.gen_wizard_stage = 'file_type'
+                        state.gen_file_type = None
+                        status_msg = ""
+                
                 elif state.gen_wizard_stage == 'file_type':
                     if cmdline in ('1', '2', '3'):
                         state.gen_file_type = int(cmdline)
                         state.gen_wizard_stage = 'data_source'
                         state.gen_data_source = None
+                        status_msg = ""
+                    elif cmdline in ('q', 'Q'):
+                        state.gen_wizard_active = False
+                        status_msg = "File generation cancelled"
                     else:
                         status_msg = "ERROR: Enter 1, 2, or 3"
+                
                 elif state.gen_wizard_stage == 'data_source':
                     if cmdline in ('1', '2', '3'):
                         state.gen_data_source = cmdline
@@ -1196,16 +1301,19 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                         state.gen_preview_file_idx = 0
                         # Generate full preview content
                         state.gen_preview_lines = _generate_preview_content(state)
+                        status_msg = ""
                     elif cmdline == 'b':
                         state.gen_wizard_stage = 'file_type'
+                        status_msg = ""
+                    elif cmdline in ('q', 'Q'):
+                        state.gen_wizard_active = False
+                        status_msg = "File generation cancelled"
                     else:
                         status_msg = "ERROR: Enter 1, 2, 3, or 'b' to go back"
+                
                 elif state.gen_wizard_stage == 'preview':
-                    if cmdline == '':  # Empty = generate
-                        msg = _generate_files(state)
-                        status_msg = msg
-                        state.gen_wizard_active = False
-                    elif cmdline == 'n':  # Next page
+                    # Handle preview stage commands
+                    if cmdline == 'n':  # Next page
                         state.gen_preview_page += 1
                         status_msg = "Scrolled down"
                     elif cmdline == 'N':  # Previous page
@@ -1222,14 +1330,16 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                             status_msg = "Only one file type selected"
                     elif cmdline == 'b':
                         state.gen_wizard_stage = 'data_source'
-                    elif cmdline == 'q' or cmdline == 'Q':
+                        status_msg = "Returned to data source selection"
+                    elif cmdline in ('q', 'Q'):
                         state.gen_wizard_active = False
                         status_msg = "File generation cancelled"
                     else:
-                        status_msg = "ERROR: Press Enter to generate, n/N to scroll, 'f' to switch file, or 'b' to edit"
-                elif cmdline == 'q' or cmdline == 'Q':
-                    state.gen_wizard_active = False
-                    status_msg = "File generation cancelled"
+                        # Empty string (just Enter) or any other input = generate files
+                        msg = _generate_files(state)
+                        status_msg = msg
+                        state.gen_wizard_active = False
+                
                 continue
             # Regular char
             if 0 <= ch <= 255:
@@ -1406,6 +1516,10 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                         if not state.onboarding_cand_visible:
                             state.onboarding_cand_page = 0
                         state.onboarding_cand_visible = True
+                        # Linux-like: If only one match and it's a directory, auto-append slash
+                        if len(items) == 1 and items[0][1]:  # Single item and it's a directory
+                            input_buf.append('/')
+                            cursor_pos = len(input_buf)
                     else:
                         # No new common part → advance candidates page (wrap)
                         # Compute paging using same geometry as renderer
@@ -1974,9 +2088,9 @@ def _main(stdscr: "curses._CursesWindow") -> None:
             pass
 
         # Command hints line (second last line)
-        hints = "[help] [new] [gen] [ms] [param] [f/F] [n/N] [quit|q]"
+        hints = "[help: Help], [new: Assertion], [gen: Files], [ms: Signal], [param: Param], [f/F: Filter], [n/N: Page], [q: Quit]"
         try:
-            stdscr.addnstr(max_y - 2, 0, _truncate(hints, max_x - 1), max_x - 1)
+            stdscr.addnstr(max_y - 2, 0, _truncate(hints, max_x - 1), max_x - 1, curses.A_DIM)
         except curses.error:
             pass
 
@@ -4006,9 +4120,37 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             row_index += 1
         # Empty-state message
         if len(filtered) == 0:
-            msg = "No previous sessions. Type 'new' to start."
             try:
-                stdscr.addnstr(list_y + 3, list_margin_x + 2, _truncate(msg, inner_w), inner_w, curses.A_DIM)
+                # Center the message vertically in the list area
+                center_y = list_y + (list_h // 2)
+                
+                # Line 1: "No previous sessions."
+                msg1 = "No previous sessions."
+                x1 = list_margin_x + (inner_w - len(msg1)) // 2
+                stdscr.addnstr(center_y - 2, x1, msg1, inner_w, 
+                              curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+                
+                # Line 2: Empty line for spacing
+                
+                # Line 3: "Type 'new' to start a new session"
+                msg_part1 = "Type "
+                msg_new = "new"
+                msg_part2 = " to start a new session"
+                full_msg = msg_part1 + msg_new + msg_part2
+                x2 = list_margin_x + (inner_w - len(full_msg)) // 2
+                
+                # Draw "Type " in white
+                stdscr.addnstr(center_y, x2, msg_part1, inner_w, curses.A_BOLD)
+                
+                # Draw "new" in bright green with extra emphasis
+                x_new = x2 + len(msg_part1)
+                stdscr.addnstr(center_y, x_new, msg_new, inner_w, 
+                              curses.A_BOLD | curses.A_REVERSE | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+                
+                # Draw " to start a new session" in white
+                x_part2 = x_new + len(msg_new)
+                stdscr.addnstr(center_y, x_part2, msg_part2, inner_w, curses.A_BOLD)
+                
             except curses.error:
                 pass
         # Hints block (color-coded) on the line above the prompt
@@ -5819,33 +5961,89 @@ def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) ->
 
 
 def _render_type_selection_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
-    """Render type selection screen."""
+    """Render type selection screen with pagination and colored text."""
+    import re
+    
     plugins = _get_assertion_plugins_info()
+    
+    # Initialize page number if not set
+    if not hasattr(state, 'wizard_page'):
+        state.wizard_page = 0
+    
+    # Calculate items per page (each plugin takes 2 lines)
+    items_per_page = max(5, (box_h - 8) // 2)
+    total_pages = (len(plugins) + items_per_page - 1) // items_per_page
+    
+    # Ensure page is in valid range
+    if state.wizard_page >= total_pages:
+        state.wizard_page = 0
+    elif state.wizard_page < 0:
+        state.wizard_page = total_pages - 1
+    
+    start_idx = state.wizard_page * items_per_page
+    end_idx = min(start_idx + items_per_page, len(plugins))
+    page_plugins = plugins[start_idx:end_idx]
     
     y = top + 2
     try:
-        stdscr.addnstr(y, margin_x + 2, "Step 1: Select Assertion Type", box_w - 4, curses.A_BOLD)
+        title = f"Step 1: Select Assertion Type (Page {state.wizard_page + 1}/{total_pages})"
+        stdscr.addnstr(y, margin_x + 2, title, box_w - 4, curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
         y += 2
     except curses.error:
         pass
     
-    for i, plugin in enumerate(plugins, start=1):
-        if y >= top + box_h - 4:
+    # Helper to strip ANSI codes and apply curses color
+    def strip_ansi(text):
+        """Remove ANSI escape codes."""
+        return re.sub(r'\033\[\d+m', '', text)
+    
+    def render_colored_text(stdscr, y, x, text, max_width):
+        """Render text with ANSI color codes converted to curses colors."""
+        # Pattern: \033[92m = green, \033[0m = reset
+        parts = re.split(r'(\033\[\d+m)', text)
+        current_x = x
+        current_color = 0
+        
+        for part in parts:
+            if part == '\033[92m':  # Green
+                current_color = _PAIR_BY_NAME.get("green", 0)
+            elif part == '\033[0m':  # Reset
+                current_color = 0
+            elif part:  # Text content
+                remaining = max_width - (current_x - x)
+                if remaining > 0:
+                    try:
+                        stdscr.addnstr(y, current_x, part[:remaining], remaining, 
+                                      curses.color_pair(current_color))
+                        current_x += len(part[:remaining])
+                    except curses.error:
+                        pass
+    
+    for i, plugin in enumerate(page_plugins, start=start_idx + 1):
+        if y >= top + box_h - 5:
             break
         
         try:
-            option_line = f"[{i}] {plugin['name'].upper()}"
-            stdscr.addnstr(y, margin_x + 4, _truncate(option_line, box_w - 6), box_w - 6, curses.A_BOLD)
+            option_line = f"  [{i}] {plugin['name'].upper()}"
+            stdscr.addnstr(y, margin_x + 2, _truncate(option_line, box_w - 4), box_w - 4, 
+                          curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
             y += 1
             
-            desc_line = f"    {plugin['description']}"
-            stdscr.addnstr(y, margin_x + 4, _truncate(desc_line, box_w - 6), box_w - 6, curses.A_DIM)
+            desc = plugin['description']
+            render_colored_text(stdscr, y, margin_x + 6, desc, box_w - 8)
             y += 1
         except curses.error:
             pass
     
+    # Show pagination controls
     try:
-        y = top + box_h - 3
+        y = top + box_h - 4
+        if total_pages > 1:
+            nav_hint = f"Page {state.wizard_page + 1}/{total_pages} - Press 'n' for next, 'N' for previous"
+            stdscr.addnstr(y, margin_x + 2, _truncate(nav_hint, box_w - 4), box_w - 4, 
+                          curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+            y += 1
+        
         inst = "Enter [1-9] to select type, or q to quit"
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, curses.A_DIM)
     except curses.error:
@@ -7132,6 +7330,291 @@ def _generate_interface_content(state: AppState, include_asserts: bool, include_
         return f"// Error generating interface preview: {e}\n"
 
 
+def _parse_excel_sheet_directly(wb, sheet_name: str, module_info, context: dict) -> dict:
+    """
+    Parse Excel sheet directly without user input - EXACTLY like wizard mode does it.
+    Reads existing data from Excel and returns parsed data structure for plugin.generate_sv().
+    
+    This replicates the logic from each plugin's parse() method, but WITHOUT user input.
+    Excel must already contain data (from previous assertion wizard sessions).
+    """
+    try:
+        ws = wb[sheet_name]
+    except KeyError:
+        return None
+    
+    # Import parsing utilities from handshake plugin (they work for all plugins)
+    try:
+        from assertions.handshake import (
+            find_cell, _ensure_handshake_layout, 
+            parse_handshake_block_for_row, _port_width_token,
+            ALLOWED_TYPES
+        )
+    except ImportError:
+        return None
+    
+    sheet_lower = sheet_name.lower()
+    
+    # ========== HANDSHAKE ==========
+    if sheet_lower == 'handshake':
+        # Use official handshake parsing logic
+        try:
+            _, type_col, data_row = _ensure_handshake_layout(ws)
+        except:
+            return None
+        
+        # Get Base Clock/Reset from Define sheet (formulas are not evaluated in handshake sheet)
+        try:
+            define_ws = wb['Define']
+            base_clk_from_define = define_ws['C5'].value
+            base_rst_from_define = define_ws['C6'].value
+        except:
+            base_clk_from_define = None
+            base_rst_from_define = None
+        
+        # Fallback to module_info
+        if not base_clk_from_define and module_info and module_info.clocks:
+            base_clk_from_define = module_info.clocks[0].get('name', 'clk')
+        if not base_rst_from_define and module_info and module_info.resets:
+            base_rst_from_define = module_info.resets[0].get('name', 'rst_n')
+        
+        base_clk_from_define = str(base_clk_from_define).strip() if base_clk_from_define else "clk"
+        base_rst_from_define = str(base_rst_from_define).strip() if base_rst_from_define else "rst_n"
+        
+        # Scan all rows with data (Type column not empty)
+        blocks = []
+        for row_idx in range(data_row, min(50, ws.max_row + 1)):
+            type_val = ws.cell(row=row_idx, column=type_col).value
+            if not type_val or str(type_val).strip() == "":
+                continue  # Skip empty rows
+            
+            # Parse this row using official parser
+            info = parse_handshake_block_for_row(ws, row_idx, type_col)
+            
+            # Override Base Clock/Reset with values from Define sheet
+            if not info.get("Base Clock") or info.get("Base Clock") == "":
+                info["Base Clock"] = base_clk_from_define
+            if not info.get("Reset") or info.get("Reset") == "":
+                info["Reset"] = base_rst_from_define
+            
+            # Add width information from module_info
+            mod_dict = {}
+            if module_info:
+                mod_dict = {
+                    "clocks": module_info.clocks or [],
+                    "resets": module_info.resets or [],
+                    "inputs": module_info.inputs or [],
+                    "outputs": module_info.outputs or [],
+                    "inouts": module_info.inouts or [],
+                }
+            
+            info["Base Clock Width"] = _port_width_token(mod_dict, info.get("Base Clock", ""))
+            info["Reset Width"] = _port_width_token(mod_dict, info.get("Reset", ""))
+            info["Sender Width"] = _port_width_token(mod_dict, info.get("Sender", ""))
+            info["Receiver Width"] = _port_width_token(mod_dict, info.get("Receiver", ""))
+            
+            # Validate type
+            pt = (info.get("phase_type", "") or "").lower()
+            if pt in ALLOWED_TYPES and info.get("Sender") and info.get("Receiver"):
+                blocks.append(info)
+        
+        return {"blocks": blocks} if blocks else None
+    
+    # ========== COUNTER ==========
+    elif sheet_lower == 'counter':
+        # Use official counter parsing logic
+        try:
+            from assertions.counter import _ensure_counter_layout, parse_counter_block_for_row, _port_width_token as counter_width_token
+        except ImportError:
+            return None
+        
+        try:
+            _, target_col, data_row = _ensure_counter_layout(ws)
+        except:
+            return None
+        
+        # Get Base Clock/Reset from Define sheet
+        try:
+            define_ws = wb['Define']
+            base_clk_from_define = define_ws['C5'].value
+            base_rst_from_define = define_ws['C6'].value
+        except:
+            base_clk_from_define = None
+            base_rst_from_define = None
+        
+        if not base_clk_from_define and module_info and module_info.clocks:
+            base_clk_from_define = module_info.clocks[0].get('name', 'clk')
+        if not base_rst_from_define and module_info and module_info.resets:
+            base_rst_from_define = module_info.resets[0].get('name', 'rst_n')
+        
+        base_clk_from_define = str(base_clk_from_define).strip() if base_clk_from_define else "clk"
+        base_rst_from_define = str(base_rst_from_define).strip() if base_rst_from_define else "rst_n"
+        
+        # Scan all rows with data (Target column not empty)
+        blocks = []
+        for row_idx in range(data_row, min(50, ws.max_row + 1)):
+            target_val = ws.cell(row=row_idx, column=target_col).value
+            if not target_val or str(target_val).strip() == "":
+                continue  # Skip empty rows
+            
+            # Parse this row using official parser
+            info = parse_counter_block_for_row(ws, row_idx, target_col)
+            
+            # Override Base Clock/Reset with values from Define sheet
+            if not info.get("Base Clock") or info.get("Base Clock") == "":
+                info["Base Clock"] = base_clk_from_define
+            if not info.get("Reset") or info.get("Reset") == "":
+                info["Reset"] = base_rst_from_define
+            
+            # Add width information from module_info
+            mod_dict = {}
+            if module_info:
+                mod_dict = {
+                    "clocks": module_info.clocks or [],
+                    "resets": module_info.resets or [],
+                    "inputs": module_info.inputs or [],
+                    "outputs": module_info.outputs or [],
+                    "inouts": module_info.inouts or [],
+                }
+            
+            info["Base Clock Width"] = counter_width_token(mod_dict, info.get("Base Clock", ""))
+            info["Reset Width"] = counter_width_token(mod_dict, info.get("Reset", ""))
+            info["Plus Condition Width"] = counter_width_token(mod_dict, info.get("Plus Condition", ""))
+            info["Reset Condition Width"] = counter_width_token(mod_dict, info.get("Reset Condition", ""))
+            info["Trigger Condition Width"] = counter_width_token(mod_dict, info.get("Trigger Condition", ""))
+            info["Expect Count Value Width"] = counter_width_token(mod_dict, info.get("Expect Count Value", ""))
+            
+            # Add empty ports lists (expression parsing would need more logic)
+            info["Plus Condition Ports"] = []
+            info["Reset Condition Ports"] = []
+            info["Trigger Condition Ports"] = []
+            info["Expect Count Value Ports"] = []
+            
+            # Validate required fields
+            if (info.get("Target") and info.get("Plus Condition") and 
+                info.get("Trigger Condition") and info.get("Expect Count Value")):
+                blocks.append(info)
+        
+        return {"blocks": blocks} if blocks else None
+    
+    # ========== AHB_M / AHB_S ==========
+    elif sheet_lower in ['ahb_m', 'ahb_s']:
+        # Get Base Clock/Reset from Define sheet
+        try:
+            define_ws = wb['Define']
+            base_clk = str(define_ws['C5'].value).strip() if define_ws['C5'].value else "clk"
+            base_rst = str(define_ws['C6'].value).strip() if define_ws['C6'].value else "rst_n"
+        except:
+            base_clk = module_info.clocks[0].get('name', 'clk') if module_info and module_info.clocks else 'clk'
+            base_rst = module_info.resets[0].get('name', 'rst_n') if module_info and module_info.resets else 'rst_n'
+        
+        # AHB signals in row 6 (headers), row 7+ (values)
+        ahb_signals = ["HADDR", "HBURST", "HSIZE", "HTRANS", "HWRITE", "HWDATA", "HPROT", "HRDATA", "HRESP", "HREADY"]
+        
+        # Scan multiple rows for AHB configurations
+        blocks = []
+        for row_idx in range(7, min(20, ws.max_row + 1)):
+            signal_values = {}
+            has_data = False
+            
+            for sig_name in ahb_signals:
+                sig_r, sig_c = find_cell(ws, sig_name)
+                if sig_r and sig_c:
+                    # Check if this row has data
+                    sig_val = ws.cell(row=row_idx, column=sig_c).value
+                    if sig_val and str(sig_val).strip():
+                        signal_values[sig_name] = str(sig_val).strip()
+                        has_data = True
+            
+            if has_data and len(signal_values) >= 3:  # Need at least 3 signals
+                signal_values["Base Clock"] = base_clk
+                signal_values["Reset"] = base_rst
+                blocks.append(signal_values)
+        
+        if blocks:
+            return {"blocks": blocks}
+        
+        return None
+    
+    # ========== ALL OTHER TYPES (Generic parsing) ==========
+    # This handles: HSW, HBP, HACT, HFP, VSW, VBP, VACT, VFP, clockGate, clockDivider, synchronizer, pulseWidth, etc.
+    else:
+        # Get Base Clock/Reset from Define sheet
+        try:
+            define_ws = wb['Define']
+            base_clk_from_define = define_ws['C5'].value
+            base_rst_from_define = define_ws['C6'].value
+        except:
+            base_clk_from_define = None
+            base_rst_from_define = None
+        
+        # Fallback to module_info
+        if not base_clk_from_define and module_info and module_info.clocks:
+            base_clk_from_define = module_info.clocks[0].get('name', 'clk')
+        if not base_rst_from_define and module_info and module_info.resets:
+            base_rst_from_define = module_info.resets[0].get('name', 'rst_n')
+        
+        base_clk = str(base_clk_from_define).strip() if base_clk_from_define else "clk"
+        base_rst = str(base_rst_from_define).strip() if base_rst_from_define else "rst_n"
+        
+        # Try to find data rows - scan for non-empty cells after headers
+        data_found = False
+        blocks = []
+        
+        # Scan entire sheet for data (row-by-row approach)
+        for row_idx in range(1, min(100, ws.max_row + 1)):
+            row_data = {}
+            has_data = False
+            
+            # Check columns 2-10 for data
+            for col_idx in range(2, 11):
+                cell_value = ws.cell(row=row_idx, column=col_idx).value
+                if cell_value and str(cell_value).strip():
+                    # Get column header (look up for label)
+                    for header_row in range(max(1, row_idx - 5), row_idx):
+                        header_val = ws.cell(row=header_row, column=col_idx).value
+                        if header_val and str(header_val).strip():
+                            label = str(header_val).strip()
+                            value = str(cell_value).strip()
+                            # Skip header rows themselves
+                            if value.lower() != label.lower():
+                                row_data[label] = value
+                                has_data = True
+                            break
+            
+            if has_data and len(row_data) > 2:  # Need at least 3 fields for meaningful data
+                # Add Base Clock/Reset
+                row_data["Base Clock"] = base_clk
+                row_data["Reset"] = base_rst
+                blocks.append(row_data)
+                data_found = True
+        
+        if data_found and blocks:
+            return {"blocks": blocks}
+        
+        # Fallback: simple key-value parsing
+        signal_map = {}
+        for row_idx in range(1, min(50, ws.max_row + 1)):
+            for col_idx in range(2, 8):
+                label_cell = ws.cell(row=row_idx, column=col_idx).value
+                value_cell = ws.cell(row=row_idx, column=col_idx + 1).value
+                
+                if label_cell and value_cell:
+                    label = str(label_cell).strip()
+                    value = str(value_cell).strip()
+                    if label and value and label.lower() not in ['base clock', 'base reset']:
+                        signal_map[label] = value
+        
+        if signal_map:
+            return {
+                "Base Clock": base_clk,
+                "Reset": base_rst,
+                **signal_map
+            }
+        
+        return None
+
+
 def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
     """Generate instance content for preview (simplified version)."""
     try:
@@ -7202,6 +7685,7 @@ def _generate_preview_content(state: AppState) -> List[str]:
 
 def _generate_files(state: AppState) -> str:
     """Generate interface and/or instance files using assertion_builder plugins."""
+    # Validation
     if not state.gen_filename:
         return "ERROR: Filename not set"
     if not state.gen_file_type:
@@ -7213,7 +7697,12 @@ def _generate_files(state: AppState) -> str:
         import json
         import re
         from pathlib import Path
-        from assertions import get_registered_plugins  # type: ignore
+        
+        # Early return if no session Excel (can't parse assertions)
+        if state.gen_data_source in ('1', '3'):  # Includes assertions
+            if not state.session_excel_path or not state.session_excel_path.exists():
+                # Just generate with signals only
+                pass
         
         out_dir = state.out_dir or Path.cwd()
         out_dir = Path(out_dir)
@@ -7254,84 +7743,160 @@ def _generate_files(state: AppState) -> str:
         all_sv_snippets = []
         all_inst_snippets = []
         
+        # Parse assertions from Excel WITHOUT calling plugin.parse() (which blocks on input())
         if include_asserts and state.session_excel_path and state.session_excel_path.exists():
-            plugin_types = get_registered_plugins()
+            # Debug logging
+            debug_log = Path.cwd() / "out" / "file_gen_debug.log"
+            debug_log.parent.mkdir(parents=True, exist_ok=True)
+            with open(debug_log, 'w', encoding='utf-8') as f:
+                f.write(f"[{datetime.now()}] === File Generation Started ===\n")
+                f.write(f"  include_asserts: {include_asserts}\n")
+                f.write(f"  session_excel_path: {state.session_excel_path}\n")
+                f.write(f"  exists: {state.session_excel_path.exists()}\n\n")
             
-            for pcls in plugin_types:
-                try:
-                    # Parse Excel sheet for this plugin
-                    parsed = pcls().parse(state.session_excel_path)
+            try:
+                from openpyxl import load_workbook
+                from assertions import get_registered_plugins
+                
+                wb = load_workbook(state.session_excel_path, data_only=True)
+                sheet_names = wb.sheetnames
+                
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"  Workbook loaded, sheets: {sheet_names}\n\n")
+                
+                # Process each registered plugin type
+                plugins_list = get_registered_plugins()
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"  Registered plugins: {[p.plugin_name for p in plugins_list]}\n\n")
+                
+                for pcls in plugins_list:
+                    plugin = pcls()
+                    plugin_sheet_name = getattr(plugin, 'sheet_name', None)
                     
-                    # Skip if no data (sheet doesn't exist or empty)
-                    if not parsed:
+                    with open(debug_log, 'a', encoding='utf-8') as f:
+                        f.write(f"[{plugin.plugin_name}] Checking sheet: {plugin_sheet_name}\n")
+                    
+                    if not plugin_sheet_name:
+                        with open(debug_log, 'a', encoding='utf-8') as f:
+                            f.write(f"  -> No sheet_name, skipping\n")
                         continue
                     
-                    # Handle both old format (dict with "blocks") and new format (direct dict)
-                    blocks = parsed.get("blocks") if isinstance(parsed, dict) else None
+                    # Check if this plugin's sheet exists (case-insensitive)
+                    sheet_found = None
+                    for sn in sheet_names:
+                        if sn.strip().lower() == plugin_sheet_name.strip().lower():
+                            sheet_found = sn
+                            break
                     
-                    # For delayCondition: check "sets" instead of "blocks"
-                    if not blocks and isinstance(parsed, dict):
-                        if parsed.get("sets"):
-                            blocks = parsed.get("sets")
-                        elif any(key in parsed for key in ("Base Clock", "Base Reset", "unique_ports")):
-                            # delayCondition format: has Base Clock/Reset but no "blocks" key
-                            blocks = [parsed]  # Wrap in list for consistency
-                    
-                    # Skip if truly no data
-                    if not blocks:
+                    if not sheet_found:
+                        with open(debug_log, 'a', encoding='utf-8') as f:
+                            f.write(f"  -> Sheet not found, skipping\n")
                         continue
                     
-                    # Generate SV code
-                    ret = pcls().generate_sv(parsed, common_context)
+                    with open(debug_log, 'a', encoding='utf-8') as f:
+                        f.write(f"  -> Found sheet: {sheet_found}\n")
                     
-                    # Extract SV and instance content
-                    sv_txt, inst_txt = "", ""
-                    if isinstance(ret, dict):
-                        sv_txt = str(ret.get("sv", "") or "")
-                        inst_txt = str(ret.get("sv_inst", "") or "")
-                    elif isinstance(ret, (list, tuple)):
-                        if len(ret) >= 1 and ret[0]:
-                            sv_txt = str(ret[0])
-                        if len(ret) >= 2 and ret[1]:
-                            inst_txt = str(ret[1])
-                    elif isinstance(ret, str):
-                        sv_txt = ret
-                    
-                    if sv_txt.strip():
-                        all_sv_snippets.append((pcls.plugin_name, sv_txt))
-                    if inst_txt.strip():
-                        all_inst_snippets.append((pcls.plugin_name, inst_txt))
+                    # Parse Excel data directly (no user input needed)
+                    try:
+                        with open(debug_log, 'a', encoding='utf-8') as f:
+                            f.write(f"  -> Calling _parse_excel_sheet_directly...\n")
                         
-                except KeyError:
-                    # Sheet doesn't exist - skip this plugin silently
-                    continue
-                except Exception as e:
-                    # Log other errors but continue with remaining plugins
-                    import sys
-                    print(f"[Warning] Plugin {pcls.plugin_name} failed: {e}", file=sys.stderr)
+                        parsed_data = _parse_excel_sheet_directly(
+                            wb, sheet_found, state.module_info, common_context
+                        )
+                        
+                        with open(debug_log, 'a', encoding='utf-8') as f:
+                            f.write(f"  -> parsed_data: {type(parsed_data)}\n")
+                            if parsed_data:
+                                f.write(f"     Keys: {list(parsed_data.keys()) if isinstance(parsed_data, dict) else 'N/A'}\n")
+                                if 'blocks' in parsed_data:
+                                    f.write(f"     Blocks count: {len(parsed_data['blocks'])}\n")
+                        
+                        if parsed_data:
+                            # Generate SV code using plugin
+                            with open(debug_log, 'a', encoding='utf-8') as f:
+                                f.write(f"  -> Calling plugin.generate_sv...\n")
+                            
+                            result = plugin.generate_sv(parsed_data, common_context)
+                            
+                            with open(debug_log, 'a', encoding='utf-8') as f:
+                                f.write(f"  -> Result type: {type(result)}, length: {len(result) if result else 0}\n")
+                            
+                            if result:
+                                # Plugins return [sv_text, inst_text] or just [sv_text]
+                                if isinstance(result, list) and len(result) >= 1:
+                                    sv_content = result[0] if isinstance(result[0], str) else "\n".join(result[0])
+                                    all_sv_snippets.append((plugin.plugin_name, sv_content))
+                                    
+                                    with open(debug_log, 'a', encoding='utf-8') as f:
+                                        f.write(f"  -> Added SV snippet (length: {len(sv_content)})\n")
+                                    
+                                    if len(result) >= 2:
+                                        inst_content = result[1] if isinstance(result[1], str) else "\n".join(result[1])
+                                        all_inst_snippets.append((plugin.plugin_name, inst_content))
+                                        
+                                        with open(debug_log, 'a', encoding='utf-8') as f:
+                                            f.write(f"  -> Added INST snippet (length: {len(inst_content)})\n")
+                        else:
+                            # Debug: log when parsing returns None
+                            with open(debug_log, 'a', encoding='utf-8') as f:
+                                f.write(f"  -> parsed_data is None (no data to generate)\n")
+                    except Exception as e:
+                        # Log error for debugging
+                        import traceback
+                        with open(debug_log, 'a', encoding='utf-8') as f:
+                            f.write(f"\n  -> EXCEPTION: {e}\n")
+                            f.write(f"     Traceback:\n")
+                            for line in traceback.format_exc().split('\n'):
+                                f.write(f"     {line}\n")
+                
+                wb.close()
+                
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"\n=== Summary ===\n")
+                    f.write(f"  Total SV snippets: {len(all_sv_snippets)}\n")
+                    f.write(f"  Total INST snippets: {len(all_inst_snippets)}\n")
+                    for name, _ in all_sv_snippets:
+                        f.write(f"    - {name}\n")
+            except Exception as e:
+                # If Excel parsing fails, continue with signal-only generation
+                import traceback
+                with open(debug_log, 'a', encoding='utf-8') as f:
+                    f.write(f"\n=== OUTER EXCEPTION ===\n")
+                    f.write(f"  {e}\n")
+                    f.write(f"  Traceback:\n{traceback.format_exc()}\n")
         
         generated_files = []
         
         # Generate interface file
         if gen_iface:
-            iface_path = out_dir / f"{state.gen_filename}.if.sv"
-            iface_content = _generate_interface_from_plugins(
-                state, all_sv_snippets, include_signals
-            )
-            iface_path.write_text(iface_content, encoding='utf-8')
-            generated_files.append(str(iface_path))
+            try:
+                iface_path = out_dir / f"{state.gen_filename}.if.sv"
+                iface_content = _generate_interface_from_plugins(
+                    state, all_sv_snippets, include_signals
+                )
+                iface_path.write_text(iface_content, encoding='utf-8')
+                generated_files.append(str(iface_path))
+            except Exception as e:
+                return f"ERROR generating interface file: {str(e)}"
         
         # Generate instance file
         if gen_inst:
-            inst_path = out_dir / f"{state.gen_filename}.inst.sv"
-            inst_content = _generate_instance_from_plugins(
-                state, all_inst_snippets, include_signals
-            )
-            inst_path.write_text(inst_content, encoding='utf-8')
-            generated_files.append(str(inst_path))
+            try:
+                inst_path = out_dir / f"{state.gen_filename}.inst.sv"
+                inst_content = _generate_instance_from_plugins(
+                    state, all_inst_snippets, include_signals
+                )
+                inst_path.write_text(inst_content, encoding='utf-8')
+                generated_files.append(str(inst_path))
+            except Exception as e:
+                return f"ERROR generating instance file: {str(e)}"
         
-        msg = f"Generated {len(generated_files)} file(s):\n" + "\n".join(f"  {Path(f).name}" for f in generated_files)
-        state.gen_wizard_active = False
+        if not generated_files:
+            return "ERROR: No files were generated"
+        
+        msg = f"✓ Generated {len(generated_files)} file(s):\n" + "\n".join(f"  • {Path(f).name}" for f in generated_files)
+        msg += f"\n  Location: {out_dir}"
         return msg
         
     except Exception as e:
@@ -7344,98 +7909,81 @@ def _generate_interface_from_plugins(
     sv_snippets: List[Tuple[str, str]], 
     include_signals: bool
 ) -> str:
-    """Generate interface file from plugin outputs."""
+    """Generate clean interface file from plugin outputs - matches wizard quality."""
     import re
     
     # Standard UVM header
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     
-    # Aggregate inputs and bodies from all plugins
-    agg_inputs = {}  # name -> width
-    agg_bodies = []
+    # Track declared signals globally to avoid duplicates
+    declared_signals = {}  # name -> width
+    
+    # Collect clean bodies from all plugins
+    clean_bodies = []
     
     # Regex patterns
     re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
-    re_module = re.compile(r'(?is)^\s*module\b\s+\w+\s*(?:#\s*\(.*?\)\s*)?\(\s*(?P<ports>.*?)\s*\)\s*;\s*(?P<body>.*?)\s*endmodule\b')
-    re_interface = re.compile(r'(?is)^\s*interface\b\s+\w+\s*(?:#\s*\(.*?\)\s*)?\s*;?\s*(?P<body>.*?)\s*endinterface\b')
-    re_input_decl = re.compile(r'^\s*input\s+logic\s+(?:(\[[^\]]+\])\s+)?([A-Za-z_]\w*)', re.MULTILINE)
+    re_interface = re.compile(r'(?is)interface\s+\w+\s*\([^)]*\)\s*;?\s*(.*?)\s*endinterface', re.DOTALL)
+    re_logic_decl = re.compile(r'^\s*logic\s+(\[[^\]]+\]|\[0:0\])\s+([A-Za-z_]\w*)\s*;', re.MULTILINE)
     
-    # Process each plugin's SV output
     for plugin_name, sv_txt in sv_snippets:
-        if not sv_txt.strip():
+        if not sv_txt or not sv_txt.strip():
+            continue
+        
+        # Skip "No assertions generated" messages
+        if "No" in sv_txt and "assertions generated" in sv_txt and len(sv_txt) < 100:
             continue
         
         # Remove headers
-        core = re_header.sub("", sv_txt)
+        core = re_header.sub("", sv_txt).strip()
         
-        # Unwrap interface
+        # Extract interface body if wrapped
         m_iface = re_interface.search(core)
         if m_iface:
-            core = m_iface.group("body").strip()
+            core = m_iface.group(1).strip()
         
-        # Unwrap module and extract inputs
-        m_mod = re_module.search(core)
-        if m_mod:
-            ports_block = m_mod.group("ports")
-            # Extract input declarations from ports
-            for m in re_input_decl.finditer(ports_block):
-                width = (m.group(1) or "[0:0]").strip()
-                name = m.group(2)
-                if name not in agg_inputs:
-                    agg_inputs[name] = width
-            core = m_mod.group("body").strip()
+        # Extract logic declarations
+        local_signals = {}
+        for m in re_logic_decl.finditer(core):
+            width = m.group(1).strip()
+            name = m.group(2).strip()
+            local_signals[name] = width
+            # Add to global if not already declared
+            if name not in declared_signals:
+                declared_signals[name] = width
         
-        # Extract standalone input declarations
-        for m in re_input_decl.finditer(core):
-            width = (m.group(1) or "[0:0]").strip()
-            name = m.group(2)
-            if name not in agg_inputs:
-                agg_inputs[name] = width
+        # Remove logic declarations from body
+        core = re_logic_decl.sub("", core).strip()
         
-        # Remove input declarations from body
-        core = re_input_decl.sub("", core).strip()
+        # Remove empty lines and clean up
+        lines = [line for line in core.split('\n') if line.strip() and line.strip() != '();']
+        core = '\n'.join(lines).strip()
         
-        if core:
-            agg_bodies.append(f"// {plugin_name}\n{core}")
+        # Skip if nothing left
+        if not core or len(core) < 10:
+            continue
+        
+        # Add plugin section with header comment
+        clean_bodies.append(f"// ========== {plugin_name.upper()} ==========\n{core}")
     
-    # Build port list
-    port_lines = []
-    for name in sorted(agg_inputs.keys()):
-        port_lines.append(f"    input logic {agg_inputs[name]} {name}")
+    # Build signal declarations section
+    signal_decls = []
+    if declared_signals:
+        signal_decls.append("// Signal Declarations")
+        for name in sorted(declared_signals.keys()):
+            signal_decls.append(f"logic {declared_signals[name]} {name};")
+        signal_decls.append("")  # Empty line after declarations
     
-    ports_block = ""
-    if port_lines:
-        ports_block = ",\n".join(port_lines) + "\n"
-    
-    # Build body
-    body = "\n\n// ===== Next plugin section =====\n\n".join(agg_bodies)
-    if not body:
-        body = "// No assertion content generated\n"
-    
-    # Add signal information as comments if requested
-    signal_info = ""
-    if include_signals and (state.module_info.inputs or state.module_info.outputs):
-        sig_lines = ["\n// ===== MODULE SIGNALS ====="]
-        sig_lines.append(f"// Inputs: {len(state.module_info.inputs)}")
-        for inp in state.module_info.inputs[:10]:
-            sig_lines.append(f"//   {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
-        if len(state.module_info.inputs) > 10:
-            sig_lines.append(f"//   ... and {len(state.module_info.inputs) - 10} more")
-        
-        sig_lines.append(f"// Outputs: {len(state.module_info.outputs)}")
-        for out in state.module_info.outputs[:10]:
-            sig_lines.append(f"//   {out.get('name', '?')} ({out.get('width', '?')} bits)")
-        if len(state.module_info.outputs) > 10:
-            sig_lines.append(f"//   ... and {len(state.module_info.outputs) - 10} more")
-        signal_info = "\n".join(sig_lines) + "\n\n"
+    # Build final body
+    if not clean_bodies:
+        body = "// No assertions configured\n"
+    else:
+        body = "\n".join(signal_decls) + "\n" + "\n\n".join(clean_bodies)
     
     # Assemble final interface
     return (
         header +
-        signal_info +
-        "interface assertion_intf\n(\n" +
-        ports_block +
-        ");\n\n" +
+        "interface assertion_intf();\n\n" +
         body +
         "\n\nendinterface\n"
     )
@@ -7446,74 +7994,48 @@ def _generate_instance_from_plugins(
     inst_snippets: List[Tuple[str, str]],
     include_signals: bool
 ) -> str:
-    """Generate instance file from plugin outputs."""
+    """Generate clean instance file from plugin outputs - matches wizard quality."""
     import re
     
     # Standard UVM header
     header = '`include "uvm_macros.svh"\nimport uvm_pkg::*;\n\n'
     
-    # Aggregate all assign statements
+    # Collect unique assign statements
     all_assigns = []
-    module_names = set()
+    seen_assigns = set()
     
-    # Regex to extract assigns and module instances
+    # Regex patterns
     re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
-    # Match both with and without 'u_' prefix: "module_name u_instance_name();" or "module_name instance_name();"
-    re_module_inst = re.compile(r'^\s*([A-Za-z_]\w+)\s+([A-Za-z_]\w+)\s*\(\s*\)\s*;', re.MULTILINE)
-    re_assign = re.compile(r'^\s*assign\s+.*;', re.MULTILINE)
+    re_assign = re.compile(r'^\s*assign\s+u_assertion_intf\.(\w+)\s*=\s*(.+?);', re.MULTILINE)
     
     # Process each plugin's inst output
     for plugin_name, inst_txt in inst_snippets:
-        if not inst_txt.strip():
+        if not inst_txt or not inst_txt.strip():
+            continue
+        
+        # Skip "No assertions" messages
+        if "No" in inst_txt and "assertions" in inst_txt and len(inst_txt) < 100:
             continue
         
         # Remove headers
-        core = re_header.sub("", inst_txt)
+        core = re_header.sub("", inst_txt).strip()
         
-        # Extract module instances (module_name from first capture group)
-        for m in re_module_inst.finditer(core):
-            module_names.add(m.group(1))
-        
-        # Extract assigns
+        # Extract assign statements
         for m in re_assign.finditer(core):
-            assign_stmt = m.group(0).strip()
-            if assign_stmt not in all_assigns:
-                all_assigns.append(assign_stmt)
+            signal_name = m.group(1)
+            signal_source = m.group(2).strip()
+            assign_key = f"{signal_name}={signal_source}"
+            
+            if assign_key not in seen_assigns:
+                seen_assigns.add(assign_key)
+                all_assigns.append(f"assign u_assertion_intf.{signal_name} = {signal_source};")
     
-    # Build instance declarations
-    inst_lines = []
-    if not module_names:
-        # Default to assertion_intf if no modules found
-        inst_lines.append("assertion_intf")
-        inst_lines.append("      u_assertion_intf();")
-    else:
-        for mod_name in sorted(module_names):
-            inst_lines.append(f"{mod_name}")
-            inst_lines.append(f"      u_{mod_name}();")
+    # Build instance file
+    result = header
+    result += "assertion_intf u_assertion_intf();\n\n"
     
-    # Add signal information as comments if requested
-    signal_info = ""
-    if include_signals and (state.module_info.inputs or state.module_info.outputs):
-        sig_lines = ["// ===== MODULE SIGNALS ====="]
-        sig_lines.append(f"// Inputs: {len(state.module_info.inputs)}")
-        for inp in state.module_info.inputs[:10]:
-            sig_lines.append(f"//   {inp.get('name', '?')} ({inp.get('width', '?')} bits)")
-        if len(state.module_info.inputs) > 10:
-            sig_lines.append(f"//   ... and {len(state.module_info.inputs) - 10} more")
-        
-        sig_lines.append(f"// Outputs: {len(state.module_info.outputs)}")
-        for out in state.module_info.outputs[:10]:
-            sig_lines.append(f"//   {out.get('name', '?')} ({out.get('width', '?')} bits)")
-        if len(state.module_info.outputs) > 10:
-            sig_lines.append(f"//   ... and {len(state.module_info.outputs) - 10} more")
-        signal_info = "\n".join(sig_lines) + "\n\n"
-    
-    # Assemble final instance file
-    result = header + signal_info
-    result += "\n".join(inst_lines)
     if all_assigns:
-        result += "\n\n" + "\n".join(all_assigns)
-    result += "\n"
+        result += "\n".join(all_assigns) + "\n"
     
     return result
 
@@ -7546,6 +8068,18 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
     
     # Stage 1: Select Type
     if state.assertion_wizard_stage == 'select_type':
+        # Handle pagination
+        if cmd == 'n':
+            if not hasattr(state, 'wizard_page'):
+                state.wizard_page = 0
+            state.wizard_page += 1
+            return "", False
+        elif cmd == 'N':
+            if not hasattr(state, 'wizard_page'):
+                state.wizard_page = 0
+            state.wizard_page -= 1
+            return "", False
+        
         if cmd.isdigit():
             idx = int(cmd) - 1
             plugins = _get_assertion_plugins_info()
@@ -7567,7 +8101,7 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 return msg, False
             else:
                 return f"Invalid. Choose 1-{len(plugins)}", False
-        return "Enter number to select type", False
+        return "Enter number to select type, 'n' for next page, 'N' for previous", False
     
     # Stage 2: Input Data (step-by-step, input saves immediately, Enter to advance)
     elif state.assertion_wizard_stage == 'input_data':

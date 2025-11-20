@@ -2110,3 +2110,59 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: c
 
 [18:47:58] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251114_184757
 [18:47:58] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251114_184757\blur_scaler.xlsx
+[19:09:54] === _create_session_excel_and_fill() CALLED ===
+[19:09:54] state.excel_path = C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx
+[19:09:54] state.target_module = blur_scaler
+[19:09:54] state.module_info.module = blur_scaler
+[19:09:54] Creating session directory: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954
+[19:09:54] Session directory created successfully
+[19:09:54] Assertions directory created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\assertions
+[19:09:54] Copying Excel from C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\Data\Assertion_TF.xlsx to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\blur_scaler.xlsx
+[19:09:54] Excel copied successfully to C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\blur_scaler.xlsx
+[19:09:54] state.session_excel_path SET TO: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\blur_scaler.xlsx
+[19:09:54] Verifying Define sheet...
+[19:09:54] Define sheet verified OK
+[19:09:54] Creating define JSON...
+[19:09:54] Define JSON created: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\module_define.json
+[19:09:54] Running fill_define.py...
+[19:09:55] fill_define.py returned: 0
+[19:09:55] fill_define.py stdout: [19:09:55] INFO: Loaded data: module=blur_scaler, inputs=20, outputs=4, conditions=0
+[19:09:55] INFO: 작업 시작 (총 34 단계)
+[----------------------------]   2% - 기존 값 클리어
+[#---------------------------]   5% - Base: Target Name
+[##--------------------------]   8% - Base: Target Path
+[###-------------------------]  11% - Base: Base Clock
+[###-------------------------]  14% - Base: Base Reset
+[####------------------------]  17% - Inputs: i_blur_mode_cap
+[#####-----------------------]  20% - Inputs: i_den
+[######----------------------]  23% - Inputs: i_hor_cnt
+[#######---------------------]  26% - Inputs: i_hsync
+[########--------------------]  29% - Inputs: i_mirror_mode_cap
+[########--------------------]  32% - Inputs: i_sram_rd1
+[#########-------------------]  35% - Inputs: i_sram_rd2
+[##########------------------]  38% - Inputs: i_sram_rd3
+[###########-----------------]  41% - Inputs: i_vact_state
+[############----------------]  44% - Inputs: i_vsync
+[#############---------------]  47% - Inputs: i_w1_cap
+[##############--------------]  50% - Inputs: i_w2_cap
+[##############--------------]  52% - Inputs: i_w3_cap
+[###############-------------]  55% - Inputs: i_w4_cap
+[################------------]  58% - Inputs: i_w5_cap
+[#################-----------]  61% - Inputs: i_w6_cap
+[#################-----------]  64% - Inputs: i_w7_cap
+[##################----------]  67% - Inputs: i_w8_cap
+[###################---------]  70% - Inputs: i_w9_cap
+[####################--------]  73% - Inputs: i_weight_wr_mode_cap
+[#####################-------]  76% - Outputs: o_data
+[######################------]  79% - Outputs: o_den
+[######################------]  82% - Outputs: o_hsync
+[#######################-----]  85% - Outputs: o_vsync
+[########################----]  88% - Parameters: WEIGHT_WIDTH
+[#########################---]  91% - Parameters: PARAM_WIDTH
+[##########################--]  94% - Parameters: DATA_WIDTH
+[###########################-]  97% - Parameters: SUM_WIDTH
+[############################] 100% - 엑셀 저장
+[19:09:55] INFO: 모든 작업 완료
+
+[19:09:55] SUCCESS! Session created at: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954
+[19:09:55] Final state.session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\blur_scaler.xlsx

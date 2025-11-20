@@ -1,0 +1,167 @@
+[2025-11-20 20:21:34.950390] === File Generation Started ===
+  include_asserts: True
+  session_excel_path: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\out\sessions\blur_scaler-20251120_190954\blur_scaler.xlsx
+  exists: True
+
+  Workbook loaded, sheets: ['Define', 'Assertion Sheet', 'basicAssertion', 'handshake', 'HSW', 'HBP', 'HACT', 'HFP', 'VSW', 'VBP', 'VACT', 'VFP', 'Counter', 'synchronizer', 'clockGate', 'clockDivider', 'pulseWidth', 'AHB_M', 'AHB_S', 'Assertion System Function Guide']
+
+  Registered plugins: ['counter', 'handshake', 'videosyncall', 'hsw', 'hbp', 'hact', 'hfp', 'vsw', 'vbp', 'vact', 'vfp', 'synchronizer', 'clockDivider', 'clockGate', 'pulseWidth', 'AHB_M', 'AHB_S']
+
+[counter] Checking sheet: Counter
+  -> Found sheet: Counter
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['blocks']
+     Blocks count: 1
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 626)
+  -> Added INST snippet (length: 178)
+[handshake] Checking sheet: Handshake
+  -> Found sheet: handshake
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['blocks']
+     Blocks count: 3
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 2539)
+  -> Added INST snippet (length: 802)
+[videosyncall] Checking sheet: 
+  -> No sheet_name, skipping
+[hsw] Checking sheet: HSW
+  -> Found sheet: HSW
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[hbp] Checking sheet: HBP
+  -> Found sheet: HBP
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Vsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[hact] Checking sheet: HACT
+  -> Found sheet: HACT
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 33)
+  -> Added INST snippet (length: 0)
+[hfp] Checking sheet: HFP
+  -> Found sheet: HFP
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[vsw] Checking sheet: VSW
+  -> Found sheet: VSW
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Vsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[vbp] Checking sheet: VBP
+  -> Found sheet: VBP
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Vsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[vact] Checking sheet: VACT
+  -> Found sheet: VACT
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Vsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 33)
+  -> Added INST snippet (length: 0)
+[vfp] Checking sheet: VFP
+  -> Found sheet: VFP
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Hsync Signal', 'Vsync Signal', 'Data Enable Signal', 'Expected Min Value']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 32)
+  -> Added INST snippet (length: 0)
+[synchronizer] Checking sheet: Synchronizer
+  -> Found sheet: synchronizer
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Depth Sync Value', 'Enable Signal', 'Input Signal']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 41)
+  -> Added INST snippet (length: 0)
+[clockDivider] Checking sheet: clockDivider
+  -> Found sheet: clockDivider
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Reference Clock', 'MAX Value', 'DIVRATIO', 'CLKOUT', 'START FLAG']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 42)
+  -> Added INST snippet (length: 0)
+[clockGate] Checking sheet: clockGate
+  -> Found sheet: clockGate
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Depth Sync', 'Enable Signal']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 39)
+  -> Added INST snippet (length: 0)
+[pulseWidth] Checking sheet: pulseWidth
+  -> Found sheet: pulseWidth
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'dict'>
+     Keys: ['Base Clock', 'Reset', 'Pulse Signal', 'Width Parameter']
+  -> Calling plugin.generate_sv...
+  -> Result type: <class 'list'>, length: 2
+  -> Added SV snippet (length: 40)
+  -> Added INST snippet (length: 0)
+[AHB_M] Checking sheet: AHB_M
+  -> Found sheet: AHB_M
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'NoneType'>
+  -> parsed_data is None (no data to generate)
+[AHB_S] Checking sheet: AHB_S
+  -> Found sheet: AHB_S
+  -> Calling _parse_excel_sheet_directly...
+  -> parsed_data: <class 'NoneType'>
+  -> parsed_data is None (no data to generate)
+
+=== Summary ===
+  Total SV snippets: 14
+  Total INST snippets: 14
+    - counter
+    - handshake
+    - hsw
+    - hbp
+    - hact
+    - hfp
+    - vsw
+    - vbp
+    - vact
+    - vfp
+    - synchronizer
+    - clockDivider
+    - clockGate
+    - pulseWidth

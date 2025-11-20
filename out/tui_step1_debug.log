@@ -1,11 +1,11 @@
 === TUI Step 1 Debug Log ===
-[18:47:50.727] Processing RTL file: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\EDA\RTL\blur_scaler.v
-[18:47:50.733] Files discovered: 53
-[18:47:50.782] Modules parsed: 15
-[18:47:50.783] Calling find_module_instances_by_file...
-[18:47:50.786] Instances found: 1
-[18:47:50.790] Modules in file: ['blur_scaler']
-[18:47:50.791] Processing instance: tb_top.dut.u_blur_scaler (module: blur_scaler)
-[18:47:50.792] Total instances after sorting: 1
-[18:47:50.793] state.onboarding_modules set to: ['tb_top.dut.u_blur_scaler']
-[18:47:50.794] SUCCESS! Moving to Step 2
+[19:09:17.397] Processing RTL file: C:\Users\JunsChoi\OneDrive - HARMAN\문서\TF자료\Assertion TF\Assertion Script\EDA\RTL\blur_scaler.v
+[19:09:17.403] Files discovered: 53
+[19:09:17.447] Modules parsed: 15
+[19:09:17.448] Calling find_module_instances_by_file...
+[19:09:17.451] Instances found: 1
+[19:09:17.456] Modules in file: ['blur_scaler']
+[19:09:17.456] Processing instance: tb_top.dut.u_blur_scaler (module: blur_scaler)
+[19:09:17.457] Total instances after sorting: 1
+[19:09:17.458] state.onboarding_modules set to: ['tb_top.dut.u_blur_scaler']
+[19:09:17.458] SUCCESS! Moving to Step 2
