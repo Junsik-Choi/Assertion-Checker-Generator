@@ -287,17 +287,18 @@ def _build_basicassertion_sv_multi(base_clk: str, base_rst: str,
         lines.append("endsequence")
         lines.append("")
     for idx, st in enumerate(prop_sets, start=1):
+        user_prop_nm = st.get("User Property Name", "")
         prop_bs_clk_con = st.get("Property Base Clock Condition", "")
         dis_con = st.get("Disable Condition", "")
         trig_con = st.get("Trigger Condition", "")
         user_res = st.get("User Result", "").replace("\n","\n    ")
-        lines.append(f"property p_assertion_gen{idx}();")
+        lines.append(f"property {user_prop_nm}();")
         lines.append(f"    @({prop_bs_clk_con}) disable iff({dis_con})")
         lines.append(f"    {trig_con}")
         lines.append(f"    |-> {user_res};")
         lines.append("endproperty")
         lines.append("")
-        lines.append(f'assert property (p_assertion_gen{idx}) else $error("failed at %t", $time);')
+        lines.append(f'assert property ({user_prop_nm}) else $error("failed at %t", $time);')
         lines.append("")
     lines.append("endinterface")
     lines.append("")
@@ -356,6 +357,9 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
             while True:
                 sel = input("> ").strip()
                 if sel == "1":
+                    #User Property Name
+                    user_prop_nm = _scan("Enter User Property Name")
+                    _append_label_below(ws_w, "User Property Name", user_prop_nm)
                     #Property Base Clock Condition
                     prop_bs_clk_con = _scan("Enter Property Base Clock Condition")
                     _append_label_below(ws_w, "Property Base Clock Condition", prop_bs_clk_con)
@@ -369,9 +373,8 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
                     user_res = _scan_wrap("Enter User Result")
                     _append_label_below(ws_w, "User Result", user_res)
 
-                    prop_sets.append({"Property Base Clock Condition": prop_bs_clk_con, "Disable Condition": dis_con, "Trigger Condition": trig_con, "User Result": user_res})
+                    prop_sets.append({"User Property Name": user_prop_nm, "Property Base Clock Condition": prop_bs_clk_con, "Disable Condition": dis_con, "Trigger Condition": trig_con, "User Result": user_res})
                     break
-                print("Invalid selection. Try again.")
                 if sel == "2":
                     #User Sequence Name
                     user_seq_nm = _scan("Enter User Sequence Name")
@@ -385,6 +388,7 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
 
                     seq_sets.append({"User Sequence Name": user_seq_nm, "Sequence Base Clock Condition": seq_bs_clk_con, "User Sequence": user_seq})
                     break
+                print("Invalid selection. Try again.")
 
             # 추가 여부 프롬프트
             print(f"\nCurrent number of Sequence = {len(seq_sets)}, Property = {len(prop_sets)}\n")
@@ -416,6 +420,7 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
         rst = rst_do or rst
 
         # 시트에서 누적 입력 다시 수집(보정)
+        user_prop_nm_list = _read_column_values(ws, "User Property Name")
         prop_bs_clk_con_list = _read_column_values(ws, "Property Base Clock Condition")
         dis_con_list = _read_column_values(ws, "Disable Condition")
         trig_con_list = _read_column_values(ws, "Trigger Condition")
@@ -429,11 +434,12 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
         prop_sets_final: List[Dict[str, str]] = []
         seq_sets_final: List[Dict[str, str]] = []
         for i in range(prop_n):
+            user_prop_nm_i = user_prop_nm_list[i] if i < len(user_prop_nm_list) else ""
             prop_bs_clk_con_i = prop_bs_clk_con_list[i] if i < len(prop_bs_clk_con_list) else ""
             dis_con_i = dis_con_list[i] if i < len(dis_con_list) else ""
             trig_con_i = trig_con_list[i] if i < len(trig_con_list) else ""
             user_res_i = user_res_list[i] if i < len(user_res_list) else ""
-            prop_sets_final.append({"Property Base Clock Condition": prop_bs_clk_con_i, "Disable Condition": dis_con_i, "Trigger Condition": trig_con_i, "User Result": user_res_i})
+            prop_sets_final.append({"User Property Name": user_prop_nm_i, "Property Base Clock Condition": prop_bs_clk_con_i, "Disable Condition": dis_con_i, "Trigger Condition": trig_con_i, "User Result": user_res_i})
         for i in range(seq_n):
             user_seq_nm_i = user_seq_nm_list[i] if i < len(user_seq_nm_list) else ""
             seq_bs_clk_con_i = seq_bs_clk_con_list[i] if i < len(seq_bs_clk_con_list) else ""
