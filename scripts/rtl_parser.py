@@ -58,16 +58,11 @@ def discover_files(root: Path, exts: List[str]) -> List[Path]:
     return files
 
 def find_rtl_root_from(start: Path) -> Tuple[Path, bool]:
-    # start가 파일이면 상위 디렉토리부터, 디렉터리면 그 디렉터리부터 'RTL' 탐색
+    # 변경: 더 이상 상향 탐색을 하지 않습니다.
+    # 사용자가 제공한 경로(start)가 디렉터리이면 그 디렉터리 자체를, 파일이면 그 파일의 부모 디렉터리를
+    # RTL 루트로 간주합니다. 상위 디렉터리로 올라가서 'RTL' 폴더를 찾지 않습니다.
     cur = start if start.is_dir() else start.parent
-    orig = cur
-    while True:
-        if cur.name.lower() == "rtl":
-            return cur.resolve(), True
-        if cur.parent == cur:
-            break
-        cur = cur.parent
-    return (orig.resolve(), False)
+    return cur.resolve(), True
 
 # -----------------------------
 # Preprocess: strip comments & attributes
@@ -185,21 +180,44 @@ def extract_modules_from_text(text: str) -> List[Dict[str, Any]]:
             i += 1
             i = skip_spaces(text, i)
             if i < n and text[i] == "(":
-                content, j = extract_balanced(text, i, "(", ")")
-                param_ports = content
-                i = j
-                i = skip_spaces(text, i)
+                try:
+                    content, j = extract_balanced(text, i, "(", ")")
+                    param_ports = content
+                    i = j
+                    i = skip_spaces(text, i)
+                except ValueError:
+                    # Unbalanced parentheses in parameter list: warn and skip param_ports
+                    LOG.warning("Unbalanced parentheses while parsing parameter list for module %s; skipping parameter block", name)
+                    # try to recover by moving forward to the next semicolon or opening paren
+                    # advance one char to avoid infinite loop
+                    i = i + 1
 
         # Mandatory port list: ( ... )
         ports_header = ""
         if i < n and text[i] == "(":
-            ports_header, j = extract_balanced(text, i, "(", ")")
-            i = j
-            i = skip_spaces(text, i)
-            if i < n and text[i] == ";":
-                i += 1
-            else:
-                LOG.warning("Expected ';' after module port list: %s", name)
+            try:
+                ports_header, j = extract_balanced(text, i, "(", ")")
+                i = j
+                i = skip_spaces(text, i)
+                if i < n and text[i] == ";":
+                    i += 1
+                else:
+                    LOG.warning("Expected ';' after module port list: %s", name)
+            except ValueError:
+                # Unbalanced parentheses in port list: warn and attempt to locate endmodule
+                LOG.warning("Unbalanced parentheses while parsing port list for module %s; attempting to skip module body", name)
+                # Try to find corresponding 'endmodule' to skip this module
+                endm = _endmodule_re.search(text, i)
+                if not endm:
+                    LOG.warning("endmodule not found after malformed port list for module: %s", name)
+                    body = text[i:]
+                    pos = n
+                else:
+                    body = text[i:endm.start()]
+                    pos = endm.end()
+                mods.append({"name": name, "param_ports": param_ports, "ports_header": ports_header, "body": body})
+                # continue outer loop from updated pos
+                continue
         else:
             # No port list - treat as module with no ports
             # This is valid in SystemVerilog (e.g., testbench modules)
@@ -637,7 +655,7 @@ def extract_instances_strict(body: str, known_types: List[str], allow_unknown: b
 # -----------------------------
 # Build modules DB (two-pass, keep file origin)
 # -----------------------------
-def build_modules_db(files: List[Path], allow_unknown: bool=False) -> Dict[str, Any]:
+def build_modules_db(files: List[Path], allow_unknown: bool=False, preferred_dir: Optional[Path]=None) -> Dict[str, Any]:
     LOG.info("Start building modules DB from %d files", len(files))
     raw_all = []
     for p in files:
@@ -661,7 +679,33 @@ def build_modules_db(files: List[Path], allow_unknown: bool=False) -> Dict[str, 
         param_defaults = {**header_params, **body_params}
         name = rm["name"]
         if name in modules:
-            LOG.warning("Duplicate module name found; overriding: %s (prev=%s, new=%s)", name, modules[name].get("file"), rm["file"])
+            prev_file = modules[name].get("file")
+            new_file = rm.get("file")
+            # If a preferred_dir is provided, prefer the module defined under it.
+            if preferred_dir is not None:
+                try:
+                    prev_in = Path(prev_file).resolve().is_relative_to(preferred_dir.resolve())
+                except Exception:
+                    prev_in = str(Path(prev_file).resolve()).startswith(str(preferred_dir.resolve()))
+                try:
+                    new_in = Path(new_file).resolve().is_relative_to(preferred_dir.resolve())
+                except Exception:
+                    new_in = str(Path(new_file).resolve()).startswith(str(preferred_dir.resolve()))
+
+                if prev_in and not new_in:
+                    LOG.info("Duplicate module %s found; keeping previous from preferred_dir %s (prev=%s, new=%s)", name, preferred_dir, prev_file, new_file)
+                    # keep existing, skip override
+                    continue
+                if new_in and not prev_in:
+                    LOG.info("Duplicate module %s found; selecting new from preferred_dir %s (prev=%s, new=%s)", name, preferred_dir, prev_file, new_file)
+                    # allow override (fall through)
+                else:
+                    # Neither or both in preferred_dir: keep first-seen to be stable
+                    LOG.warning("Duplicate module name found; keeping first-seen: %s (prev=%s, new=%s)", name, prev_file, new_file)
+                    continue
+            else:
+                LOG.warning("Duplicate module name found; overriding: %s (prev=%s, new=%s)", name, modules[name].get("file"), rm["file"])
+
         modules[name] = {
             "module": name,
             "file": rm["file"],
