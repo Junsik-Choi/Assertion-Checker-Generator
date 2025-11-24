@@ -357,35 +357,92 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
             while True:
                 sel = input("> ").strip()
                 if sel == "1":
-                    #User Property Name
-                    user_prop_nm = _scan("Enter User Property Name")
+                    user_prop_nm = "<User Property Name>"
+                    prop_bs_clk_con = "<Property Base Clock Condition>"
+                    dis_con = "<Disable Condition>"
+                    trig_con = "<Trigger Condition>"
+                    user_res = "<User Result>"
+                    while True:
+                        print("\n==================== Enter Property ====================")
+                        print(f"property [1]{user_prop_nm}();")
+                        print(f"    @([2]{prop_bs_clk_con}) disable iff([3]{dis_con})")
+                        print(f"    [4]{trig_con}")
+                        formatted_res = user_res.replace('\n', '\n    ')
+                        print(f"    [5]{formatted_res};")
+                        print("endproperty")
+                        print("=========================================================")
+                        print("Select item number to edit")
+                        print("Press Enter twice to confirm all")
+                        choice = input("> ").strip()
+                        if choice == "":
+                            missing = []
+                            if user_prop_nm     in ("", "<User Property Name>"):            missing.append("[1]")
+                            if prop_bs_clk_con  in ("", "<Property Base Clock Condition>"): missing.append("[2]")
+                            if dis_con          in ("", "<Disable Condition>"):             missing.append("[3]")
+                            if trig_con         in ("", "<Trigger Condition>"):             missing.append("[4]")
+                            if user_res         in ("", "<User Result>"):                   missing.append("[5]")
+                            if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                            print("Press Enter again to confirm, or select item number to edit")
+                            choice = input("> ").strip()
+                            if choice == "":
+                                break
+                        if choice == "1":
+                            user_prop_nm = _scan("Enter User Property Name")
+                        elif choice == "2":
+                            prop_bs_clk_con = _scan("Enter Property Base Clock Condition")
+                        elif choice == "3":
+                            dis_con = _scan("Enter Disable Condition")
+                        elif choice == "4":
+                            trig_con = _scan("Enter Trigger Condition")
+                        elif choice == "5":
+                            user_res = _scan_wrap("Enter User Result")
+                        else:
+                            print("Invalid selection. Try again.")
+                            continue
                     _append_label_below(ws_w, "User Property Name", user_prop_nm)
-                    #Property Base Clock Condition
-                    prop_bs_clk_con = _scan("Enter Property Base Clock Condition")
                     _append_label_below(ws_w, "Property Base Clock Condition", prop_bs_clk_con)
-                    #Disable Condition
-                    dis_con = _scan("Enter Disable Condition")
                     _append_label_below(ws_w, "Disable Condition", dis_con)
-                    #Trigger Condition
-                    trig_con = _scan("Enter Trigger Condition")
                     _append_label_below(ws_w, "Trigger Condition", trig_con)
-                    #User Result
-                    user_res = _scan_wrap("Enter User Result")
                     _append_label_below(ws_w, "User Result", user_res)
-
                     prop_sets.append({"User Property Name": user_prop_nm, "Property Base Clock Condition": prop_bs_clk_con, "Disable Condition": dis_con, "Trigger Condition": trig_con, "User Result": user_res})
                     break
                 if sel == "2":
-                    #User Sequence Name
-                    user_seq_nm = _scan("Enter User Sequence Name")
+                    user_seq_nm = "<User Sequence Name>"
+                    seq_bs_clk_con = "<Sequence Base Clock Condition>"
+                    user_seq = "<User Sequence>"
+                    while True:
+                        print("\n==================== Enter Sequence ====================")
+                        print(f"sequence [1]{user_seq_nm}();")
+                        print(f"    @([2]{seq_bs_clk_con})")
+                        formatted_seq = user_seq.replace('\n', '\n    ')
+                        print(f"    [3]{formatted_seq}")
+                        print("endsequence")
+                        print("=========================================================")
+                        print("Select item number to edit")
+                        print("Press Enter twice to confirm all")
+                        choice = input("> ").strip()
+                        if choice == "":
+                            missing = []
+                            if user_seq_nm      in ("", "<User Sequence Name>"):            missing.append("[1]")
+                            if seq_bs_clk_con   in ("", "<Sequence Base Clock Condition>"): missing.append("[2]")
+                            if user_seq         in ("", "<User Sequence>"):                 missing.append("[3]")
+                            if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                            print("Press Enter again to confirm, or select item number to edit")
+                            choice = input("> ").strip()
+                            if choice == "":
+                                break
+                        if choice == "1":
+                            user_seq_nm = _scan("Enter User Sequence Name")
+                        elif choice == "2":
+                            seq_bs_clk_con = _scan("Enter Sequence Base Clock Condition")
+                        elif choice == "3":
+                            user_seq = _scan_wrap("Enter User Sequence")
+                        else:
+                            print("Invalid selection. Try again.")
+                            continue
                     _append_label_below(ws_w, "User Sequence Name", user_seq_nm)
-                    #Sequence Base Clock Condition
-                    seq_bs_clk_con = _scan("Enter Sequence Base Clock Condition")
                     _append_label_below(ws_w, "Sequence Base Clock Condition", seq_bs_clk_con)
-                    #User Sequence
-                    user_seq = _scan_wrap("Enter User Sequence")
                     _append_label_below(ws_w, "User Sequence", user_seq)
-
                     seq_sets.append({"User Sequence Name": user_seq_nm, "Sequence Base Clock Condition": seq_bs_clk_con, "User Sequence": user_seq})
                     break
                 print("Invalid selection. Try again.")
