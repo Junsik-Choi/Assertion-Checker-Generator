@@ -209,6 +209,12 @@ class ClockDividerPlugin(BaseAssertionPlugin):
             n = it.get("name")
             if n and n not in all_ports:
                 all_ports.append(n)
+        
+        # Base Clock과 Reset도 포트 목록에 추가 (중복 제거)
+        if base_clk and base_clk not in all_ports:
+            all_ports.insert(0, base_clk)  # 맨 앞에 추가
+        if base_rst and base_rst not in all_ports:
+            all_ports.insert(0 if not base_clk else 1, base_rst)  # 맨 앞 또는 두 번째에 추가
 
         # 4. 각 항목 위치 찾기 + 기존 값 읽기 (있으면 초기값으로 사용)
         ref_clk_r, ref_clk_c = _find_cell(ws, "Reference Clock")
