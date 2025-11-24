@@ -210,104 +210,93 @@ class ClockDividerPlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # 4. Reference Clock 확인 및 입력
+        # 4. 각 항목 위치 찾기 + 기존 값 읽기 (있으면 초기값으로 사용)
         ref_clk_r, ref_clk_c = _find_cell(ws, "Reference Clock")
-        if not ref_clk_r:
-            print("ERROR: 'Reference Clock' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'Reference Clock' cell not found")
-        
-        ref_clk = ws.cell(row=ref_clk_r + 1, column=ref_clk_c).value
-        if not ref_clk or str(ref_clk).strip() == "":
-            print(f"\n=== Reference Clock ===")
-            ref_clk = _pick_from(all_ports, "Select Reference Clock:", allow_custom=True)
-            ws.cell(row=ref_clk_r + 1, column=ref_clk_c, value=ref_clk)
-        else:
-            ref_clk = str(ref_clk).strip()
-
-        # 5. MAX Value 확인 및 입력
-        max_r, max_c = _find_cell(ws, "MAX Value")
-        if not max_r:
-            print("ERROR: 'MAX Value' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'MAX Value' cell not found")
-        
-        max_val = ws.cell(row=max_r + 1, column=max_c).value
-        if not max_val or str(max_val).strip() == "":
-            print(f"\n=== MAX Value ===")
-            print("Enter the maximum divider ratio value")
-            max_val = _pick_int("Enter MAX Value", default="")
-            ws.cell(row=max_r + 1, column=max_c, value=max_val)
-        else:
-            max_val = str(max_val).strip()
-
-        # 6. DIVRATIO 확인 및 입력
+        max_r, max_c         = _find_cell(ws, "MAX Value")
         divratio_r, divratio_c = _find_cell(ws, "DIVRATIO")
-        if not divratio_r:
-            print("ERROR: 'DIVRATIO' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'DIVRATIO' cell not found")
-        
-        divratio = ws.cell(row=divratio_r + 1, column=divratio_c).value
-        if not divratio or str(divratio).strip() == "":
-            print(f"\n=== DIVRATIO ===")
-            divratio = _pick_from(all_ports, "Select DIVRATIO signal:", allow_custom=True)
-            ws.cell(row=divratio_r + 1, column=divratio_c, value=divratio)
-        else:
-            divratio = str(divratio).strip()
-
-        # 7. CLKOUT 확인 및 입력
-        clkout_r, clkout_c = _find_cell(ws, "CLKOUT")
-        if not clkout_r:
-            print("ERROR: 'CLKOUT' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'CLKOUT' cell not found")
-        
-        clkout = ws.cell(row=clkout_r + 1, column=clkout_c).value
-        if not clkout or str(clkout).strip() == "":
-            print(f"\n=== CLKOUT ===")
-            clkout = _pick_from(all_ports, "Select CLKOUT signal:", allow_custom=True)
-            ws.cell(row=clkout_r + 1, column=clkout_c, value=clkout)
-        else:
-            clkout = str(clkout).strip()
-
-        # 8. START FLAG 확인 및 입력
+        clkout_r, clkout_c   = _find_cell(ws, "CLKOUT")
         start_flag_r, start_flag_c = _find_cell(ws, "START FLAG")
-        if not start_flag_r:
-            print("ERROR: 'START FLAG' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'START FLAG' cell not found")
-        
-        start_flag = ws.cell(row=start_flag_r + 1, column=start_flag_c).value
-        if not start_flag or str(start_flag).strip() == "":
-            print(f"\n=== START FLAG ===")
-            start_flag = _pick_from(all_ports, "Select START FLAG signal:", allow_custom=True)
-            ws.cell(row=start_flag_r + 1, column=start_flag_c, value=start_flag)
-        else:
-            start_flag = str(start_flag).strip()
-
-        # 9. DISABLE 확인 및 입력
         disable_r, disable_c = _find_cell(ws, "DISABLE")
-        if not disable_r:
-            print("ERROR: 'DISABLE' cell not found in clockDivider sheet.", flush=True)
-            raise ValueError("'DISABLE' cell not found")
-        
-        disable = ws.cell(row=disable_r + 1, column=disable_c).value
-        if not disable or str(disable).strip() == "":
-            print(f"\n=== DISABLE ===")
-            disable = _pick_from(all_ports, "Select DISABLE signal:", allow_custom=True)
-            ws.cell(row=disable_r + 1, column=disable_c, value=disable)
-        else:
-            disable = str(disable).strip()
 
-        # 10. clockDivider 시트의 Base Clock/Reset 셀에도 값 기록
+        if not ref_clk_r or not max_r or not divratio_r or not clkout_r or not start_flag_r or not disable_r:
+            print("ERROR: One or more required cells (Reference Clock / MAX Value / DIVRATIO / CLKOUT / START FLAG / DISABLE) not found in clockDivider sheet.", flush=True)
+            raise ValueError("Missing required clockDivider labels")
+
+        def _cell_str(r, c):
+            v = ws.cell(row=r + 1, column=c).value
+            return str(v).strip() if v is not None and str(v).strip() != "" else ""
+
+        ref_clk    = _cell_str(ref_clk_r, ref_clk_c)    or "<Reference Clock>"
+        max_val    = _cell_str(max_r, max_c)            or "<MAX Value>"
+        divratio   = _cell_str(divratio_r, divratio_c)  or "<DIVRATIO>"
+        clkout     = _cell_str(clkout_r, clkout_c)      or "<CLKOUT>"
+        start_flag = _cell_str(start_flag_r, start_flag_c) or "<START FLAG>"
+        disable    = _cell_str(disable_r, disable_c)    or "<DISABLE>"
+
+        # 5. 요약 보여주고 번호 선택 / Enter 두 번으로 확정
+        while True:
+            print("\n==================== Clock Divider Settings ====================")
+            print(f"[1] Reference Clock : {ref_clk}")
+            print(f"[2] MAX Value       : {max_val}")
+            print(f"[3] DIVRATIO        : {divratio}")
+            print(f"[4] CLKOUT          : {clkout}")
+            print(f"[5] START FLAG      : {start_flag}")
+            print(f"[6] DISABLE         : {disable}")
+            print("================================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if ref_clk    in ("", "<Reference Clock>"):  missing.append("[1]")
+                if max_val    in ("", "<MAX Value>"):        missing.append("[2]")
+                if divratio   in ("", "<DIVRATIO>"):         missing.append("[3]")
+                if clkout     in ("", "<CLKOUT>"):           missing.append("[4]")
+                if start_flag in ("", "<START FLAG>"):       missing.append("[5]")
+                if disable    in ("", "<DISABLE>"):          missing.append("[6]")
+                if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                ref_clk = _pick_from(all_ports, "Select Reference Clock:", allow_custom=True)
+            elif choice == "2":
+                print("Enter the maximum divider ratio value")
+                max_val = _pick_int("Enter MAX Value", default=str(max_val) if max_val not in ("", "<MAX Value>") else "")
+            elif choice == "3":
+                divratio = _pick_from(all_ports, "Select DIVRATIO signal:", allow_custom=True)
+            elif choice == "4":
+                clkout = _pick_from(all_ports, "Select CLKOUT signal:", allow_custom=True)
+            elif choice == "5":
+                start_flag = _pick_from(all_ports, "Select START FLAG signal:", allow_custom=True)
+            elif choice == "6":
+                disable = _pick_from(all_ports, "Select DISABLE signal:", allow_custom=True)
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 6. 최종 값 시트에 기록
+        ws.cell(row=ref_clk_r + 1,    column=ref_clk_c,    value=ref_clk)
+        ws.cell(row=max_r + 1,        column=max_c,        value=max_val)
+        ws.cell(row=divratio_r + 1,   column=divratio_c,   value=divratio)
+        ws.cell(row=clkout_r + 1,     column=clkout_c,     value=clkout)
+        ws.cell(row=start_flag_r + 1, column=start_flag_c, value=start_flag)
+        ws.cell(row=disable_r + 1,    column=disable_c,    value=disable)
+
+        # 7. clockDivider 시트의 Base Clock/Reset 셀에도 값 기록
         clk_row, clk_col = _find_cell(ws, "Base Clock")
         if clk_row:
             ws.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
+
         rst_row, rst_col = _find_cell(ws, "Base Reset")
         if rst_row:
             ws.cell(row=rst_row, column=rst_col + 1, value=base_rst)
 
-        # 11. Excel 저장
+        # 8. Excel 저장
         wb.save(xls_path)
 
-        # 12. Width 정보 수집
+        # 9. Width 정보 수집
         ref_clk_width = _port_width_token(mod, ref_clk)
         base_rst_width = _port_width_token(mod, base_rst)
         divratio_width = _port_width_token(mod, divratio)
@@ -315,7 +304,7 @@ class ClockDividerPlugin(BaseAssertionPlugin):
         start_flag_width = _port_width_token(mod, start_flag)
         disable_width = _port_width_token(mod, disable)
 
-        # 13. 결과 반환
+        # 10. 결과 반환
         blocks = [{
             "Base Clock": base_clk,
             "Base Reset": base_rst,
@@ -343,7 +332,7 @@ class ClockDividerPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No Clock Divider assertions generated.\n", ""]
-        
+
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
@@ -391,7 +380,7 @@ class ClockDividerPlugin(BaseAssertionPlugin):
         lines.append("")
         lines.append("    property p_clkdiv_check0;")
         lines.append("        int h_cnt, l_cnt;")
-        lines.append(f"        @(posedge {ref_clk}) disable iff (!{base_rst} || {disable})")
+        lines.append(f"        @(posedge {ref_clk} or negedge {ref_clk}) disable iff (!{base_rst} || {disable})")
         lines.append(f"        $rose({start_flag})")
         lines.append("        |-> first_match(s_clkdiv_counter(h_cnt, l_cnt))")
         lines.append(f"        |-> ((h_cnt == ({divratio} + 1)) && (l_cnt == ({divratio} + 1)))")
