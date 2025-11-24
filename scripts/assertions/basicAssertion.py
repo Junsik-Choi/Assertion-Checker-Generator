@@ -343,9 +343,14 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
             cell = ws_w.cell(row=1, column=1, value="basicAssertion")
             cell.alignment = Alignment(wrap_text=True)
 
-        # 2) Base Clock/Reset from label-right (resolve references, no prompts)
-        clk = _read_label_right_resolved(wb_w, ws_w, "Base Clock")
-        rst = _read_label_right_resolved(wb_w, ws_w, "Base Reset")
+        # 2) Base Clock/Reset from Define sheet (resolve references, no prompts)
+        try:
+            ws_define = _get_sheet_ci(wb_w, "Define", create=False)
+            clk = _read_label_right_resolved(wb_w, ws_define, "Base Clock")
+            rst = _read_label_right_resolved(wb_w, ws_define, "Base Reset")
+        except KeyError:
+            clk = ""
+            rst = ""
 
         # 3) 세트 입력 루프
         prop_sets: List[Dict[str, str]] = []
@@ -469,10 +474,17 @@ class BasicAssertionPlugin(BaseAssertionPlugin):
         wb = load_workbook(xls_path, data_only=True)
         ws = _get_sheet_ci(wb, self.sheet_name, create=False)
         clk_do, rst_do = _read_base_clk_rst(ws)
-        if not clk_do:
-            clk_do = _read_label_right_resolved(wb_w, ws_w, "Base Clock")
-        if not rst_do:
-            rst_do = _read_label_right_resolved(wb_w, ws_w, "Base Reset")
+        
+        # Define 시트에서 Base Clock/Reset 읽기 (우선순위 높음)
+        try:
+            ws_define = _get_sheet_ci(wb, "Define", create=False)
+            clk_define = _read_label_right_resolved(wb, ws_define, "Base Clock")
+            rst_define = _read_label_right_resolved(wb, ws_define, "Base Reset")
+            clk_do = clk_define or clk_do
+            rst_do = rst_define or rst_do
+        except KeyError:
+            pass
+        
         clk = clk_do or clk
         rst = rst_do or rst
 
