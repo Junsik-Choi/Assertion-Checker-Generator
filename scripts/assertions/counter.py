@@ -407,45 +407,61 @@ class CounterPlugin(BaseAssertionPlugin):
         in_names = [(f"in : {p.get('name')}", p.get("name") or "") for p in (mod.get("inputs") or []) if p.get("name")]
         out_names = [(f"out: {p.get('name')}", p.get("name") or "") for p in (mod.get("outputs") or []) if p.get("name")]
         sig_opts = in_names + out_names or [("manual input", "")]
-        target = _scan("\nEnter A New Counter Name (e.g., cnt)")
-        plus_con = _pick_one("""
-
-Choose a signal for <plus_con> in the following code:
-
-    else if( <plus_con> ) begin
-        cnt <= cnt+1;
-    end
-
-Available signals:""", sig_opts, allow_custom=True)
-        reset_con = _pick_one("""
-
-Choose a signal for <reset_con> in the following code:
-
-    else if( <reset_con> ) begin
-        cnt <= 0;
-    end
-
-Available signals:""", sig_opts, allow_custom=True)
-        trigger_con = _pick_one("""
-
-Choose a signal for <trigger_con> in the following code:
-
-    property p_counter_check
-        @(posedge I_CLK) disable iff(!I_RSTN)
-        <trigger_con> |-> (cnt == <exp_cnt_val>);
-    endproperty
-
-Available signals:""", sig_opts, allow_custom=True)
-        exp_cnt_val = _pick_one("""
-
-Choose a signal for <exp_cnt_val> in the following code:
-
-    property p_counter_check
-        @(posedge I_CLK) disable iff(!I_RSTN)
-        <trigger_con> |-> (cnt == <exp_cnt_val>);
-    endproperty
-
-Available signals:""", sig_opts, allow_custom=True)
+        target = "<Target>"
+        reset_con = "<Reset Condition>"
+        plus_con = "<Plus Condition>"
+        trigger_con = "<Trigger Condition>"
+        exp_cnt_val = "<Expect Counter Value>"
+        while True:
+            print("\n==================== Enter Items ====================")
+            print(f"always @(posedge clk or negedge rstn) begin")
+            print(f"    if(!rstn) begin")
+            print(f"        [1]{target} <= 0;")
+            print(f"    end")
+            print(f"    else if([2]{reset_con}) begin")
+            print(f"        [1]{target} <= 0;")
+            print(f"    end")
+            print(f"    else if([3]{plus_con}) begin")
+            print(f"        [1]{target} <= [1]{target}+1;")
+            print(f"    end")
+            print(f"    else begin")
+            print(f"        [1]{target} <= [1]{target};")
+            print(f"    end")
+            print(f"end")
+            print(f"")
+            print(f"property p_counter_check;")
+            print(f"    @(posedge clk) disable iff(!rstn)")
+            print(f"    [4]{trigger_con} |-> ([1]{target} == [5]{exp_cnt_val});")
+            print(f"endproperty")
+            print("=========================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if target       in ("", "<Target>"):                missing.append("[1]")
+                if reset_con    in ("", "<Reset Condition>"):       missing.append("[2]")
+                if plus_con     in ("", "<Plus Condition>"):        missing.append("[3]")
+                if trigger_con  in ("", "<Trigger Condition>"):     missing.append("[4]")
+                if exp_cnt_val  in ("", "<Expect Counter Value>"):  missing.append("[5]")
+                if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                target = _scan("Enter Target")
+            elif choice == "2":
+                reset_con = _pick_one("Select Reset Condition", sig_opts, allow_custom=True)
+            elif choice == "3":
+                plus_con = _pick_one("Select Plus Condition", sig_opts, allow_custom=True)
+            elif choice == "4":
+                trigger_con = _pick_one("Select Trigger Condition", sig_opts, allow_custom=True)
+            elif choice == "5":
+                exp_cnt_val = _pick_one("Select Expect Counter Value", sig_opts, allow_custom=True)
+            else:
+                print("Invalid selection. Try again.")
+                continue
         return {"target": target, "plus_con": plus_con, "reset_con": reset_con, "trigger_con": trigger_con, "exp_cnt_val": exp_cnt_val}
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
