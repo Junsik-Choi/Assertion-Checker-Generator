@@ -275,6 +275,8 @@ def run_builder(
     enabled_plugins: Optional[List[str]],
     emit_json: bool,
     handshake_cfg: Optional[Dict[str, str]] = None,
+    base_clk: str = "",
+    base_rst: str = "",
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -286,6 +288,49 @@ def run_builder(
         os.environ["ASSERTION_FORCE_TYPE"] = handshake_cfg["force_type"]
 
     session_excel, session_dir = _create_session_excel_copy(excel_path, actual_module, out_dir)
+
+    # Write Base Clock and Base Reset to Define sheet before fill_define.py runs
+    if base_clk or base_rst:
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(session_excel)
+            # Find "Define" sheet (case-insensitive)
+            ws = None
+            for sheet_name in wb.sheetnames:
+                if sheet_name.lower() == "define":
+                    ws = wb[sheet_name]
+                    break
+            if not ws:
+                ws = wb.active
+            
+            found_clk = False
+            found_rst = False
+            
+            # Find Base Clock and Base Reset labels and write values
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        cell_val = cell.value.strip()
+                        if cell_val == "Base Clock" and base_clk:
+                            right_cell = ws.cell(row=cell.row, column=cell.column + 1)
+                            right_cell.value = base_clk
+                            found_clk = True
+                            print(f"✓ Base Clock set to: {base_clk} (row {cell.row}, col {cell.column})")
+                        elif cell_val == "Base Reset" and base_rst:
+                            right_cell = ws.cell(row=cell.row, column=cell.column + 1)
+                            right_cell.value = base_rst
+                            found_rst = True
+                            print(f"✓ Base Reset set to: {base_rst} (row {cell.row}, col {cell.column})")
+            
+            wb.save(session_excel)
+            if not found_clk and base_clk:
+                print(f"[Warn] 'Base Clock' label not found in Define sheet, but value provided: {base_clk}")
+            if not found_rst and base_rst:
+                print(f"[Warn] 'Base Reset' label not found in Define sheet, but value provided: {base_rst}")
+        except Exception as e:
+            print(f"[Warn] Failed to write Base Clock/Reset to Define sheet: {e}")
+            import traceback
+            traceback.print_exc()
 
     if auto_define_fill:
         define_json_path = fill_define_excel_if_needed(session_excel, module_info, session_dir)
@@ -433,6 +478,30 @@ def run_builder(
         if core:
             agg_bodies.append(f"// {plugin_name}\n{core}")
 
+    def _deduplicate_logic_declarations(sv_text: str) -> str:
+        """
+        interface 블록 내 logic 선언의 중복을 제거
+        같은 신호 이름으로 여러 번 선언된 logic은 첫 번째만 유지
+        """
+        lines = sv_text.splitlines(keepends=True)
+        result_lines = []
+        seen_logics = set()
+        
+        # logic 패턴: logic [width] name;
+        logic_pattern = re.compile(r'^\s*logic\s+(?:\[[^\]]+\])?\s+([A-Za-z_]\w*)\s*;', re.MULTILINE)
+        
+        for line in lines:
+            m = logic_pattern.match(line)
+            if m:
+                sig_name = m.group(1)
+                if sig_name in seen_logics:
+                    # 이미 봤으면 건너뛰기 (중복 제거)
+                    continue
+                seen_logics.add(sig_name)
+            result_lines.append(line)
+        
+        return "".join(result_lines)
+
     def _merge_interface_code(existing_sv: str, new_sv: str, plugin_name: str) -> str:
         """
         기존 interface 코드와 새 코드를 병합
@@ -468,24 +537,31 @@ def run_builder(
         existing_body = existing_match.group(1).strip()
         new_body = new_match.group(1).strip()
         
-        # 4. logic 선언 추출 및 병합
-        logic_pattern = re.compile(r'^\s*logic\s+(\[[^\]]+\])?\s*([A-Za-z_]\w*)\s*;', re.MULTILINE)
+        # 4. logic 선언 추출 및 병합 (더 나은 정규식으로 모든 spacing 처리)
+        # logic [width] name; 형식을 모두 찾음
+        logic_pattern = re.compile(r'logic\s+(?:\[[^\]]+\])?\s+([A-Za-z_]\w*)\s*;', re.MULTILINE)
         
-        existing_logics = {}  # {name: full_declaration}
-        for m in logic_pattern.finditer(existing_body):
-            width = m.group(1) or ""
-            name = m.group(2)
-            existing_logics[name] = m.group(0).strip()
+        # 기존 코드에서 logic 신호 이름 추출
+        existing_logic_names = set()
+        existing_logics = []  # 순서 유지
+        for line in existing_body.splitlines():
+            m = logic_pattern.search(line)
+            if m:
+                sig_name = m.group(1)
+                existing_logic_names.add(sig_name)
+                existing_logics.append(line.strip())
         
-        new_logics = {}
-        new_logic_lines = []
-        for m in logic_pattern.finditer(new_body):
-            width = m.group(1) or ""
-            name = m.group(2)
-            decl = m.group(0).strip()
-            if name not in existing_logics:
-                new_logics[name] = decl
-                new_logic_lines.append(decl)
+        # 새 코드에서 logic 신호 이름 추출 (중복 제거)
+        new_logics = []
+        seen_in_new = set()
+        for line in new_body.splitlines():
+            m = logic_pattern.search(line)
+            if m:
+                sig_name = m.group(1)
+                # 기존 logic에 없고, 현재 새 로직에서도 아직 안 봤으면 추가
+                if sig_name not in existing_logic_names and sig_name not in seen_in_new:
+                    new_logics.append(line.strip())
+                    seen_in_new.add(sig_name)
         
         # 5. logic 선언 제거한 본문 추출
         existing_body_no_logic = logic_pattern.sub("", existing_body).strip()
@@ -505,9 +581,8 @@ def run_builder(
         merged_headers = "\n".join(all_headers)
         
         # logic 선언 재구성
-        all_logic_lines = [existing_logics[name] for name in sorted(existing_logics.keys())]
-        all_logic_lines.extend(new_logic_lines)
-        merged_logics = "\n".join(all_logic_lines) if all_logic_lines else ""
+        merged_logic_lines = existing_logics + new_logics
+        merged_logics = "\n".join(merged_logic_lines) if merged_logic_lines else ""
         
         # parameter 재구성
         merged_params = "\n".join(sorted(all_params)) if all_params else ""
@@ -615,13 +690,16 @@ def run_builder(
                     
                     # 지능형 병합
                     combined_sv = _merge_interface_code(existing_sv, sv_txt, pcls.plugin_name)
+                    # 최종 중복 제거
+                    combined_sv = _deduplicate_logic_declarations(combined_sv)
                     combined_inst = _merge_inst_code(existing_inst, inst_txt, pcls.plugin_name)
                     
                     intf_sv_path.write_text(combined_sv, encoding="utf-8")
                     intf_inst_path.write_text(combined_inst, encoding="utf-8")
                     print(f"✓ {pcls.plugin_name.upper()}: Merged to {intf_sv_path.name} and {intf_inst_path.name}")
                 else:
-                    # 첫 생성 또는 덮어쓰기 모드
+                    # 첫 생성 또는 덮어쓰기 모드: 중복 제거 적용
+                    sv_txt = _deduplicate_logic_declarations(sv_txt)
                     intf_sv_path.write_text(sv_txt, encoding="utf-8")
                     intf_inst_path.write_text(inst_txt, encoding="utf-8")
                     print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
@@ -707,11 +785,11 @@ def _pick_one(title: str, options: List[Tuple[str, str]], allow_custom: bool = F
     for i, (label, _) in enumerate(options, start=1):
         print(f"  [{i}] {label}")
     if allow_custom:
-        print("  [0] Enter custom path")
+        print("  [0] Custom Input")
     while True:
         s = input("Select > ").strip()
         if allow_custom and s == "0":
-            return _prompt("Enter custom path")
+            return _prompt("Enter custom value")
         if s.isdigit():
             i = int(s)
             if 1 <= i <= len(options):
@@ -793,6 +871,45 @@ def interactive_wizard():
         excel_path_str = _pick_one("Select Excel file (Data/)", excel_opts, allow_custom=True)
         excel_path = Path(excel_path_str).resolve()
 
+    # Get properly classified ports for the selected target module
+    try:
+        ctx = build_module_context(rtl_start, target_module)
+        module_info = ctx["module_info"]
+        clocks = module_info.get("clocks", [])
+        resets = module_info.get("resets", [])
+        inputs = module_info.get("inputs", [])
+    except Exception as e:
+        print(f"[Warn] Failed to classify module ports: {e}")
+        clocks = []
+        resets = []
+        inputs = []
+    
+    # Build clock options (all ports: clocks, resets, inputs, outputs)
+    clk_opts: List[Tuple[str, str]] = []
+    all_ports = (
+        module_info.get("clocks", []) +
+        module_info.get("resets", []) +
+        module_info.get("inputs", []) +
+        module_info.get("outputs", [])
+    )
+    seen_clk = set()
+    for p in all_ports:
+        port_name = p.get("name")
+        if port_name and port_name not in seen_clk:
+            clk_opts.append((port_name, port_name))
+            seen_clk.add(port_name)
+    base_clk = _pick_one("\nSelect Base Clock signal", clk_opts, allow_custom=True)
+    
+    # Build reset options (all ports: clocks, resets, inputs, outputs)
+    rst_opts: List[Tuple[str, str]] = []
+    seen_rst = set()
+    for p in all_ports:
+        port_name = p.get("name")
+        if port_name and port_name not in seen_rst:
+            rst_opts.append((port_name, port_name))
+            seen_rst.add(port_name)
+    base_rst = _pick_one("Select Base Reset signal", rst_opts, allow_custom=True)
+
     # Remove Output directory prompt; set default silently
     repo_root = Path(__file__).resolve().parents[1]
     out_dir = (repo_root / "out" / "assertions").resolve()
@@ -823,6 +940,8 @@ def interactive_wizard():
         "enabled_plugins": enabled,
         "emit_json": emit_json,
         "handshake_cfg": handshake_cfg,
+        "base_clk": base_clk,
+        "base_rst": base_rst,
     }
 
 
