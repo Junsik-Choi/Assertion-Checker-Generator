@@ -206,68 +206,79 @@ class SynchronizerPlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # 4. Depth Sync Value 확인 및 입력
+        # 4. Depth Sync / Enable / Input / Output 시그널 위치 찾기
         depth_r, depth_c = _find_cell(ws, "Depth Sync Value")
-        if not depth_r:
-            print("ERROR: 'Depth Sync Value' cell not found in Synchronizer sheet.", flush=True)
-            raise ValueError("'Depth Sync Value' cell not found")
-        
-        depth_val = ws.cell(row=depth_r + 1, column=depth_c).value
-        if not depth_val or str(depth_val).strip() == "":
-            print(f"\n=== Depth Sync Value ===")
-            print("Enter the synchronizer depth (e.g., 2 for 2-stage, 3 for 3-stage)")
-            depth_val = _pick_int("Enter Depth Sync Value", default="2")
-            ws.cell(row=depth_r + 1, column=depth_c, value=depth_val)
-        else:
-            depth_val = str(depth_val).strip()
-
-        # 5. Enable Signal 확인 및 입력
         enable_r, enable_c = _find_cell(ws, "Enable Signal")
-        if not enable_r:
-            print("ERROR: 'Enable Signal' cell not found in Synchronizer sheet.", flush=True)
-            raise ValueError("'Enable Signal' cell not found")
-        
-        enable_sig = ws.cell(row=enable_r + 1, column=enable_c).value
-        if not enable_sig or str(enable_sig).strip() == "":
-            print(f"\n=== Enable Signal ===")
-            enable_sig = _pick_from(all_ports, "Select Enable Signal:", allow_custom=True)
-            ws.cell(row=enable_r + 1, column=enable_c, value=enable_sig)
-        else:
-            enable_sig = str(enable_sig).strip()
-
-        # 6. Input Signal 확인 및 입력
-        input_r, input_c = _find_cell(ws, "Input Signal")
-        if not input_r:
-            print("ERROR: 'Input Signal' cell not found in Synchronizer sheet.", flush=True)
-            raise ValueError("'Input Signal' cell not found")
-        
-        input_sig = ws.cell(row=input_r + 1, column=input_c).value
-        if not input_sig or str(input_sig).strip() == "":
-            print(f"\n=== Input Signal ===")
-            input_sig = _pick_from(all_ports, "Select Input Signal:", allow_custom=True)
-            ws.cell(row=input_r + 1, column=input_c, value=input_sig)
-        else:
-            input_sig = str(input_sig).strip()
-
-        # 7. Output Signal 확인 및 입력
+        input_r,  input_c  = _find_cell(ws, "Input Signal")
         output_r, output_c = _find_cell(ws, "Output Signal")
-        if not output_r:
-            print("ERROR: 'Output Signal' cell not found in Synchronizer sheet.", flush=True)
-            raise ValueError("'Output Signal' cell not found")
-        
-        output_sig = ws.cell(row=output_r + 1, column=output_c).value
-        if not output_sig or str(output_sig).strip() == "":
-            print(f"\n=== Output Signal ===")
-            output_sig = _pick_from(all_ports, "Select Output Signal:", allow_custom=True)
-            ws.cell(row=output_r + 1, column=output_c, value=output_sig)
-        else:
-            output_sig = str(output_sig).strip()
+
+        if not depth_r or not enable_r or not input_r or not output_r:
+            print("ERROR: One or more required cells "
+                  "('Depth Sync Value' / 'Enable Signal' / 'Input Signal' / 'Output Signal') "
+                  "not found in Synchronizer sheet.", flush=True)
+            raise ValueError("Missing required Synchronizer labels")
+
+        # 기존 값 읽어서 없으면 플레이스홀더로 초기화
+        depth_cell  = ws.cell(row=depth_r  + 1, column=depth_c).value
+        enable_cell = ws.cell(row=enable_r + 1, column=enable_c).value
+        input_cell  = ws.cell(row=input_r  + 1, column=input_c).value
+        output_cell = ws.cell(row=output_r + 1, column=output_c).value
+
+        depth_val  = str(depth_cell).strip()  if depth_cell  and str(depth_cell).strip()  else "<Depth Sync Value>"
+        enable_sig = str(enable_cell).strip() if enable_cell and str(enable_cell).strip() else "<Enable Signal>"
+        input_sig  = str(input_cell).strip()  if input_cell  and str(input_cell).strip()  else "<Input Signal>"
+        output_sig = str(output_cell).strip() if output_cell and str(output_cell).strip() else "<Output Signal>"
+
+        while True:
+            print("\n==================== Synchronizer Settings ====================")
+            print(f"[1] Depth Sync Value : {depth_val}")
+            print(f"[2] Enable Signal    : {enable_sig}")
+            print(f"[3] Input Signal     : {input_sig}")
+            print(f"[4] Output Signal    : {output_sig}")
+            print("================================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if depth_val  in ("", "<Depth Sync Value>"): missing.append("[1]")
+                if enable_sig in ("", "<Enable Signal>"):     missing.append("[2]")
+                if input_sig  in ("", "<Input Signal>"):      missing.append("[3]")
+                if output_sig in ("", "<Output Signal>"):     missing.append("[4]")
+                if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                print("\n=== Depth Sync Value ===")
+                print("Enter the synchronizer depth (e.g., 2 for 2-stage, 3 for 3-stage)")
+                default_depth = depth_val if depth_val not in ("", "<Depth Sync Value>") else "2"
+                depth_val = _pick_int("Enter Depth Sync Value", default=default_depth)
+            elif choice == "2":
+                print("\n=== Enable Signal ===")
+                enable_sig = _pick_from(all_ports, "Select Enable Signal:", allow_custom=True)
+            elif choice == "3":
+                print("\n=== Input Signal ===")
+                input_sig = _pick_from(all_ports, "Select Input Signal:", allow_custom=True)
+            elif choice == "4":
+                print("\n=== Output Signal ===")
+                output_sig = _pick_from(all_ports, "Select Output Signal:", allow_custom=True)
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 최종 값 시트에 기록
+        ws.cell(row=depth_r  + 1, column=depth_c, value=depth_val)
+        ws.cell(row=enable_r + 1, column=enable_c, value=enable_sig)
+        ws.cell(row=input_r  + 1, column=input_c, value=input_sig)
+        ws.cell(row=output_r + 1, column=output_c, value=output_sig)
 
         # 8. Synchronizer 시트의 Base Clock/Reset 셀에도 값 기록
         clk_row, clk_col = _find_cell(ws, "Base Clock")
         if clk_row:
             ws.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
+
         rst_row, rst_col = _find_cell(ws, "Base Reset")
         if rst_row:
             ws.cell(row=rst_row, column=rst_col + 1, value=base_rst)
@@ -307,7 +318,7 @@ class SynchronizerPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No Synchronizer assertions generated.\n", ""]
-        
+
         b = blocks[0]
         clk = b.get("Base Clock", "") or "clk"
         rst = b.get("Base Reset", "") or "rst_n"
