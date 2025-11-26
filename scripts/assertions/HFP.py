@@ -200,59 +200,142 @@ class HFPPlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # Hsync Signal 확인 및 입력
-        hs_row, hs_col = _find_cell(ws_hfp, "Hsync Signal")
-        if hs_row is None:
-            print("ERROR: 'Hsync Signal' cell not found in HFP sheet.", flush=True)
-            raise ValueError("Hsync Signal cell not found")
-        
+        # Hsync / Data Enable / Min / Max 값 셀 위치 확인
+        hs_row, hs_col   = _find_cell(ws_hfp, "Hsync Signal")
+        de_row, de_col   = _find_cell(ws_hfp, "Data Enable Signal")
+        min_row, min_col = _find_cell(ws_hfp, "Expected Min Value")
+        max_row, max_col = _find_cell(ws_hfp, "Expected Max Value")
+
+        if (
+            hs_row is None
+            or de_row is None
+            or min_row is None
+            or max_row is None
+        ):
+            print(
+                "ERROR: One or more required cells "
+                "(Hsync / Data Enable / Expected Min / Expected Max) "
+                "not found in HFP sheet.",
+                flush=True,
+            )
+            raise ValueError("Missing required HFP labels")
+
+        # 기존 시트 값 읽기
+        hs_cell  = ws_hfp.cell(row=hs_row  + 1, column=hs_col).value
+        de_cell  = ws_hfp.cell(row=de_row  + 1, column=de_col).value
+        min_cell = ws_hfp.cell(row=min_row + 1, column=min_col).value
+        max_cell = ws_hfp.cell(row=max_row + 1, column=max_col).value
+
+        # 후보 포트 목록
         hs_candidates = [n for n in all_ports if "i_hsync" in n.lower()]
-        if not hs_candidates:
+        de_candidates = [n for n in all_ports if "i_de" in n.lower()]
+
+        # Hsync Signal 초기값 결정
+        if hs_cell and str(hs_cell).strip():
+            hsync_signal = str(hs_cell).strip()
+        elif not hs_candidates:
             print("ERROR: No port containing 'i_hsync' found in RTL.", flush=True)
+            hsync_signal = "<Hsync Signal>"
             raise ValueError("i_hsync port not found")
         elif len(hs_candidates) == 1:
             hsync_signal = hs_candidates[0]
         else:
-            hsync_signal = _pick_from(hs_candidates, "Select Hsync Signal (matched i_hsync)", allow_custom=False)
-        ws_hfp.cell(row=hs_row + 1, column=hs_col, value=hsync_signal)
+            # 여러 개 후보가 있을 때는 일단 placeholder로 두고 편집 루프에서 고르게 함
+            hsync_signal = "<Hsync Signal>"
 
-        # Data Enable Signal 확인 및 입력
-        de_row, de_col = _find_cell(ws_hfp, "Data Enable Signal")
-        if de_row is None:
-            print("ERROR: 'Data Enable Signal' cell not found in HFP sheet.", flush=True)
-            raise ValueError("Data Enable Signal cell not found")
-        
-        de_candidates = [n for n in all_ports if "i_de" in n.lower()]
-        if not de_candidates:
+        # Data Enable Signal 초기값 결정
+        if de_cell and str(de_cell).strip():
+            data_enable_signal = str(de_cell).strip()
+        elif not de_candidates:
             print("ERROR: No port containing 'i_de' found in RTL.", flush=True)
+            data_enable_signal = "<Data Enable Signal>"
             raise ValueError("i_de port not found")
         elif len(de_candidates) == 1:
             data_enable_signal = de_candidates[0]
         else:
-            data_enable_signal = _pick_from(de_candidates, "Select Data Enable Signal (matched i_de)", allow_custom=False)
-        ws_hfp.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
+            data_enable_signal = "<Data Enable Signal>"
 
-        # Expected Min Value 확인 및 입력
-        min_row, min_col = _find_cell(ws_hfp, "Expected Min Value")
-        if min_row is None:
-            print("ERROR: 'Expected Min Value' cell not found in HFP sheet.", flush=True)
-            raise ValueError("Expected Min Value cell not found")
-        exp_min = _pick_int("Enter Expected Min Value")
-        ws_hfp.cell(row=min_row + 1, column=min_col, value=exp_min)
+        # Min/Max 초기값 (없으면 placeholder)
+        exp_min = (
+            str(min_cell).strip()
+            if min_cell is not None and str(min_cell).strip()
+            else "<Expected Min Value>"
+        )
+        exp_max = (
+            str(max_cell).strip()
+            if max_cell is not None and str(max_cell).strip()
+            else "<Expected Max Value>"
+        )
 
-        # Expected Max Value 확인 및 입력 (Min보다 크거나 같아야 함)
-        max_row, max_col = _find_cell(ws_hfp, "Expected Max Value")
-        if max_row is None:
-            print("ERROR: 'Expected Max Value' cell not found in HFP sheet.", flush=True)
-            raise ValueError("Expected Max Value cell not found")
-        exp_max = _pick_int_with_validation("Enter Expected Max Value", min_val=int(exp_min))
-        ws_hfp.cell(row=max_row + 1, column=max_col, value=exp_max)
+        # 인터랙티브 편집 루프 (HACT 스타일과 동일한 UX)
+        while True:
+            print("\n==================== HFP Settings ====================")
+            print(f"[1] Hsync Signal        : {hsync_signal}")
+            print(f"[2] Data Enable Signal  : {data_enable_signal}")
+            print(f"[3] Expected Min Value  : {exp_min}")
+            print(f"[4] Expected Max Value  : {exp_max}")
+            print("=======================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+
+            if choice == "":
+                missing = []
+                if hsync_signal       in ("", "<Hsync Signal>"):
+                    missing.append("[1]")
+                if data_enable_signal in ("", "<Data Enable Signal>"):
+                    missing.append("[2]")
+                if exp_min            in ("", "<Expected Min Value>"):
+                    missing.append("[3]")
+                if exp_max            in ("", "<Expected Max Value>"):
+                    missing.append("[4]")
+
+                if missing:
+                    print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+
+            if choice == "1":
+                hsync_signal = _pick_from(
+                    hs_candidates,
+                    "Select Hsync Signal (matched i_hsync)",
+                    allow_custom=False,
+                )
+            elif choice == "2":
+                data_enable_signal = _pick_from(
+                    de_candidates,
+                    "Select Data Enable Signal (matched i_de)",
+                    allow_custom=False,
+                )
+            elif choice == "3":
+                exp_min = _pick_int("Enter Expected Min Value")
+            elif choice == "4":
+                # exp_min이 정수로 안 들어있으면 0 기준
+                try:
+                    min_val_int = int(exp_min)
+                except Exception:
+                    min_val_int = 0
+                exp_max = _pick_int_with_validation(
+                    "Enter Expected Max Value",
+                    min_val=min_val_int,
+                )
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 최종 선택 값을 시트에 기록
+        ws_hfp.cell(row=hs_row  + 1, column=hs_col,   value=hsync_signal)
+        ws_hfp.cell(row=de_row  + 1, column=de_col,   value=data_enable_signal)
+        ws_hfp.cell(row=min_row + 1, column=min_col,  value=exp_min)
+        ws_hfp.cell(row=max_row + 1, column=max_col,  value=exp_max)
 
         # HFP 시트의 Base Clock/Reset 셀에도 Define에서 읽은 값 기록 (수식이 아닌 실제 값)
         clk_row, clk_col = _find_cell(ws_hfp, "Base Clock")
         if clk_row:
             ws_hfp.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
+
         rst_row, rst_col = _find_cell(ws_hfp, "Base Reset")
         if rst_row:
             ws_hfp.cell(row=rst_row, column=rst_col + 1, value=base_rst)
@@ -262,8 +345,8 @@ class HFPPlugin(BaseAssertionPlugin):
         # 포트 너비 추출
         w_clk = _port_width_token(mod, base_clk)
         w_rst = _port_width_token(mod, base_rst)
-        w_hs = _port_width_token(mod, hsync_signal)
-        w_de = _port_width_token(mod, data_enable_signal)
+        w_hs  = _port_width_token(mod, hsync_signal)
+        w_de  = _port_width_token(mod, data_enable_signal)
 
         blocks = [{
             "Base Clock": base_clk,
@@ -283,7 +366,7 @@ class HFPPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No HFP assertions generated.\n", ""]
-        
+
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
@@ -370,7 +453,7 @@ class HFPPlugin(BaseAssertionPlugin):
         inst_lines.append(f"assign u_assertion_intf.{hsync_signal} = top.dut.{hsync_signal};")
         inst_lines.append(f"assign u_assertion_intf.{data_enable_signal} = top.dut.{data_enable_signal};")
         inst_text = "\n".join(inst_lines) + "\n"
-        
+
         return [sv_text, inst_text]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
