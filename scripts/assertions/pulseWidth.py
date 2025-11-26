@@ -193,67 +193,80 @@ class PulseWidthPlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # 4. Pulse Signal 확인 및 입력
-        pulse_r, pulse_c = _find_cell(ws, "Pulse Signal")
-        if not pulse_r:
-            print("ERROR: 'Pulse Signal' cell not found in pulseWidth sheet.", flush=True)
-            raise ValueError("'Pulse Signal' cell not found")
-        
-        pulse_sig = ws.cell(row=pulse_r + 1, column=pulse_c).value
-        if not pulse_sig or str(pulse_sig).strip() == "":
-            print(f"\n=== Pulse Signal ===")
-            pulse_sig = _pick_from(all_ports, "Select Pulse Signal:", allow_custom=True)
-            ws.cell(row=pulse_r + 1, column=pulse_c, value=pulse_sig)
-        else:
-            pulse_sig = str(pulse_sig).strip()
-
-        # 5. Width Parameter 확인 및 입력
-        width_r, width_c = _find_cell(ws, "Width Parameter")
-        if not width_r:
-            print("ERROR: 'Width Parameter' cell not found in pulseWidth sheet.", flush=True)
-            raise ValueError("'Width Parameter' cell not found")
-        
-        width_param = ws.cell(row=width_r + 1, column=width_c).value
-        if not width_param or str(width_param).strip() == "":
-            print(f"\n=== Width Parameter ===")
-            width_param = _pick_from(all_ports, "Select Width Parameter:", allow_custom=True)
-            ws.cell(row=width_r + 1, column=width_c, value=width_param)
-        else:
-            width_param = str(width_param).strip()
-
-        # 6. Disable Condition 확인 및 입력
+        # 4. Pulse / Width / Disable 셀 위치 찾기
+        pulse_r, pulse_c   = _find_cell(ws, "Pulse Signal")
+        width_r, width_c   = _find_cell(ws, "Width Parameter")
         disable_r, disable_c = _find_cell(ws, "Disable Condition")
-        if not disable_r:
-            print("ERROR: 'Disable Condition' cell not found in pulseWidth sheet.", flush=True)
-            raise ValueError("'Disable Condition' cell not found")
-        
-        disable_cond = ws.cell(row=disable_r + 1, column=disable_c).value
-        if not disable_cond or str(disable_cond).strip() == "":
-            print(f"\n=== Disable Condition ===")
-            disable_cond = _pick_from(all_ports, "Select Disable Condition:", allow_custom=True)
-            ws.cell(row=disable_r + 1, column=disable_c, value=disable_cond)
-        else:
-            disable_cond = str(disable_cond).strip()
 
-        # 7. pulseWidth 시트의 Base Clock/Reset 셀에도 값 기록
+        if not pulse_r or not width_r or not disable_r:
+            print("ERROR: One or more required cells (Pulse Signal / Width Parameter / Disable Condition) "
+                  "not found in pulseWidth sheet.", flush=True)
+            raise ValueError("Missing required pulseWidth labels")
+
+        # 5. 셀 값 읽어서 플레이스홀더 세팅
+        pulse_cell   = ws.cell(row=pulse_r + 1, column=pulse_c).value
+        width_cell   = ws.cell(row=width_r + 1, column=width_c).value
+        disable_cell = ws.cell(row=disable_r + 1, column=disable_c).value
+
+        pulse_sig    = str(pulse_cell).strip()   if pulse_cell   and str(pulse_cell).strip()   else "<Pulse Signal>"
+        width_param  = str(width_cell).strip()   if width_cell   and str(width_cell).strip()   else "<Width Parameter>"
+        disable_cond = str(disable_cell).strip() if disable_cell and str(disable_cell).strip() else "<Disable Condition>"
+
+        # 6. 한 화면에서 수정 + Enter 두 번으로 확정
+        while True:
+            print("\n==================== Pulse Width Settings ====================")
+            print(f"[1] Pulse Signal      : {pulse_sig}")
+            print(f"[2] Width Parameter   : {width_param}")
+            print(f"[3] Disable Condition : {disable_cond}")
+            print("============================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if pulse_sig    in ("", "<Pulse Signal>"):       missing.append("[1]")
+                if width_param  in ("", "<Width Parameter>"):    missing.append("[2]")
+                if disable_cond in ("", "<Disable Condition>"):  missing.append("[3]")
+                if missing:
+                    print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                pulse_sig = _pick_from(all_ports, "Select Pulse Signal:", allow_custom=True)
+            elif choice == "2":
+                width_param = _pick_from(all_ports, "Select Width Parameter:", allow_custom=True)
+            elif choice == "3":
+                disable_cond = _pick_from(all_ports, "Select Disable Condition:", allow_custom=True)
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 7. 최종값을 시트에 기록
+        ws.cell(row=pulse_r   + 1, column=pulse_c,   value=pulse_sig)
+        ws.cell(row=width_r   + 1, column=width_c,   value=width_param)
+        ws.cell(row=disable_r + 1, column=disable_c, value=disable_cond)
+
+        # 8. pulseWidth 시트의 Base Clock/Reset 셀에도 값 기록
         clk_row, clk_col = _find_cell(ws, "Base Clock")
         if clk_row:
             ws.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
+
         rst_row, rst_col = _find_cell(ws, "Base Reset")
         if rst_row:
             ws.cell(row=rst_row, column=rst_col + 1, value=base_rst)
 
-        # 8. Excel 저장
+        # 9. Excel 저장
         wb.save(xls_path)
 
-        # 9. Width 정보 수집
-        pulse_width = _port_width_token(mod, pulse_sig)
+        # 10. Width 정보 수집
+        pulse_width  = _port_width_token(mod, pulse_sig)
         disable_width = _port_width_token(mod, disable_cond)
-        clk_width = _port_width_token(mod, base_clk)
-        rst_width = _port_width_token(mod, base_rst)
+        clk_width    = _port_width_token(mod, base_clk)
+        rst_width    = _port_width_token(mod, base_rst)
 
-        # 10. 결과 반환
+        # 11. 결과 반환
         blocks = [{
             "Base Clock": base_clk,
             "Base Reset": base_rst,
@@ -267,6 +280,7 @@ class PulseWidthPlugin(BaseAssertionPlugin):
         }]
         return {"blocks": blocks}
 
+
     def generate_sv(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
         """
         SystemVerilog assertion 코드 생성
@@ -276,7 +290,7 @@ class PulseWidthPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No Pulse Width assertions generated.\n", ""]
-        
+
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
