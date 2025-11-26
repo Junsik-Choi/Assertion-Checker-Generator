@@ -202,75 +202,145 @@ class HBPPlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # Hsync Signal 확인 및 입력
+        # Hsync / Vsync / Data Enable / Min / Max 값 초기화 및 셀 위치 확인
         hs_row, hs_col = _find_cell(ws_hbp, "Hsync Signal")
-        if hs_row is None:
-            print("ERROR: 'Hsync Signal' cell not found in HBP sheet.", flush=True)
-            raise ValueError("Hsync Signal cell not found")
-        
+        vs_row, vs_col = _find_cell(ws_hbp, "Vsync Signal")
+        de_row, de_col = _find_cell(ws_hbp, "Data Enable Signal")
+        min_row, min_col = _find_cell(ws_hbp, "Expected Min Value")
+        max_row, max_col = _find_cell(ws_hbp, "Expected Max Value")
+
+        if (
+            hs_row is None
+            or vs_row is None
+            or de_row is None
+            or min_row is None
+            or max_row is None
+        ):
+            print(
+                "ERROR: One or more required cells "
+                "(Hsync/Vsync/Data Enable/Expected Min/Expected Max) not found in HBP sheet.",
+                flush=True,
+            )
+            raise ValueError("Missing required HBP labels")
+
+        # 기존 시트 값 읽기
+        hs_cell  = ws_hbp.cell(row=hs_row  + 1, column=hs_col).value
+        vs_cell  = ws_hbp.cell(row=vs_row  + 1, column=vs_col).value
+        de_cell  = ws_hbp.cell(row=de_row  + 1, column=de_col).value
+        min_cell = ws_hbp.cell(row=min_row + 1, column=min_col).value
+        max_cell = ws_hbp.cell(row=max_row + 1, column=max_col).value
+
+        # Hsync 후보 및 초기값
         hs_candidates = [n for n in all_ports if "i_hsync" in n.lower()]
-        if not hs_candidates:
+        if hs_cell and str(hs_cell).strip():
+            hsync_signal = str(hs_cell).strip()
+        elif not hs_candidates:
             print("ERROR: No port containing 'i_hsync' found in RTL.", flush=True)
+            hsync_signal = "<Hsync Signal>"
             raise ValueError("i_hsync port not found")
         elif len(hs_candidates) == 1:
             hsync_signal = hs_candidates[0]
         else:
-            hsync_signal = _pick_from(hs_candidates, "Select Hsync Signal (matched i_hsync)", allow_custom=False)
-        ws_hbp.cell(row=hs_row + 1, column=hs_col, value=hsync_signal)
+            hsync_signal = "<Hsync Signal>"
 
-        # Vsync Signal 확인 및 입력
-        vs_row, vs_col = _find_cell(ws_hbp, "Vsync Signal")
-        if vs_row is None:
-            print("ERROR: 'Vsync Signal' cell not found in HBP sheet.", flush=True)
-            raise ValueError("Vsync Signal cell not found")
-        
+        # Vsync 후보 및 초기값
         vs_candidates = [n for n in all_ports if "i_vsync" in n.lower()]
-        if not vs_candidates:
+        if vs_cell and str(vs_cell).strip():
+            vsync_signal = str(vs_cell).strip()
+        elif not vs_candidates:
             print("ERROR: No port containing 'i_vsync' found in RTL.", flush=True)
+            vsync_signal = "<Vsync Signal>"
             raise ValueError("i_vsync port not found")
         elif len(vs_candidates) == 1:
             vsync_signal = vs_candidates[0]
         else:
-            vsync_signal = _pick_from(vs_candidates, "Select Vsync Signal (matched i_vsync)", allow_custom=False)
-        ws_hbp.cell(row=vs_row + 1, column=vs_col, value=vsync_signal)
+            vsync_signal = "<Vsync Signal>"
 
-        # Data Enable Signal 확인 및 입력
-        de_row, de_col = _find_cell(ws_hbp, "Data Enable Signal")
-        if de_row is None:
-            print("ERROR: 'Data Enable Signal' cell not found in HBP sheet.", flush=True)
-            raise ValueError("Data Enable Signal cell not found")
-        
+        # Data Enable 후보 및 초기값
         de_candidates = [n for n in all_ports if "i_de" in n.lower()]
-        if not de_candidates:
+        if de_cell and str(de_cell).strip():
+            data_enable_signal = str(de_cell).strip()
+        elif not de_candidates:
             print("ERROR: No port containing 'i_de' found in RTL.", flush=True)
+            data_enable_signal = "<Data Enable Signal>"
             raise ValueError("i_de port not found")
         elif len(de_candidates) == 1:
             data_enable_signal = de_candidates[0]
         else:
-            data_enable_signal = _pick_from(de_candidates, "Select Data Enable Signal (matched i_de)", allow_custom=False)
+            data_enable_signal = "<Data Enable Signal>"
+
+        # Min / Max 초기값
+        exp_min = str(min_cell).strip() if min_cell and str(min_cell).strip() else "<Expected Min Value>"
+        exp_max = str(max_cell).strip() if max_cell and str(max_cell).strip() else "<Expected Max Value>"
+
+        while True:
+            print("\n==================== HBP Settings ====================")
+            print(f"[1] Hsync Signal        : {hsync_signal}")
+            print(f"[2] Vsync Signal        : {vsync_signal}")
+            print(f"[3] Data Enable Signal  : {data_enable_signal}")
+            print(f"[4] Expected Min Value  : {exp_min}")
+            print(f"[5] Expected Max Value  : {exp_max}")
+            print("=======================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if hsync_signal       in ("", "<Hsync Signal>"):        missing.append("[1]")
+                if vsync_signal       in ("", "<Vsync Signal>"):        missing.append("[2]")
+                if data_enable_signal in ("", "<Data Enable Signal>"):  missing.append("[3]")
+                if exp_min            in ("", "<Expected Min Value>"):  missing.append("[4]")
+                if exp_max            in ("", "<Expected Max Value>"):  missing.append("[5]")
+                if missing:
+                    print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                hsync_signal = _pick_from(
+                    hs_candidates,
+                    "Select Hsync Signal (matched i_hsync)",
+                    allow_custom=False,
+                )
+            elif choice == "2":
+                vsync_signal = _pick_from(
+                    vs_candidates,
+                    "Select Vsync Signal (matched i_vsync)",
+                    allow_custom=False,
+                )
+            elif choice == "3":
+                data_enable_signal = _pick_from(
+                    de_candidates,
+                    "Select Data Enable Signal (matched i_de)",
+                    allow_custom=False,
+                )
+            elif choice == "4":
+                exp_min = _pick_int("Enter Expected Min Value")
+            elif choice == "5":
+                try:
+                    min_val_int = int(exp_min)
+                except Exception:
+                    min_val_int = 0
+                exp_max = _pick_int_with_validation(
+                    "Enter Expected Max Value", min_val=min_val_int
+                )
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 최종 선택 값을 시트에 기록
+        ws_hbp.cell(row=hs_row + 1, column=hs_col, value=hsync_signal)
+        ws_hbp.cell(row=vs_row + 1, column=vs_col, value=vsync_signal)
         ws_hbp.cell(row=de_row + 1, column=de_col, value=data_enable_signal)
-
-        # Expected Min Value 확인 및 입력
-        min_row, min_col = _find_cell(ws_hbp, "Expected Min Value")
-        if min_row is None:
-            print("ERROR: 'Expected Min Value' cell not found in HBP sheet.", flush=True)
-            raise ValueError("Expected Min Value cell not found")
-        exp_min = _pick_int("Enter Expected Min Value")
         ws_hbp.cell(row=min_row + 1, column=min_col, value=exp_min)
-
-        # Expected Max Value 확인 및 입력 (Min보다 크거나 같아야 함)
-        max_row, max_col = _find_cell(ws_hbp, "Expected Max Value")
-        if max_row is None:
-            print("ERROR: 'Expected Max Value' cell not found in HBP sheet.", flush=True)
-            raise ValueError("Expected Max Value cell not found")
-        exp_max = _pick_int_with_validation("Enter Expected Max Value", min_val=int(exp_min))
         ws_hbp.cell(row=max_row + 1, column=max_col, value=exp_max)
 
         # HBP 시트의 Base Clock/Reset 셀에도 Define에서 읽은 값 기록 (수식이 아닌 실제 값)
         clk_row, clk_col = _find_cell(ws_hbp, "Base Clock")
         if clk_row:
             ws_hbp.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
+
         rst_row, rst_col = _find_cell(ws_hbp, "Base Reset")
         if rst_row:
             ws_hbp.cell(row=rst_row, column=rst_col + 1, value=base_rst)
@@ -304,7 +374,7 @@ class HBPPlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No HBP assertions generated.\n", ""]
-        
+
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
@@ -361,7 +431,7 @@ class HBPPlugin(BaseAssertionPlugin):
         inst_lines.append(f"assign u_assertion_intf.{vsync_signal} = top.dut.{vsync_signal};")
         inst_lines.append(f"assign u_assertion_intf.{data_enable_signal} = top.dut.{data_enable_signal};")
         inst_text = "\n".join(inst_lines) + "\n"
-        
+
         return [sv_text, inst_text]
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
