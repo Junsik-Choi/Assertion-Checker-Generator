@@ -22,6 +22,26 @@ Assistant usage hint (for future AI extension requests):
 from .base import BaseAssertionPlugin
 from .registry import get_registered_plugins
 
+# Import all plugins to trigger @register decorators
+from . import AHB_M
+from . import AHB_S
+from . import basicAssertion
+from . import clockDivider
+from . import clockGate
+from . import counter
+from . import HACT
+from . import handshake
+from . import HBP
+from . import HFP
+from . import HSW
+from . import pulseWidth
+from . import synchronizer
+from . import VACT
+from . import VBP
+from . import VFP
+from . import videoSyncAll
+from . import VSW
+
 __all__ = [
     "BaseAssertionPlugin",
     "get_registered_plugins",
