@@ -206,56 +206,66 @@ class ClockGatePlugin(BaseAssertionPlugin):
             if n and n not in all_ports:
                 all_ports.append(n)
 
-        # 4. Depth Sync 확인 및 입력
+        # 4. Depth Sync / Enable Signal / Clock Out 확인 + 인터랙티브 편집
         depth_r, depth_c = _find_cell(ws, "Depth Sync")
         if not depth_r:
             print("ERROR: 'Depth Sync' cell not found in clockGate sheet.", flush=True)
             raise ValueError("'Depth Sync' cell not found")
-        
-        depth_sync = ws.cell(row=depth_r + 1, column=depth_c).value
-        if not depth_sync or str(depth_sync).strip() == "":
-            print(f"\n=== Depth Sync ===")
-            depth_sync = _pick_from(all_ports, "Select Depth Sync signal:", allow_custom=True)
-            ws.cell(row=depth_r + 1, column=depth_c, value=depth_sync)
-        else:
-            depth_sync = str(depth_sync).strip()
 
-        # 5. Enable Signal 확인 및 입력
         enable_r, enable_c = _find_cell(ws, "Enable Signal")
         if not enable_r:
             print("ERROR: 'Enable Signal' cell not found in clockGate sheet.", flush=True)
             raise ValueError("'Enable Signal' cell not found")
-        
-        enable_sig = ws.cell(row=enable_r + 1, column=enable_c).value
-        if not enable_sig or str(enable_sig).strip() == "":
-            print(f"\n=== Enable Signal ===")
-            enable_sig = _pick_from(all_ports, "Select Enable Signal:", allow_custom=True)
-            ws.cell(row=enable_r + 1, column=enable_c, value=enable_sig)
-        else:
-            enable_sig = str(enable_sig).strip()
 
-        # 6. Clock Out 확인 및 입력
         clkout_r, clkout_c = _find_cell(ws, "Clock Out")
         if not clkout_r:
             print("ERROR: 'Clock Out' cell not found in clockGate sheet.", flush=True)
             raise ValueError("'Clock Out' cell not found")
-        
-        clkout = ws.cell(row=clkout_r + 1, column=clkout_c).value
-        if not clkout or str(clkout).strip() == "":
-            print(f"\n=== Clock Out ===")
-            clkout = _pick_from(all_ports, "Select Clock Out signal:", allow_custom=True)
-            ws.cell(row=clkout_r + 1, column=clkout_c, value=clkout)
-        else:
-            clkout = str(clkout).strip()
 
-        # 7. clockGate 시트의 Base Clock/Reset 셀에도 값 기록
-        clk_row, clk_col = _find_cell(ws, "Base Clock")
-        if clk_row:
-            ws.cell(row=clk_row, column=clk_col + 1, value=base_clk)
-        
-        rst_row, rst_col = _find_cell(ws, "Base Reset")
-        if rst_row:
-            ws.cell(row=rst_row, column=rst_col + 1, value=base_rst)
+        depth_cell  = ws.cell(row=depth_r + 1, column=depth_c).value
+        enable_cell = ws.cell(row=enable_r + 1, column=enable_c).value
+        clkout_cell = ws.cell(row=clkout_r + 1, column=clkout_c).value
+
+        depth_sync  = str(depth_cell).strip()  if depth_cell  and str(depth_cell).strip()  else "<Depth Sync>"
+        enable_sig  = str(enable_cell).strip() if enable_cell and str(enable_cell).strip() else "<Enable Signal>"
+        clkout      = str(clkout_cell).strip() if clkout_cell and str(clkout_cell).strip() else "<Clock Out>"
+
+        while True:
+            print("\n==================== Clock Gate Settings ====================")
+            print(f"[1] Depth Sync   : {depth_sync}")
+            print(f"[2] Enable Signal: {enable_sig}")
+            print(f"[3] Clock Out    : {clkout}")
+            print("============================================================")
+            print("Select item number to edit")
+            print("Press Enter twice to confirm all")
+            choice = input("> ").strip()
+            if choice == "":
+                missing = []
+                if depth_sync  in ("", "<Depth Sync>"):     missing.append("[1]")
+                if enable_sig  in ("", "<Enable Signal>"):  missing.append("[2]")
+                if clkout      in ("", "<Clock Out>"):      missing.append("[3]")
+                if missing: print(f"{','.join(missing)} has NOT been entered yet.")
+                print("Press Enter again to confirm, or select item number to edit")
+                choice = input("> ").strip()
+                if choice == "":
+                    break
+            if choice == "1":
+                print("\n=== Depth Sync ===")
+                depth_sync = _pick_from(all_ports, "Select Depth Sync signal:", allow_custom=True)
+            elif choice == "2":
+                print("\n=== Enable Signal ===")
+                enable_sig = _pick_from(all_ports, "Select Enable Signal:", allow_custom=True)
+            elif choice == "3":
+                print("\n=== Clock Out ===")
+                clkout = _pick_from(all_ports, "Select Clock Out signal:", allow_custom=True)
+            else:
+                print("Invalid selection. Try again.")
+                continue
+
+        # 최종값을 시트에 기록
+        ws.cell(row=depth_r  + 1, column=depth_c, value=depth_sync)
+        ws.cell(row=enable_r + 1, column=enable_c, value=enable_sig)
+        ws.cell(row=clkout_r + 1, column=clkout_c, value=clkout)
 
         # 8. Excel 저장
         wb.save(xls_path)
@@ -291,7 +301,7 @@ class ClockGatePlugin(BaseAssertionPlugin):
         blocks = parsed.get("blocks") or []
         if not blocks:
             return ["// No Clock Gate assertions generated.\n", ""]
-        
+
         b = blocks[0]
         base_clk = b.get("Base Clock", "") or "clk"
         base_rst = b.get("Base Reset", "") or "rst_n"
