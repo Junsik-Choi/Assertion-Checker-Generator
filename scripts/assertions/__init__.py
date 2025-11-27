@@ -41,6 +41,7 @@ from . import VBP
 from . import VFP
 from . import videoSyncAll
 from . import VSW
+from . import QCH
 
 __all__ = [
     "BaseAssertionPlugin",
