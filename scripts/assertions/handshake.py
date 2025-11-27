@@ -349,37 +349,11 @@ class HandshakePlugin(BaseAssertionPlugin):
     def _interactive_collect(self, mod: Dict[str, Any]) -> Dict[str, str]:
         # 빌더에서 이미 타입을 선택했으므로 재질문하지 않음
         phase = _get_forced_type() or "2phase"
-        in_names = [(f"in : {p.get('name')}", p.get("name") or "")
-                    for p in (mod.get("inputs") or []) if p.get("name")]
-        out_names = [(f"out: {p.get('name')}", p.get("name") or "")
-                    for p in (mod.get("outputs") or []) if p.get("name")]
+        in_names = [(f"in : {p.get('name')}", p.get("name") or "") for p in (mod.get("inputs") or []) if p.get("name")]
+        out_names = [(f"out: {p.get('name')}", p.get("name") or "") for p in (mod.get("outputs") or []) if p.get("name")]
         sig_opts = in_names + out_names or [("manual input", "")]
-        sender   = "<Sender>"
-        receiver = "<Receiver>"
-        while True:
-            print("\n==================== Handshake Settings ====================")
-            print(f"[1] Sender   : {sender}")
-            print(f"[2] Receiver : {receiver}")
-            print("============================================================")
-            print("Select item number to edit")
-            print("Press Enter twice to confirm all")
-            choice = input("> ").strip()
-            if choice == "":
-                missing = []
-                if sender   in ("", "<Sender>"):   missing.append("[1]")
-                if receiver in ("", "<Receiver>"): missing.append("[2]")
-                if missing: print(f"{','.join(missing)} has NOT been entered yet.")
-                print("Press Enter again to confirm, or select item number to edit")
-                choice = input("> ").strip()
-                if choice == "":
-                    break
-            if choice == "1":
-                sender = _pick_one("Select Sender signal", sig_opts, allow_custom=True)
-            elif choice == "2":
-                receiver = _pick_one("Select Receiver signal", sig_opts, allow_custom=True)
-            else:
-                print("Invalid selection. Try again.")
-                continue
+        sender = _pick_one("Select Sender signal", sig_opts, allow_custom=True)
+        receiver = _pick_one("Select Receiver signal", sig_opts, allow_custom=True)
         return {"phase_type": phase or "2phase", "sender": sender, "receiver": receiver}
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
