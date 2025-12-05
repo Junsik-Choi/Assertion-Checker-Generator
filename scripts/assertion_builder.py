@@ -266,6 +266,211 @@ def _filter_rtl_ansi(files: List[Path]) -> List[Path]:
     return out
 
 
+def _verify_excel_write(excel_path: Path, plugin_name: str, data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    Verify that assertion data was correctly written to the Excel sheet.
+    
+    Returns True if verification passed, False otherwise.
+    Prints detailed verification results.
+    """
+    try:
+        from openpyxl import load_workbook  # type: ignore
+        
+        wb = load_workbook(str(excel_path))
+        
+        # Find the sheet for this plugin (case-insensitive)
+        sheet_name = None
+        target_sheet_lower = None
+        
+        # Map plugin_name to expected sheet_name
+        plugin_to_sheet = {
+            'hact': 'HACT',
+            'hsw': 'HSW',
+            'hbp': 'HBP',
+            'counter': 'Counter',
+            'handshake': 'Handshake',
+            'pulseWidth': 'pulseWidth',
+        }
+        target_sheet = plugin_to_sheet.get(plugin_name, plugin_name.title())
+        target_sheet_lower = target_sheet.lower()
+        
+        for name in wb.sheetnames:
+            if name.lower() == target_sheet_lower:
+                sheet_name = name
+                break
+        
+        if not sheet_name:
+            print(f"  ✗ Sheet '{target_sheet}' not found in workbook")
+            wb.close()
+            return False
+        
+        ws = wb[sheet_name]
+        
+        # Helper function to find cell by label
+        def _find_cell_by_label(ws, label: str) -> Tuple[Optional[int], Optional[int]]:
+            """Find a cell by its value (label). Returns (row, col) or (None, None)."""
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        if cell.value.strip() == label:
+                            return cell.row, cell.column
+            return None, None
+        
+        # Plugin-specific verification logic
+        verification_passed = True
+        found_items = []
+        
+        if plugin_name in ['hact', 'hsw']:
+            # HACT and HSW have the same structure: blocks with specific fields
+            blocks = data.get("blocks", [])
+            if not blocks:
+                print(f"  ✗ No blocks found in parsed data")
+                verification_passed = False
+            else:
+                block = blocks[0]
+                labels_to_check = [
+                    "Base Clock",
+                    "Base Reset",
+                    "Hsync Signal",
+                    "Data Enable Signal",
+                    "Expected Min Value",
+                    "Expected Max Value",
+                ]
+                
+                for label in labels_to_check:
+                    row, col = _find_cell_by_label(ws, label)
+                    if row is None:
+                        print(f"    ✗ Label '{label}' not found")
+                        verification_passed = False
+                        continue
+                    
+                    # Read value from row+1 (data row)
+                    data_cell = ws.cell(row=row + 1, column=col)
+                    data_value = data_cell.value
+                    expected_value = block.get(label)
+                    
+                    if data_value == expected_value:
+                        found_items.append((label, data_value, row + 1, col))
+                        print(f"    ✓ {label}: '{data_value}' (row {row + 1}, col {col})")
+                    else:
+                        print(f"    ✗ {label}: Expected '{expected_value}', got '{data_value}' (row {row + 1}, col {col})")
+                        verification_passed = False
+        
+        elif plugin_name == 'hbp':
+            # HBP is similar to HACT/HSW but with Vsync Signal
+            blocks = data.get("blocks", [])
+            if not blocks:
+                print(f"  ✗ No blocks found in parsed data")
+                verification_passed = False
+            else:
+                block = blocks[0]
+                labels_to_check = [
+                    "Base Clock",
+                    "Base Reset",
+                    "Hsync Signal",
+                    "Vsync Signal",
+                    "Data Enable Signal",
+                    "Expected Min Value",
+                    "Expected Max Value",
+                ]
+                
+                for label in labels_to_check:
+                    row, col = _find_cell_by_label(ws, label)
+                    if row is None:
+                        print(f"    ✗ Label '{label}' not found")
+                        verification_passed = False
+                        continue
+                    
+                    # Read value from row+1 (data row)
+                    data_cell = ws.cell(row=row + 1, column=col)
+                    data_value = data_cell.value
+                    expected_value = block.get(label)
+                    
+                    if data_value == expected_value:
+                        found_items.append((label, data_value, row + 1, col))
+                        print(f"    ✓ {label}: '{data_value}' (row {row + 1}, col {col})")
+                    else:
+                        print(f"    ✗ {label}: Expected '{expected_value}', got '{data_value}' (row {row + 1}, col {col})")
+                        verification_passed = False
+        
+        elif plugin_name == 'counter':
+            # Counter: columns are Target, Plus, Reset, Trigger, Expect Count
+            # Row 8 is first data row
+            fields = ['target', 'plus_con', 'reset_con', 'trigger_con', 'exp_cnt_val']
+            col_map = {
+                'target': 2,
+                'plus_con': 3,
+                'reset_con': 4,
+                'trigger_con': 5,
+                'exp_cnt_val': 6,
+            }
+            
+            # Find next empty row starting from row 8
+            next_row = 8
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            for field, col in col_map.items():
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected_value = data.get(field)
+                
+                if cell_value == expected_value:
+                    found_items.append((field, cell_value, next_row, col))
+                    print(f"    ✓ {field}: '{cell_value}' (row {next_row}, col {col})")
+                else:
+                    print(f"    ✗ {field}: Expected '{expected_value}', got '{cell_value}' (row {next_row}, col {col})")
+                    verification_passed = False
+        
+        elif plugin_name == 'handshake':
+            # Handshake: Type, Sender, Receiver at row 7+
+            next_row = 7
+            while ws.cell(row=next_row, column=3).value:
+                next_row += 1
+            
+            fields = [('phase_type', 3), ('sender', 4), ('receiver', 5)]
+            for field_name, col in fields:
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected_value = data.get(field_name)
+                
+                if cell_value == expected_value:
+                    found_items.append((field_name, cell_value, next_row, col))
+                    print(f"    ✓ {field_name}: '{cell_value}' (row {next_row}, col {col})")
+                else:
+                    print(f"    ✗ {field_name}: Expected '{expected_value}', got '{cell_value}' (row {next_row}, col {col})")
+                    verification_passed = False
+        
+        elif plugin_name == 'pulseWidth':
+            # PulseWidth: Signal, Target, Min, Max at row 8+
+            next_row = 8
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            fields = [('signal', 2), ('target', 3), ('min_val', 4), ('max_val', 5)]
+            for field_name, col in fields:
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected_value = data.get(field_name)
+                
+                if cell_value == expected_value:
+                    found_items.append((field_name, cell_value, next_row, col))
+                    print(f"    ✓ {field_name}: '{cell_value}' (row {next_row}, col {col})")
+                else:
+                    print(f"    ✗ {field_name}: Expected '{expected_value}', got '{cell_value}' (row {next_row}, col {col})")
+                    verification_passed = False
+        
+        wb.close()
+        
+        if verification_passed and found_items:
+            print(f"  ✓ All {len(found_items)} values verified successfully")
+        
+        return verification_passed
+    
+    except Exception as e:
+        print(f"  ✗ Verification error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def run_builder(
     rtl_start: Path,
     target_module: Optional[str],
@@ -703,8 +908,19 @@ def run_builder(
                     intf_sv_path.write_text(sv_txt, encoding="utf-8")
                     intf_inst_path.write_text(inst_txt, encoding="utf-8")
                     print(f"✓ {pcls.plugin_name.upper()}: Wrote {intf_sv_path.name} and {intf_inst_path.name}")
+                
+                # ===== Excel 검증 =====
+                print(f"\n--- Verifying {pcls.plugin_name.upper()} Excel write ---")
+                session_excel_path = Path(common_context["define_excel_path"])
+                if _verify_excel_write(session_excel_path, pcls.plugin_name, parsed):
+                    print(f"✓ {pcls.plugin_name.upper()} Excel verification PASSED\n")
+                else:
+                    print(f"✗ {pcls.plugin_name.upper()} Excel verification FAILED\n")
+            
             except Exception as e:
                 print(f"[Warn] Plugin {pcls.plugin_name} generate failed: {e}")
+                import traceback
+                traceback.print_exc()
 
     # First pass
     _run_generation(plugin_types)

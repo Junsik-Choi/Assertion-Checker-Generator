@@ -352,3 +352,41 @@ class PulseWidthPlugin(BaseAssertionPlugin):
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """JSON 출력 (필요시)"""
         return parsed
+    
+    @classmethod
+    def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
+        """Write pulseWidth assertion data to Excel sheet."""
+        from openpyxl import load_workbook  # type: ignore
+        
+        wb = load_workbook(str(excel_path))
+        
+        # Find pulseWidth sheet
+        sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, 'pulseWidth')
+        if not sheet_name:
+            sheet_name = 'pulseWidth'
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+        
+        ws = wb[sheet_name]
+        
+        # Find next empty row (pulseWidth sheet: data starts at row 7)
+        next_row = 7
+        while ws.cell(row=next_row, column=3).value:
+            next_row += 1
+        
+        # Determine pulse type and count trigger
+        pulse_type = data.get('pulse_type', 'hpulse')
+        if pulse_type == 'hpulse':
+            count_trigger = data.get('base_clock', '')
+        else:
+            count_trigger = data.get('trigger_signal', '')
+        
+        # pulseWidth sheet columns (from row 6): col3=Type, col4=Count_Trigger, col5=Target_Pulse, col6=Min, col7=Max
+        ws.cell(row=next_row, column=3, value=pulse_type)
+        ws.cell(row=next_row, column=4, value=count_trigger)
+        ws.cell(row=next_row, column=5, value=data.get('target_signal', ''))
+        ws.cell(row=next_row, column=6, value=data.get('min_width', ''))
+        ws.cell(row=next_row, column=7, value=data.get('max_width', ''))
+        
+        wb.save(str(excel_path))
+        wb.close()

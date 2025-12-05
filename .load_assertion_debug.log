@@ -1,0 +1,66 @@
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'de_signal': 'i_den', 'expected_min': '10', 'expected_max': '10'}
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'de_signal': 'i_den', 'expected_min': '10', 'expected_max': '10'}
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'data_enable_signal': 'i_den', 'expected_min_value': '10', 'expected_max_value': '10'}
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'data_enable_signal': 'i_den', 'expected_min_value': '10', 'expected_max_value': '10'}
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'data_enable_signal': 'i_den', 'expected_min_value': '10', 'expected_max_value': '10'}
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_den', 'data_enable_signal': 'i_den', 'expected_min_value': '10', 'expected_max_value': '10'}
+[assertion_wizard] Type selected: basicAssertion
+[assertion_wizard] session_excel_path exists: False
+[assertion_wizard] No session_excel_path set
+[assertion_wizard] Type selected: basicAssertion
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for basicAssertion
+[_load_assertion_data_from_excel] Called for type=basicAssertion
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: basicAssertion
+[assertion_wizard] session_excel_path exists: False
+[assertion_wizard] No session_excel_path set
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hsw
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hsw
+[_load_assertion_data_from_excel] Called for type=hsw
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: counter
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for counter
+[_load_assertion_data_from_excel] Called for type=counter
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: pulseWidth
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for pulseWidth
+[_load_assertion_data_from_excel] Called for type=pulseWidth
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: counter
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for counter
+[_load_assertion_data_from_excel] Called for type=counter
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: counter
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for counter
+[_load_assertion_data_from_excel] Called for type=counter
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: clockDivider
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for clockDivider
+[_load_assertion_data_from_excel] Called for type=clockDivider
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}

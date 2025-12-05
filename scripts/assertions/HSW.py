@@ -425,3 +425,64 @@ class HSWPlugin(BaseAssertionPlugin):
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
+
+    @classmethod
+    def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
+        """Write HSW assertion data to Excel sheet using labeled row locations."""
+        from openpyxl import load_workbook  # type: ignore
+        
+        try:
+            wb = load_workbook(str(excel_path))
+            
+            # Find HSW sheet (case-insensitive)
+            sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, cls.sheet_name)
+            if not sheet_name:
+                sheet_name = cls.sheet_name
+                if sheet_name not in wb.sheetnames:
+                    wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Extract blocks from data
+            blocks = data.get("blocks", [])
+            if not blocks:
+                wb.close()
+                return
+            
+            # Process first block (HSW typically has one block)
+            block = blocks[0]
+            
+            # Find label rows and write values to row+1 for each key
+            label_to_key_map = {
+                "Base Clock": "Base Clock",
+                "Base Reset": "Base Reset",
+                "Hsync Signal": "Hsync Signal",
+                "Data Enable Signal": "Data Enable Signal",
+                "Expected Min Value": "Expected Min Value",
+                "Expected Max Value": "Expected Max Value",
+                "Count Trigger": "Count Trigger",
+                "Target Pulse": "Target Pulse",
+            }
+            
+            # Helper: Find or create label (moved from HACT)
+            def find_or_create_label(ws, label):
+                """Find label in sheet or create it in first available row."""
+                row, col = _find_cell(ws, label)
+                if row is not None:
+                    return row, col
+                
+                # Label not found, create it in next available row (column A)
+                next_row = ws.max_row + 1 if ws.max_row > 1 else 2
+                ws.cell(row=next_row, column=1, value=label)
+                return next_row, 1
+            
+            for label, key in label_to_key_map.items():
+                if key in block:
+                    row, col = find_or_create_label(ws, label)
+                    # Write value to the cell one row below the label
+                    ws.cell(row=row + 1, column=col, value=block[key])
+            
+            wb.save(str(excel_path))
+            wb.close()
+        except Exception as e:
+            raise RuntimeError(f"Failed to write HSW assertion to Excel: {str(e)}")

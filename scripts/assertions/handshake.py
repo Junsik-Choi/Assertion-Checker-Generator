@@ -408,6 +408,35 @@ class HandshakePlugin(BaseAssertionPlugin):
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
+    
+    @classmethod
+    def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
+        """Write handshake assertion data to Excel sheet."""
+        from openpyxl import load_workbook  # type: ignore
+        
+        wb = load_workbook(str(excel_path))
+        
+        # Find Handshake sheet
+        sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, 'Handshake')
+        if not sheet_name:
+            sheet_name = 'Handshake'
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+        
+        ws = wb[sheet_name]
+        
+        # Find next empty row (Handshake sheet: data starts at row 7)
+        next_row = 7
+        while ws.cell(row=next_row, column=3).value:
+            next_row += 1
+        
+        # Handshake sheet columns (from row 6): col3=Type, col4=Sender, col5=Receiver
+        ws.cell(row=next_row, column=3, value=data.get('phase_type', ''))
+        ws.cell(row=next_row, column=4, value=data.get('sender', ''))
+        ws.cell(row=next_row, column=5, value=data.get('receiver', ''))
+        
+        wb.save(str(excel_path))
+        wb.close()
 
 # Optional: standalone script entry point for legacy usage
 def main(xlsx_path: str) -> None:

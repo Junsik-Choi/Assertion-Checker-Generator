@@ -396,7 +396,7 @@ class AppState:
     assertions: List[Dict[str, Any]] = field(default_factory=list)
     # Assertion creation wizard state
     assertion_wizard_active: bool = False
-    assertion_wizard_stage: str = ""  # 'select_type' | 'input_data' | 'confirm'
+    assertion_wizard_stage: str = ""  # 'select_type' | 'input_data' | 'confirm' | 'done'
     assertion_selected_type: Optional[str] = None
     assertion_input_data: Dict[str, Any] = field(default_factory=dict)
     # New: Store port_dict for each signal field (field_name -> port_dict with calculated_bit_width)
@@ -424,6 +424,11 @@ class AppState:
     gen_preview_lines: List[str] = field(default_factory=list)  # Preview of generated code
     gen_preview_page: int = 0  # Current page in preview (for pagination)
     gen_preview_file_idx: int = 0  # 0=interface, 1=instance (for "both" mode)
+    
+    # Excel 검증 결과
+    last_verification_messages: List[str] = field(default_factory=list)
+    last_verification_success: bool = False
+    last_assertion_result: str = ""  # Assertion creation result message
 
     def log(self, msg: str) -> None:
         self.messages.append(msg)
@@ -978,8 +983,12 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         
         # Restore condition signals from Excel after session Excel path is set
         if state.session_excel_path:
+            _restore_hierarchy_clocks_resets_from_excel(state)  # Restore hierarchy, clocks, resets
+            _restore_inputs_outputs_from_excel(state)  # Restore inputs/outputs
             _restore_conditions_from_excel(state)
+            _restore_defines_from_excel(state)  # Also restore parameters (defines)
             _restore_assertions_from_excel(state)  # Also restore assertions from Excel
+            _save_session_snapshot(state)  # Save the restored state to session.json
     elif chooser_result == "new":
         state.onboarding_active = True
         state.onboarding_stage = 'rtl'
@@ -2890,7 +2899,10 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 idx = int(m.group(1))
                 ins = (state.module_info.inputs + state.module_info.inouts)
                 if 1 <= idx <= len(ins):
-                    return ins[idx-1].get('name', '')
+                    # Extract signal name without width (e.g., 'i_vact_state [10:0]' -> 'i_vact_state')
+                    full_name = ins[idx-1].get('name', '')
+                    base_name = full_name.split()[0] if full_name else ''
+                    return base_name
             
             # Output alias: o1, o2, o3...
             m = re.match(r'^o(\d+)$', token)
@@ -2898,28 +2910,40 @@ def _handle_command(state: AppState, cmdline: str) -> Tuple[str, bool]:
                 idx = int(m.group(1))
                 outs = (state.module_info.outputs + state.module_info.inouts)
                 if 1 <= idx <= len(outs):
-                    return outs[idx-1].get('name', '')
+                    # Extract signal name without width (e.g., 'o_data [7:0]' -> 'o_data')
+                    full_name = outs[idx-1].get('name', '')
+                    base_name = full_name.split()[0] if full_name else ''
+                    return base_name
             
             # Parameter alias: p1, p2, p3...
             m = re.match(r'^p(\d+)$', token)
             if m:
                 idx = int(m.group(1))
                 if 1 <= idx <= len(state.module_info.parameters):
-                    return state.module_info.parameters[idx-1].get('name', '')
+                    # Extract signal name without width
+                    full_name = state.module_info.parameters[idx-1].get('name', '')
+                    base_name = full_name.split()[0] if full_name else ''
+                    return base_name
             
             # Clock alias: c1, c2, c3...
             m = re.match(r'^c(\d+)$', token)
             if m:
                 idx = int(m.group(1))
                 if 1 <= idx <= len(state.module_info.clocks):
-                    return state.module_info.clocks[idx-1].get('name', '')
+                    # Extract signal name without width
+                    full_name = state.module_info.clocks[idx-1].get('name', '')
+                    base_name = full_name.split()[0] if full_name else ''
+                    return base_name
             
             # Reset alias: r1, r2, r3...
             m = re.match(r'^r(\d+)$', token)
             if m:
                 idx = int(m.group(1))
                 if 1 <= idx <= len(state.module_info.resets):
-                    return state.module_info.resets[idx-1].get('name', '')
+                    # Extract signal name without width
+                    full_name = state.module_info.resets[idx-1].get('name', '')
+                    base_name = full_name.split()[0] if full_name else ''
+                    return base_name
             
             # Plain numbers (1, 2, 3, etc.) remain as literal numbers
             # No automatic mapping to input ports
@@ -3477,6 +3501,7 @@ def _load_sessions() -> List[Dict[str, Any]]:
     """
     Load all sessions from session folders.
     Each session has a session.json file inside its folder.
+    Also attempts to load assertions from Excel if available.
     """
     d = _sessions_dir()
     sessions: List[Dict[str, Any]] = []
@@ -3495,6 +3520,19 @@ def _load_sessions() -> List[Dict[str, Any]]:
             obj = json.loads(session_json.read_text(encoding="utf-8"))
             obj["_path"] = str(session_json)  # Path to JSON file
             obj["_folder"] = str(folder)      # Path to folder
+            
+            # Try to load assertions from Excel if session_excel_path exists
+            # This ensures assertions are loaded even if not in session.json
+            excel_path = obj.get("session_excel_path")
+            if excel_path and Path(excel_path).exists():
+                try:
+                    assertions = _load_assertions_from_excel_file(excel_path)
+                    if assertions:
+                        obj["assertions"] = assertions
+                except Exception:
+                    # If Excel reading fails, keep assertions from session.json (if any)
+                    pass
+            
             sessions.append(obj)
         except Exception:
             continue
@@ -3502,11 +3540,172 @@ def _load_sessions() -> List[Dict[str, Any]]:
     return sessions
 
 
+def _load_assertions_from_excel_file(excel_path: str) -> List[Dict[str, Any]]:
+    """
+    Load assertions from an Excel file.
+    Returns list of assertion entries (similar to state.assertions structure).
+    Helper function used by _load_sessions() to populate assertion data.
+    """
+    assertions = []
+    
+    if not load_workbook or not Path(excel_path).exists():
+        return assertions
+    
+    try:
+        wb = load_workbook(str(excel_path))
+        
+        # ============ Counter Sheet ============
+        counter_sheet = None
+        for name in wb.sheetnames:
+            if name.lower() == 'counter':
+                counter_sheet = name
+                break
+        
+        if counter_sheet:
+            ws = wb[counter_sheet]
+            # Counter sheet: Row 8 has "cnt", "plus_condition", etc. (header), data starts at Row 9
+            for row_idx in range(9, ws.max_row + 1):
+                target = ws.cell(row=row_idx, column=2).value  # Column B
+                # Check if row has actual data (not empty)
+                if not target or str(target).strip() == '':
+                    break
+                    
+                import re
+                match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(target))
+                target_name = match.group(1).strip() if match else str(target).strip()
+                
+                plus_con = ws.cell(row=row_idx, column=3).value     # Column C
+                reset_con = ws.cell(row=row_idx, column=4).value    # Column D
+                trigger_con = ws.cell(row=row_idx, column=5).value  # Column E
+                exp_cnt_val = ws.cell(row=row_idx, column=6).value  # Column F
+                
+                # Skip if all conditions are empty (indicates end of data)
+                if not plus_con and not reset_con and not trigger_con and not exp_cnt_val:
+                    break
+                
+                assertion_entry = {
+                    'type': 'counter',
+                    'data': {
+                        'target': target_name,
+                        'plus_con': str(plus_con).strip() if plus_con else '',
+                        'reset_con': str(reset_con).strip() if reset_con else '',
+                        'trigger_con': str(trigger_con).strip() if trigger_con else '',
+                        'exp_cnt_val': str(exp_cnt_val).strip() if exp_cnt_val else '',
+                    },
+                    'description': 'counter assertion'
+                }
+                assertions.append(assertion_entry)
+        
+        # ============ Handshake Sheet ============
+        handshake_sheet = None
+        for name in wb.sheetnames:
+            if name.lower() == 'handshake':
+                handshake_sheet = name
+                break
+        
+        if handshake_sheet:
+            ws = wb[handshake_sheet]
+            # Handshake sheet: Row 6 is header, data starts at Row 7
+            for row_idx in range(7, ws.max_row + 1):
+                phase_type = ws.cell(row=row_idx, column=3).value  # Column C
+                if not phase_type or str(phase_type).strip() == '':
+                    break
+                
+                phase_str = str(phase_type).strip()
+                if phase_str in ['ready_valid', '4phase', '2phase']:
+                    sender_val = ws.cell(row=row_idx, column=4).value
+                    if sender_val and str(sender_val).strip() in ['valid', 'req', 'ack']:
+                        continue
+                
+                sender = ws.cell(row=row_idx, column=4).value    # Column D
+                receiver = ws.cell(row=row_idx, column=5).value  # Column E
+                
+                import re
+                sender_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(sender)) if sender else None
+                sender_name = sender_match.group(1).strip() if sender_match else (str(sender).strip() if sender else '')
+                
+                receiver_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(receiver)) if receiver else None
+                receiver_name = receiver_match.group(1).strip() if receiver_match else (str(receiver).strip() if receiver else '')
+                
+                if not sender_name and not receiver_name:
+                    continue
+                
+                assertion_entry = {
+                    'type': 'handshake',
+                    'data': {
+                        'sender': sender_name,
+                        'receiver': receiver_name,
+                        'phase_type': phase_str,
+                    },
+                    'description': 'handshake assertion'
+                }
+                assertions.append(assertion_entry)
+        
+        # ============ PulseWidth Sheet ============
+        pulse_sheet = None
+        for name in wb.sheetnames:
+            if name.lower() == 'pulsewidth':
+                pulse_sheet = name
+                break
+        
+        if pulse_sheet:
+            ws = wb[pulse_sheet]
+            # PulseWidth sheet: Row 6 is header, data starts at Row 7
+            for row_idx in range(7, ws.max_row + 1):
+                pulse_type = ws.cell(row=row_idx, column=3).value  # Column C
+                if not pulse_type or str(pulse_type).strip() == '':
+                    break
+                
+                signal_name = ws.cell(row=row_idx, column=5).value  # Column E
+                if signal_name and str(signal_name).strip() == 'target_pulse':
+                    continue
+                
+                import re
+                match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(signal_name)) if signal_name else None
+                clean_signal = match.group(1).strip() if match else (str(signal_name).strip() if signal_name else '')
+                
+                if not clean_signal:
+                    continue
+                
+                count_trigger = ws.cell(row=row_idx, column=4).value  # Column D
+                min_width = ws.cell(row=row_idx, column=6).value  # Column F
+                max_width = ws.cell(row=row_idx, column=7).value  # Column G
+                
+                pulse_type_str = str(pulse_type).strip() if pulse_type else 'hpulse'
+                
+                pulse_data = {
+                    'pulse_type': pulse_type_str,
+                    'target_signal': clean_signal,
+                    'min_width': str(min_width).strip() if min_width else '',
+                    'max_width': str(max_width).strip() if max_width else '',
+                }
+                
+                if pulse_type_str == 'hpulse':
+                    pulse_data['base_clock'] = str(count_trigger).strip() if count_trigger else '<Base Clock>'
+                elif pulse_type_str == 'vpulse':
+                    pulse_data['trigger_signal'] = str(count_trigger).strip() if count_trigger else ''
+                
+                assertion_entry = {
+                    'type': 'pulseWidth',
+                    'data': pulse_data,
+                    'description': 'pulseWidth assertion'
+                }
+                assertions.append(assertion_entry)
+        
+        wb.close()
+    
+    except Exception:
+        pass
+    
+    return assertions
+
+
 def _save_session_snapshot(state: AppState) -> None:
     """
     Save session snapshot to session.json INSIDE the session folder.
     This keeps JSON and Excel together in the same folder.
     Now also saves conditions and assertions for full state restoration.
+    Uses state.assertions which should already be loaded from Excel.
     """
     if not state.session_excel_path:
         # No session folder yet, cannot save
@@ -3525,7 +3724,7 @@ def _save_session_snapshot(state: AppState) -> None:
         "session_excel_path": str(state.session_excel_path),  # Only session Excel!
         "out_dir": str(state.out_dir),
         "conditions": state.conditions,  # Save MS signals
-        "assertions": state.assertions,  # Save created assertions
+        "assertions": state.assertions,  # Save assertions from state (loaded from Excel)
         "clocks": state.module_info.clocks,  # Save clocks
         "resets": state.module_info.resets,  # Save resets
         "parameters": state.module_info.parameters,  # Save parameters
@@ -3536,6 +3735,122 @@ def _save_session_snapshot(state: AppState) -> None:
     try:
         session_json.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
+        pass
+
+
+def _restore_hierarchy_clocks_resets_from_excel(state: AppState) -> None:
+    """
+    Restore hierarchy, clocks, and resets from Excel Define sheet.
+    This data is stored in rows 4-6 of Define sheet.
+    """
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        return
+    
+    if not load_workbook:
+        return
+    
+    try:
+        wb = load_workbook(str(state.session_excel_path))
+        if "Define" not in wb.sheetnames:
+            wb.close()
+            return
+        
+        ws = wb["Define"]
+        
+        # Row 4: "Target Path" = module_hierarchy (e.g., top.dut)
+        # Row 5: "Base Clock" = clock name (e.g., I_CLK)
+        # Row 6: "Base Reset" = reset name (e.g., I_RSTN)
+        
+        # Read Target Path (Row 4, Column C)
+        target_path = ws.cell(row=4, column=3).value
+        if target_path:
+            state.module_info.module_hierarchy = str(target_path).strip()
+        
+        # Read Base Clock (Row 5, Column C)
+        base_clock = ws.cell(row=5, column=3).value
+        if base_clock:
+            clock_name = str(base_clock).strip()
+            # Check if it's not already in clocks list
+            if not any(c.get('name') == clock_name for c in state.module_info.clocks):
+                state.module_info.clocks = [{"name": clock_name, "width": ""}]
+        
+        # Read Base Reset (Row 6, Column C)
+        base_reset = ws.cell(row=6, column=3).value
+        if base_reset:
+            reset_name = str(base_reset).strip()
+            # Check if it's not already in resets list
+            if not any(r.get('name') == reset_name for r in state.module_info.resets):
+                state.module_info.resets = [{"name": reset_name, "width": ""}]
+        
+        wb.close()
+        
+    except Exception:
+        # Excel reading failed, keep existing values
+        pass
+
+
+def _restore_inputs_outputs_from_excel(state: AppState) -> None:
+    """
+    Restore input and output ports from Excel Define sheet.
+    Inputs are in Column E (row 10+), Outputs in Column G (row 10+).
+    Also includes bit width info in Column F and implicit for outputs.
+    Note: This populates internal tracking but doesn't directly affect conditions.
+    """
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        return
+    
+    if not load_workbook:
+        return
+    
+    try:
+        wb = load_workbook(str(state.session_excel_path))
+        if "Define" not in wb.sheetnames:
+            wb.close()
+            return
+        
+        ws = wb["Define"]
+        
+        # Row 9 has headers: "Inputs" (Col E), "Bits" (Col F), "Outputs" (Col G)
+        # Data starts from Row 10
+        inputs = []
+        outputs = []
+        
+        for row_idx in range(10, ws.max_row + 1):
+            # Column E = Input name
+            input_cell = ws.cell(row=row_idx, column=5).value
+            # Column F = Input bits (width)
+            bits_cell = ws.cell(row=row_idx, column=6).value
+            # Column G = Output name
+            output_cell = ws.cell(row=row_idx, column=7).value
+            
+            # Read input
+            if input_cell:
+                input_name = str(input_cell).strip()
+                bits = str(bits_cell).strip() if bits_cell else "1"
+                try:
+                    width = int(bits)
+                except (ValueError, TypeError):
+                    width = 1
+                inputs.append({"name": input_name, "width": width})
+            
+            # Read output
+            if output_cell:
+                output_name = str(output_cell).strip()
+                outputs.append({"name": output_name, "width": ""})
+            
+            # Stop if both input and output are empty
+            if not input_cell and not output_cell:
+                break
+        
+        # Store in state if you have a place for them
+        # (Currently not used, but available for future UI display)
+        # state.module_info.inputs = inputs
+        # state.module_info.outputs = outputs
+        
+        wb.close()
+        
+    except Exception:
+        # Excel reading failed, keep existing values
         pass
 
 
@@ -3644,10 +3959,283 @@ def _restore_conditions_from_excel(state: AppState) -> None:
                 data = json.loads(session_json.read_text(encoding="utf-8"))
                 if "conditions" in data and isinstance(data["conditions"], list):
                     state.conditions = data["conditions"]
-                if "assertions" in data and isinstance(data["assertions"], list):
-                    state.assertions = data["assertions"]
             except Exception:
                 pass
+
+
+def _restore_defines_from_excel(state: AppState) -> None:
+    """
+    Restore defines (parameters) from Excel Defines section.
+    Reads Define sheet and populates state.module_info.parameters list.
+    """
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        return
+    
+    if not load_workbook:
+        return
+    
+    try:
+        wb = load_workbook(str(state.session_excel_path))
+        if "Define" not in wb.sheetnames:
+            wb.close()
+            return
+        
+        ws = wb["Define"]
+        
+        # Find Defines header
+        hdr = None
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.strip().casefold() == "defines":
+                    header_row = cell.row
+                    # Check next row for Name/Value
+                    next_row = list(ws.iter_rows(min_row=header_row + 1, max_row=header_row + 1))
+                    if next_row:
+                        name_col = None
+                        value_col = None
+                        for c in next_row[0]:
+                            if isinstance(c.value, str):
+                                val = c.value.strip().casefold()
+                                if val == "name":
+                                    name_col = c.column
+                                elif val == "value":
+                                    value_col = c.column
+                        if name_col and value_col:
+                            hdr = {
+                                "header_row": header_row,
+                                "data_row": header_row + 1,
+                                "name_col": name_col,
+                                "value_col": value_col
+                            }
+                            break
+                if hdr:
+                    break
+            if hdr:
+                break
+        
+        if hdr:
+            # Read parameters starting from data_row + 1
+            parameters = []
+            start_row = hdr["data_row"] + 1
+            for row in ws.iter_rows(min_row=start_row, max_row=ws.max_row):
+                name_cell = row[hdr["name_col"] - 1] if len(row) >= hdr["name_col"] else None
+                value_cell = row[hdr["value_col"] - 1] if len(row) >= hdr["value_col"] else None
+                
+                if not name_cell or not name_cell.value:
+                    # Empty row, stop reading
+                    break
+                
+                name = str(name_cell.value).strip() if name_cell.value else ""
+                value = str(value_cell.value).strip() if value_cell and value_cell.value else ""
+                
+                if not name:
+                    continue
+                
+                parameters.append({
+                    "name": name,
+                    "default": value
+                })
+            
+            # Update state
+            if parameters:
+                state.module_info.parameters = parameters
+        
+        wb.close()
+    
+    except Exception:
+        pass
+
+
+def _load_assertion_data_from_excel(state: AppState, assertion_type: str) -> Dict[str, Any]:
+    """
+    Load the first row of assertion data from the corresponding Excel sheet.
+    Used to pre-populate the input form when reopening a session.
+    
+    Args:
+        state: AppState with session_excel_path set
+        assertion_type: Name of assertion type (e.g., 'counter', 'handshake', 'hact')
+    
+    Returns:
+        Dictionary with field_name -> value mappings, empty dict if no data found
+    """
+    # DEBUG - write to file
+    try:
+        with open(".load_assertion_debug.log", "a") as f:
+            f.write(f"[_load_assertion_data_from_excel] Called for type={assertion_type}\n")
+            f.write(f"[_load_assertion_data_from_excel] state.session_excel_path={state.session_excel_path}\n")
+    except:
+        pass
+    
+    if not state.session_excel_path or not Path(state.session_excel_path).exists():
+        try:
+            with open(".load_assertion_debug.log", "a") as f:
+                f.write(f"[_load_assertion_data_from_excel] Excel path not valid, returning empty dict\n")
+        except:
+            pass
+        return {}
+    
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(str(state.session_excel_path), data_only=True)
+        
+        # Get sheet name from plugin info
+        from assertions import get_registered_plugins
+        plugins = get_registered_plugins()
+        sheet_name = None
+        for plugin_cls in plugins:
+            if plugin_cls.plugin_name.lower() == assertion_type.lower():
+                sheet_name = plugin_cls.sheet_name
+                break
+        
+        if not sheet_name:
+            return {}
+        
+        # Find sheet (case-insensitive)
+        ws = None
+        for sn in wb.sheetnames:
+            if sn.lower() == sheet_name.lower():
+                ws = wb[sn]
+                break
+        
+        if not ws:
+            return {}
+        
+        # Map assertion type to starting row and column layout
+        assertion_type_lower = assertion_type.lower()
+        loaded_data = {}
+        
+        # ============ COUNTER ============
+        if assertion_type_lower == 'counter':
+            # Counter: Row 8 onwards (Row 7 is header)
+            row_idx = 8
+            target = ws.cell(row=row_idx, column=2).value  # Column B
+            
+            if target and str(target).strip() not in ['', 'cnt', 'counter', 'target']:
+                import re
+                match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(target))
+                target_name = match.group(1).strip() if match else str(target).strip()
+                
+                plus_con = ws.cell(row=row_idx, column=3).value     # Column C
+                reset_con = ws.cell(row=row_idx, column=4).value    # Column D
+                trigger_con = ws.cell(row=row_idx, column=5).value  # Column E
+                exp_cnt_val = ws.cell(row=row_idx, column=6).value  # Column F
+                
+                loaded_data = {
+                    'target': target_name,
+                    'plus_con': str(plus_con).strip() if plus_con else '',
+                    'reset_con': str(reset_con).strip() if reset_con else '',
+                    'trigger_con': str(trigger_con).strip() if trigger_con else '',
+                    'exp_cnt_val': str(exp_cnt_val).strip() if exp_cnt_val else '',
+                }
+        
+        # ============ HANDSHAKE ============
+        elif assertion_type_lower == 'handshake':
+            # Handshake: Row 7 onwards (Row 6 is header)
+            row_idx = 7
+            phase_type = ws.cell(row=row_idx, column=3).value  # Column C
+            
+            if phase_type and str(phase_type).strip() not in ['', 'type']:
+                sender = ws.cell(row=row_idx, column=4).value    # Column D
+                receiver = ws.cell(row=row_idx, column=5).value  # Column E
+                
+                import re
+                sender_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(sender)) if sender else None
+                sender_name = sender_match.group(1).strip() if sender_match else (str(sender).strip() if sender else '')
+                
+                receiver_match = re.match(r'^([^\[]*)(?:\[.*\])?$', str(receiver)) if receiver else None
+                receiver_name = receiver_match.group(1).strip() if receiver_match else (str(receiver).strip() if receiver else '')
+                
+                # Field names from wizard: phase_type, sender, receiver
+                loaded_data = {
+                    'phase_type': str(phase_type).strip() if phase_type else '',
+                    'sender': sender_name,
+                    'receiver': receiver_name,
+                }
+        
+        # ============ HACT/HSW/HBP/VACT/VBP/VSW/VFP/HFP ============
+        elif assertion_type_lower in ['hact', 'hsw', 'hbp', 'vact', 'vbp', 'vsw', 'vfp', 'hfp']:
+            # These types: Row 7 onwards (Row 6 is header)
+            row_idx = 7
+            
+            # Get field definitions for this type to know column order
+            plugins_info = []
+            from assertions import get_registered_plugins
+            for p_cls in get_registered_plugins():
+                if p_cls.plugin_name.lower() == assertion_type_lower:
+                    # Get column mappings from plugin info - MUST MATCH WIZARD FIELD NAMES!
+                    if assertion_type_lower == 'hact':
+                        # HACT: Hsync (C), DE (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: hsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'hsync_signal': 3, 'data_enable_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    elif assertion_type_lower == 'hsw':
+                        # HSW: CountTrigger (C), TargetPulse (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: count_trigger, target_pulse, expected_min_value, expected_max_value
+                        col_map = {'count_trigger': 3, 'target_pulse': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    elif assertion_type_lower == 'hbp':
+                        # HBP: Hsync (C), DE (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: hsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'hsync_signal': 3, 'data_enable_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    elif assertion_type_lower == 'vact':
+                        # VACT: Hsync (C), Vsync (D), DE (E), MinVal (F), MaxVal (G)
+                        # Field names from wizard: hsync_signal, vsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'hsync_signal': 3, 'vsync_signal': 4, 'data_enable_signal': 5, 'expected_min_value': 6, 'expected_max_value': 7}
+                    elif assertion_type_lower == 'vbp':
+                        # VBP: Vsync (C), DE (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: vsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'vsync_signal': 3, 'data_enable_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    elif assertion_type_lower == 'vsw':
+                        # VSW: Hsync (C), Vsync (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: hsync_signal, vsync_signal, expected_min_value, expected_max_value
+                        col_map = {'hsync_signal': 3, 'vsync_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    elif assertion_type_lower == 'vfp':
+                        # VFP: Vsync (C), DE (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: vsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'vsync_signal': 3, 'data_enable_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    else:  # hfp
+                        # HFP: Hsync (C), DE (D), MinVal (E), MaxVal (F)
+                        # Field names from wizard: hsync_signal, data_enable_signal, expected_min_value, expected_max_value
+                        col_map = {'hsync_signal': 3, 'data_enable_signal': 4, 'expected_min_value': 5, 'expected_max_value': 6}
+                    
+                    # Read values from Excel
+                    for field_name, col_num in col_map.items():
+                        val = ws.cell(row=row_idx, column=col_num).value
+                        if val is not None:
+                            loaded_data[field_name] = str(val).strip()
+                    
+                    break
+        
+        # ============ PULSEWIDTH ============
+        elif assertion_type_lower == 'pulsewidth':
+            # PulseWidth: Row 7 onwards (Row 6 is header)
+            row_idx = 7
+            pulse_signal = ws.cell(row=row_idx, column=3).value  # Column C
+            
+            if pulse_signal and str(pulse_signal).strip() not in ['', 'signal', 'pulse signal']:
+                width_param = ws.cell(row=row_idx, column=4).value  # Column D
+                disable_con = ws.cell(row=row_idx, column=5).value  # Column E
+                
+                loaded_data = {
+                    'pulse_signal': str(pulse_signal).strip() if pulse_signal else '',
+                    'width_param': str(width_param).strip() if width_param else '',
+                    'disable_con': str(disable_con).strip() if disable_con else '',
+                }
+        
+        wb.close()
+        try:
+            with open(".load_assertion_debug.log", "a") as f:
+                f.write(f"[_load_assertion_data_from_excel] Loaded data: {loaded_data}\n")
+        except:
+            pass
+        return loaded_data
+        
+    except Exception as e:
+        # Silently fail, just return empty
+        try:
+            with open(".load_assertion_debug.log", "a") as f:
+                f.write(f"[_load_assertion_data_from_excel] Exception: {e}\n")
+        except:
+            pass
+        return {}
 
 
 def _restore_assertions_from_excel(state: AppState) -> None:
@@ -3677,11 +4265,12 @@ def _restore_assertions_from_excel(state: AppState) -> None:
             
             if counter_sheet:
                 ws = wb[counter_sheet]
-                # Counter sheet: Row 7 is header, data starts at Row 8
+                # Counter sheet: Row 8 is template (default values), data starts at Row 9
                 # Columns: B(2)=Target, C(3)=Plus, D(4)=Reset, E(5)=Trigger, F(6)=Expect Count
-                for row_idx in range(8, ws.max_row + 1):
+                for row_idx in range(9, ws.max_row + 1):
                     target = ws.cell(row=row_idx, column=2).value  # Column B
-                    if not target or str(target).strip() in ['', 'cnt', 'counter']:
+                    # Check if row has actual data (not empty)
+                    if not target or str(target).strip() == '':
                         break
                     
                     # Extract signal name (remove [...] if present)
@@ -3694,6 +4283,10 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     reset_con = ws.cell(row=row_idx, column=4).value    # Column D
                     trigger_con = ws.cell(row=row_idx, column=5).value  # Column E
                     exp_cnt_val = ws.cell(row=row_idx, column=6).value  # Column F
+                    
+                    # Skip if all conditions are empty (indicates end of data)
+                    if not plus_con and not reset_con and not trigger_con and not exp_cnt_val:
+                        break
                     
                     # Build assertion entry
                     assertion_entry = {
@@ -3725,14 +4318,6 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     phase_type = ws.cell(row=row_idx, column=3).value  # Column C
                     if not phase_type or str(phase_type).strip() == '':
                         break
-                    
-                    # Skip sample data rows
-                    phase_str = str(phase_type).strip()
-                    if phase_str in ['ready_valid', '4phase', '2phase']:
-                        sender_val = ws.cell(row=row_idx, column=4).value
-                        if sender_val and str(sender_val).strip() in ['valid', 'req', 'ack']:
-                            # This looks like original sample data, skip it
-                            continue
                     
                     sender = ws.cell(row=row_idx, column=4).value    # Column D
                     receiver = ws.cell(row=row_idx, column=5).value  # Column E
@@ -3778,10 +4363,8 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     if not pulse_type or str(pulse_type).strip() == '':
                         break
                     
-                    # Skip sample data rows (those with 'target_pulse' as signal name)
+                    # Read signal name and check if it's valid data
                     signal_name = ws.cell(row=row_idx, column=5).value  # Column E - Target_Pulse
-                    if signal_name and str(signal_name).strip() == 'target_pulse':
-                        continue
                     
                     # Extract clean signal name
                     import re
@@ -3827,9 +4410,16 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                 state.assertions = assertions
                 excel_success = True
         
-        except Exception:
+        except Exception as e:
             # Excel reading failed, will try session.json fallback
-            pass
+            # Log the error for debugging
+            import traceback
+            try:
+                with open(".restore_assertions_debug.log", "a") as f:
+                    f.write(f"[_restore_assertions_from_excel] Exception: {e}\n")
+                    f.write(traceback.format_exc())
+            except:
+                pass
     
     # Fallback: restore from session.json if Excel reading failed
     if not excel_success:
@@ -3935,7 +4525,7 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             "   / \\   ___ ___  ___ _ __| |_(_) ___  _ __    / ___| ___ _ __  ",
             "  / _ \\ / __/ __|/ _ \\ '__| __| |/ _ \\| '_ \\  | |  _ / _ \\ '_ \\",
             " / ___ \\\\__ \\__ \\  __/ |  | |_| | (_) | | | | | |_| |  __/ | | |",
-            "/_/   \_\__/___/\___|_|   \__|_|\___/|_| |_|  \____|\___| |_| |_|",
+            "/_/   \_\__/____/\___|_|   \__|_|\___/|_| |_|  \____|\___| |_| |",
         ]
         guide = "Type new to start, a number to load, f <text> to filter, n/N to page, q to quit."
         y = 0
@@ -4022,11 +4612,12 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
         # Column header inside list window
         no_w = 6
         module_w = max(12, inner_w // 6)
-        rtl_w = max(18, inner_w // 4)
+        rtl_w = max(18, inner_w // 5)
         xls_w = max(10, inner_w // 8)
         modified_w = 16  # "YYYY-MM-DD HH:MM"
+        asserts_w = 12  # "Assertions" column
         gap = 3  # 3 spaces between columns
-        out_w = max(10, inner_w - no_w - module_w - rtl_w - xls_w - modified_w - (gap * 5) - 2)
+        out_w = max(10, inner_w - no_w - module_w - rtl_w - xls_w - modified_w - asserts_w - (gap * 6) - 2)
         try:
             col_x = list_margin_x + 2
             stdscr.addnstr(list_y + 1, col_x, _truncate("No", no_w), no_w, curses.A_BOLD)
@@ -4039,6 +4630,8 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
             col_x += xls_w + gap
             stdscr.addnstr(list_y + 1, col_x, _truncate("Modified", modified_w), modified_w, curses.A_BOLD)
             col_x += modified_w + gap
+            stdscr.addnstr(list_y + 1, col_x, _truncate("Assertions", asserts_w), asserts_w, curses.A_BOLD)
+            col_x += asserts_w + gap
             stdscr.addnstr(list_y + 1, col_x, _truncate("Out", out_w), out_w, curses.A_BOLD)
         except curses.error:
             pass
@@ -4087,6 +4680,12 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                     mod_date_str = "N/A"
             if not mod_date_str:
                 mod_date_str = "N/A"
+            
+            # Count assertions in this session
+            assertions = s.get('assertions', []) or []
+            asserts_count = len(assertions)
+            asserts_str = f"{asserts_count}"
+            
             rtl_lines = _wrap_text(rtl_display, rtl_w)
             row_h = max(1, len(rtl_lines))
             if y_ptr + row_h > y_limit:
@@ -4111,6 +4710,10 @@ def _run_session_chooser(stdscr: "curses._CursesWindow", sessions: List[Dict[str
                 # modified
                 stdscr.addnstr(y_ptr, col_x, _truncate(mod_date_str, modified_w), modified_w, zebra)
                 col_x += modified_w + gap
+                # assertions count (cyan for non-zero, dim for zero)
+                asserts_color = _PAIR_BY_NAME.get('cyan',0) if asserts_count > 0 else 0
+                stdscr.addnstr(y_ptr, col_x, _truncate(asserts_str, asserts_w), asserts_w, curses.color_pair(asserts_color) | zebra)
+                col_x += asserts_w + gap
                 # out
                 stdscr.addnstr(y_ptr, col_x, _truncate(outp, out_w), out_w, zebra)
             except curses.error:
@@ -4515,18 +5118,20 @@ def _auto_find_excel() -> Optional[Path]:
 
 def _tokenize_expr(expr: str) -> List[str]:
     # Tokenize a subset of SystemVerilog operators sufficient for validation
-    # Multi-char ops first to avoid partial matches
-    ops = [
-        "<<<", ">>>", "===", "!==", "<<", ">>", "<=", ">=", "==", "!=", "&&", "||", "**",
-    ]
-    singles = list("&|^~!+-*/%<>()[]{}?:=,;")
-    s = expr
-    for op in ops:
-        s = s.replace(op, f" {op} ")
-    for ch in singles:
-        s = s.replace(ch, f" {ch} ")
-    # Collapse spaces and split
-    return [t for t in s.split() if t]
+    # Use regex-based tokenization to avoid double-splitting issues
+    import re
+    
+    # Define all operators and identifiers in order of precedence
+    # Multi-char operators should be recognized as single tokens
+    token_pattern = r'''
+        <<<|>>>|===|!==|<<|>>|<=|>=|==|!=|&&|\|\||\*\*  # Multi-char operators
+        |[&|^~!+\-*/%<>()[\]{}?:=,;]                      # Single-char operators
+        |[A-Za-z_]\w*                                      # Identifiers
+        |\d+                                               # Numbers
+    '''
+    
+    tokens = re.findall(token_pattern, expr, re.VERBOSE)
+    return tokens
 
 
 def _join_expr_tokens(tokens: List[str]) -> str:
@@ -4703,7 +5308,21 @@ def _validate_condition_expr(expr: str, state: AppState) -> Tuple[bool, str]:
             # Identifier possibly followed by selection
             if _is_identifier(tok):
                 name = tok
-                if name not in refs:
+                # Try exact match first, then try to find widthless version
+                found = False
+                if name in refs:
+                    found = True
+                else:
+                    # Check if this is a widthless version of a signal with width
+                    # e.g., looking for 'i_vact_state' when refs has 'i_vact_state [10:0]'
+                    for ref_name in refs.keys():
+                        # Extract widthless version of ref_name
+                        widthless = ref_name.split()[0] if ref_name else ''
+                        if widthless == name:
+                            found = True
+                            break
+                
+                if not found:
                     # Provide more helpful error message
                     available_signals = list(refs.keys())[:10]  # Show first 10 signals as hint
                     signal_hint = ", ".join(available_signals)
@@ -5099,8 +5718,8 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
                 'type': 'string',
                 'step': 5,
                 'title': 'Trigger Condition',
-                'description': 'Enter trigger condition (when assertion starts checking)\n  - Example: valid && ready\n  - Example: $rose(start)',
-                'example': 'valid && ready',
+                'description': 'Enter trigger condition (when assertion starts checking)\n  Basic: valid && ready, data_enable\n  Temporal Functions:\n    $rose(expr) - Signal transitions 0 to 1\n    $fell(expr) - Signal transitions 1 to 0\n    $stable(expr) - Signal unchanged from previous cycle\n    $changed(expr) - Signal changed from previous cycle\n    $past(expr, n) - Value from n cycles ago',
+                'example': '$rose(valid)',
                 'required': True,
                 'show_if': {'property_or_sequence': 'property'},
             },
@@ -5958,6 +6577,8 @@ def _render_assertion_wizard(stdscr: "curses._CursesWindow", state: AppState) ->
         _render_field_input_step(stdscr, state, top, margin_x, box_h, box_w)
     elif state.assertion_wizard_stage == 'confirm':
         _render_confirmation_step(stdscr, state, top, margin_x, box_h, box_w)
+    elif state.assertion_wizard_stage == 'done':
+        _render_assertion_done_step(stdscr, state, top, margin_x, box_h, box_w)
 
 
 def _render_type_selection_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
@@ -5970,8 +6591,8 @@ def _render_type_selection_step(stdscr: "curses._CursesWindow", state: AppState,
     if not hasattr(state, 'wizard_page'):
         state.wizard_page = 0
     
-    # Calculate items per page (each plugin takes 2 lines)
-    items_per_page = max(5, (box_h - 8) // 2)
+    # Calculate items per page (each plugin takes 3 lines: number + description + blank line)
+    items_per_page = max(5, (box_h - 8) // 3)
     total_pages = (len(plugins) + items_per_page - 1) // items_per_page
     
     # Ensure page is in valid range
@@ -6031,6 +6652,9 @@ def _render_type_selection_step(stdscr: "curses._CursesWindow", state: AppState,
             
             desc = plugin['description']
             render_colored_text(stdscr, y, margin_x + 6, desc, box_w - 8)
+            y += 1
+            
+            # Add blank line between items for better readability
             y += 1
         except curses.error:
             pass
@@ -6400,6 +7024,75 @@ def _render_confirmation_step(stdscr: "curses._CursesWindow", state: AppState, t
     try:
         y = top + box_h - 3
         inst = "[Enter] to create | 'b' to edit | 'q' to cancel"
+        stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+    except curses.error:
+        pass
+
+
+def _render_assertion_done_step(stdscr: "curses._CursesWindow", state: AppState, top: int, margin_x: int, box_h: int, box_w: int) -> None:
+    """Render completion screen showing assertion creation result and verification messages."""
+    y = top + 2
+    
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Step: Assertion Created", box_w - 4, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+        y += 2
+    except curses.error:
+        pass
+    
+    # Show creation status
+    try:
+        if state.last_assertion_result:
+            status_color = curses.color_pair(_PAIR_BY_NAME.get("green", 0))
+            stdscr.addnstr(y, margin_x + 2, "Creation Status:", box_w - 4, curses.A_BOLD)
+            y += 1
+            
+            result_text = _truncate(state.last_assertion_result, box_w - 6)
+            stdscr.addnstr(y, margin_x + 4, result_text, box_w - 6, status_color)
+            y += 2
+    except curses.error:
+        pass
+    
+    # Show verification results
+    try:
+        stdscr.addnstr(y, margin_x + 2, "Verification Results:", box_w - 4, 
+                      curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("cyan", 0)))
+        y += 1
+    except curses.error:
+        pass
+    
+    # Display verification messages
+    if state.last_verification_messages:
+        for msg in state.last_verification_messages:
+            if y >= top + box_h - 5:
+                break
+            
+            try:
+                # Determine color based on message content
+                if '✓' in msg or 'verified' in msg.lower():
+                    color = curses.color_pair(_PAIR_BY_NAME.get("green", 0))
+                elif '✗' in msg or 'failed' in msg.lower() or 'error' in msg.lower():
+                    color = curses.color_pair(_PAIR_BY_NAME.get("red", 0))
+                else:
+                    color = 0
+                
+                msg_text = _truncate(msg, box_w - 6)
+                stdscr.addnstr(y, margin_x + 4, msg_text, box_w - 6, color)
+                y += 1
+            except curses.error:
+                pass
+    else:
+        try:
+            stdscr.addnstr(y, margin_x + 4, "[No verification messages]", box_w - 6)
+            y += 1
+        except curses.error:
+            pass
+    
+    # Show instructions
+    try:
+        y = top + box_h - 3
+        inst = "[Enter] to continue | 'q' to cancel"
         stdscr.addnstr(y, margin_x + 2, _truncate(inst, box_w - 4), box_w - 4, 
                       curses.A_BOLD | curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
     except curses.error:
@@ -7029,31 +7722,39 @@ def _generate_assertion_preview(plugin_name: str, data: Dict[str, Any], state: "
             trig_cond = data.get('trigger_condition', '?')
             result = data.get('expected_result', '?')
             
-            lines.append(f"Type: Custom Property")
-            lines.append(f"Name: {prop_name}")
+            lines.append(f"Type: Property Assertion")
+            lines.append(f"Property Name: {prop_name}")
+            lines.append(f"Clock: {clk_cond}")
+            lines.append(f"Disable: {dis_cond}")
             lines.append("")
-            lines.append(f"property {prop_name}();")
-            lines.append(f"    @({clk_cond}) disable iff({dis_cond})")
-            lines.append(f"    {trig_cond}")
-            lines.append(f"    |-> {result};")
-            lines.append(f"endproperty")
+            lines.append("SVA Code:")
+            lines.append(f"  property {prop_name}();")
+            lines.append(f"    @({clk_cond}) disable iff ({dis_cond})")
+            lines.append(f"    {trig_cond} |-> {result};")
+            lines.append(f"  endproperty")
             lines.append("")
-            lines.append("User-defined assertion logic")
+            lines.append(f"  assert property ({prop_name})")
+            lines.append(f"    else $error(\"Assertion failed at %t\", $time);")
         
         elif prop_or_seq == 'sequence':
             seq_name = data.get('seq_name', '?')
             seq_clk = data.get('seq_clock_condition', '?')
             seq_def = data.get('sequence_definition', '?')
             
-            lines.append(f"Type: Custom Sequence")
-            lines.append(f"Name: {seq_name}")
+            lines.append(f"Type: Sequence Definition")
+            lines.append(f"Sequence Name: {seq_name}")
+            lines.append(f"Clock: {seq_clk}")
             lines.append("")
-            lines.append(f"sequence {seq_name}();")
+            lines.append("SVA Code:")
+            lines.append(f"  sequence {seq_name}();")
             lines.append(f"    @({seq_clk})")
-            lines.append(f"    {seq_def}")
-            lines.append(f"endsequence")
+            lines.append(f"    {seq_def};")
+            lines.append(f"  endsequence")
             lines.append("")
-            lines.append("Reusable temporal pattern")
+            lines.append("Use this sequence in properties:")
+            lines.append(f"  property p_using_{seq_name}();")
+            lines.append(f"    {seq_name} |-> expected_behavior;")
+            lines.append(f"  endproperty")
         else:
             lines.append("Type: Not yet selected")
         lines.append("")
@@ -7261,68 +7962,214 @@ def _render_confirmation(stdscr: "curses._CursesWindow", state: AppState, top: i
         pass
 
 
-def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
-    """Generate interface content for preview (simplified version)."""
+def _generate_actual_plugin_content(state: AppState, is_interface: bool = True) -> List[Tuple[str, str]]:
+    """
+    Generate actual assertion content by parsing Excel and calling plugins.
+    Returns list of (plugin_name, content) tuples.
+    is_interface=True returns interface snippets, False returns instance snippets.
+    """
     try:
-        # Generate a simple template preview without parsing
+        if not state.session_excel_path or not state.session_excel_path.exists():
+            return []
+        
+        from openpyxl import load_workbook
+        from assertions import get_registered_plugins
+        
+        wb = load_workbook(state.session_excel_path, data_only=True)
+        sheet_names = wb.sheetnames
+        
+        # Build common context
+        common_context = {
+            "module_info": {
+                "module": state.module_info.module if state.module_info else "",
+                "clocks": state.module_info.clocks if state.module_info else [],
+                "resets": state.module_info.resets if state.module_info else [],
+                "inputs": state.module_info.inputs if state.module_info else [],
+                "outputs": state.module_info.outputs if state.module_info else [],
+                "inouts": state.module_info.inouts if state.module_info else [],
+                "parameters": state.module_info.parameters if state.module_info else [],
+                "conditions": state.conditions if state.conditions else [],
+            },
+            "define_excel_path": str(state.session_excel_path) if state.session_excel_path else "",
+            "output_dir": str(state.out_dir) if state.out_dir else "",
+            "session_dir": str(state.out_dir) if state.out_dir else "",
+            "config": {
+                "auto_define_fill": False,
+                "enabled_plugins": None,
+                "emit_json": False,
+            },
+        }
+        
+        snippets = []
+        plugins_list = get_registered_plugins()
+        
+        for pcls in plugins_list:
+            plugin = pcls()
+            plugin_sheet_name = getattr(plugin, 'sheet_name', None)
+            
+            if not plugin_sheet_name:
+                continue
+            
+            # Find sheet (case-insensitive)
+            sheet_found = None
+            for sn in sheet_names:
+                if sn.strip().lower() == plugin_sheet_name.strip().lower():
+                    sheet_found = sn
+                    break
+            
+            if not sheet_found:
+                continue
+            
+            # Parse Excel data
+            try:
+                parsed_data = _parse_excel_sheet_directly(
+                    wb, sheet_found, state.module_info, common_context
+                )
+                
+                if not parsed_data:
+                    continue
+                
+                # Generate SV code
+                result = plugin.generate_sv(parsed_data, common_context)
+                
+                if not result:
+                    continue
+                
+                if isinstance(result, list) and len(result) >= 1:
+                    if is_interface:
+                        # Return interface code
+                        content = result[0] if isinstance(result[0], str) else "\n".join(result[0])
+                        snippets.append((plugin.plugin_name, content))
+                    else:
+                        # Return instance code if available
+                        if len(result) >= 2:
+                            content = result[1] if isinstance(result[1], str) else "\n".join(result[1])
+                            snippets.append((plugin.plugin_name, content))
+            except Exception:
+                # Silently skip plugins that fail
+                continue
+        
+        wb.close()
+        return snippets
+    
+    except Exception:
+        return []
+
+
+def _generate_interface_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
+    """Generate interface content for preview with actual generated assertions."""
+    try:
         lines = []
         lines.append("`include \"uvm_macros.svh\"")
         lines.append("import uvm_pkg::*;")
         lines.append("")
         
-        if include_signals:
-            lines.append("// Signal Information:")
-            if state.module_info:
-                if state.module_info.clocks:
-                    lines.append("// Clocks:")
-                    for clk in state.module_info.clocks[:5]:
-                        lines.append(f"//   - {clk.get('name', '')}")
-                if state.module_info.resets:
-                    lines.append("// Resets:")
-                    for rst in state.module_info.resets[:5]:
-                        lines.append(f"//   - {rst.get('name', '')}")
-                if state.module_info.inputs:
-                    lines.append(f"// Inputs: {len(state.module_info.inputs)} signals")
-                if state.module_info.outputs:
-                    lines.append(f"// Outputs: {len(state.module_info.outputs)} signals")
-            lines.append("")
-        
-        lines.append("interface assertion_intf")
-        lines.append("(")
-        
-        # Add some sample ports
-        if state.module_info and state.module_info.clocks:
-            clk = state.module_info.clocks[0]
-            lines.append(f"    input logic {clk.get('name', 'clk')},")
-        if state.module_info and state.module_info.resets:
-            rst = state.module_info.resets[0]
-            lines.append(f"    input logic {rst.get('name', 'rst_n')}")
-        else:
-            lines[-1] = lines[-1].rstrip(',')
-        
-        lines.append(");")
-        lines.append("")
-        
+        # Try to get actual generated assertions
+        actual_snippets = []
         if include_asserts:
-            lines.append("// Assertions will be generated here")
-            lines.append("// Based on Excel sheet configuration:")
-            if state.session_excel_path:
-                lines.append(f"//   Excel: {state.session_excel_path.name}")
-            lines.append("//")
-            lines.append("// property p_example;")
-            lines.append("//     @(posedge clk) disable iff(!rst_n)")
-            lines.append("//     condition |-> expected_behavior;")
-            lines.append("// endproperty")
-            lines.append("//")
-            lines.append("// assert property (p_example)")
-            lines.append("//     else `uvm_error(\"ASSERTION\", \"Assertion failed\")")
+            actual_snippets = _generate_actual_plugin_content(state, is_interface=True)
         
-        lines.append("")
-        lines.append("endinterface")
-        lines.append("")
-        lines.append("// NOTE: This is a preview. Actual content will be generated")
-        lines.append("// by parsing Excel sheets and running assertion plugins.")
-        lines.append("// Press Enter to generate the actual files.")
+        # If we got actual content, use it
+        if actual_snippets:
+            lines.append("interface assertion_intf")
+            lines.append("(")
+            
+            # Add ports
+            if state.module_info and state.module_info.clocks:
+                clk = state.module_info.clocks[0]
+                lines.append(f"    input logic {clk.get('name', 'clk')},")
+            if state.module_info and state.module_info.resets:
+                rst = state.module_info.resets[0]
+                lines.append(f"    input logic {rst.get('name', 'rst_n')}")
+            else:
+                if lines[-1].endswith(','):
+                    lines[-1] = lines[-1].rstrip(',')
+            
+            lines.append(");")
+            lines.append("")
+            
+            # Add actual assertion content from plugins
+            import re
+            re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
+            re_interface = re.compile(r'(?is)interface\s+\w+\s*\([^)]*\)\s*;?\s*(.*?)\s*endinterface', re.DOTALL)
+            
+            declared_signals = {}
+            clean_bodies = []
+            
+            for plugin_name, sv_txt in actual_snippets:
+                if not sv_txt or not sv_txt.strip():
+                    continue
+                if "No" in sv_txt and "assertions generated" in sv_txt and len(sv_txt) < 100:
+                    continue
+                
+                # Remove headers
+                core = re_header.sub("", sv_txt).strip()
+                
+                # Extract interface body if wrapped
+                m_iface = re_interface.search(core)
+                if m_iface:
+                    core = m_iface.group(1).strip()
+                
+                # Clean up
+                lines_core = [line for line in core.split('\n') if line.strip() and line.strip() != '();']
+                core = '\n'.join(lines_core).strip()
+                
+                if core and len(core) >= 10:
+                    clean_bodies.append(f"// ========== {plugin_name.upper()} ==========\n{core}")
+            
+            # Add assertions
+            if clean_bodies:
+                for body in clean_bodies:
+                    lines.append(body)
+                    lines.append("")
+            else:
+                lines.append("// No assertions configured")
+                lines.append("")
+            
+            lines.append("endinterface")
+        else:
+            # Fallback to simple preview if no actual content
+            if include_signals:
+                lines.append("// Signal Information:")
+                if state.module_info:
+                    if state.module_info.clocks:
+                        lines.append("// Clocks:")
+                        for clk in state.module_info.clocks[:5]:
+                            lines.append(f"//   - {clk.get('name', '')}")
+                    if state.module_info.resets:
+                        lines.append("// Resets:")
+                        for rst in state.module_info.resets[:5]:
+                            lines.append(f"//   - {rst.get('name', '')}")
+                    if state.module_info.inputs:
+                        lines.append(f"// Inputs: {len(state.module_info.inputs)} signals")
+                    if state.module_info.outputs:
+                        lines.append(f"// Outputs: {len(state.module_info.outputs)} signals")
+                lines.append("")
+            
+            lines.append("interface assertion_intf")
+            lines.append("(")
+            
+            if state.module_info and state.module_info.clocks:
+                clk = state.module_info.clocks[0]
+                lines.append(f"    input logic {clk.get('name', 'clk')},")
+            if state.module_info and state.module_info.resets:
+                rst = state.module_info.resets[0]
+                lines.append(f"    input logic {rst.get('name', 'rst_n')}")
+            else:
+                if lines[-1].endswith(','):
+                    lines[-1] = lines[-1].rstrip(',')
+            
+            lines.append(");")
+            lines.append("")
+            
+            if include_asserts:
+                lines.append("// Assertions from Excel (no data found)")
+                lines.append("// Check that Excel file contains assertion data")
+                if state.session_excel_path:
+                    lines.append(f"//   Excel: {state.session_excel_path.name}")
+            
+            lines.append("")
+            lines.append("endinterface")
         
         return "\n".join(lines)
         
@@ -7616,18 +8463,23 @@ def _parse_excel_sheet_directly(wb, sheet_name: str, module_info, context: dict)
 
 
 def _generate_instance_content(state: AppState, include_asserts: bool, include_signals: bool) -> str:
-    """Generate instance content for preview (simplified version)."""
+    """Generate instance content for preview with actual generated assertions."""
     try:
-        # Generate a simple template preview without parsing
         lines = []
         lines.append("`include \"uvm_macros.svh\"")
         lines.append("import uvm_pkg::*;")
         lines.append("")
+        
+        # Try to get actual generated instance code
+        actual_snippets = []
+        if include_asserts:
+            actual_snippets = _generate_actual_plugin_content(state, is_interface=False)
+        
         lines.append("// Assertion Interface Instance")
         lines.append("assertion_intf u_assertion_intf")
         lines.append("(")
         
-        # Add some sample connections
+        # Add port connections
         if state.module_info and state.module_info.clocks:
             clk = state.module_info.clocks[0]
             lines.append(f"    .{clk.get('name', 'clk')}({clk.get('name', 'clk')}),")
@@ -7635,22 +8487,45 @@ def _generate_instance_content(state: AppState, include_asserts: bool, include_s
             rst = state.module_info.resets[0]
             lines.append(f"    .{rst.get('name', 'rst_n')}({rst.get('name', 'rst_n')})")
         else:
-            lines[-1] = lines[-1].rstrip(',')
+            if lines[-1].endswith(','):
+                lines[-1] = lines[-1].rstrip(',')
         
         lines.append(");")
         lines.append("")
         
-        if include_signals:
-            lines.append("// Signal connections will be generated here")
-            lines.append(f"// Total signals to connect: {len(state.module_info.inputs) + len(state.module_info.outputs) if state.module_info else 0}")
-            lines.append("//")
-            lines.append("// Example:")
-            lines.append("// assign u_assertion_intf.signal_name = top.dut.signal_name;")
-        
-        lines.append("")
-        lines.append("// NOTE: This is a preview. Actual content will be generated")
-        lines.append("// by parsing Excel sheets and running assertion plugins.")
-        lines.append("// Press Enter to generate the actual files.")
+        # If we got actual instance code, add it
+        if actual_snippets:
+            import re
+            re_header = re.compile(r'^\s*(?:`include\s+"[^"]+"\s*;?\s*|import\s+uvm_pkg::\*\s*;?\s*)$', re.MULTILINE)
+            
+            for plugin_name, inst_txt in actual_snippets:
+                if not inst_txt or not inst_txt.strip():
+                    continue
+                if "No" in inst_txt and "assertions" in inst_txt and len(inst_txt) < 100:
+                    continue
+                
+                # Remove headers
+                core = re_header.sub("", inst_txt).strip()
+                
+                # Clean up
+                lines_core = [line for line in core.split('\n') if line.strip()]
+                core = '\n'.join(lines_core).strip()
+                
+                if core:
+                    lines.append(f"// ========== {plugin_name.upper()} ==========")
+                    lines.append(core)
+                    lines.append("")
+        else:
+            # Fallback to description if no actual code
+            if include_signals:
+                lines.append("// Signal connections will be generated here")
+                lines.append(f"// Total signals to connect: {len(state.module_info.inputs) + len(state.module_info.outputs) if state.module_info else 0}")
+                lines.append("//")
+                lines.append("// Example:")
+                lines.append("// assign u_assertion_intf.signal_name = top.dut.signal_name;")
+                lines.append("")
+            
+            lines.append("// No instance assertions configured")
         
         return "\n".join(lines)
         
@@ -8088,7 +8963,39 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 state.assertion_selected_type = selected['name']
                 state.assertion_wizard_stage = 'input_data'
                 state.assertion_current_field_idx = 0
+                
+                # TRY TO LOAD EXISTING DATA FROM EXCEL (if session Excel exists)
+                # This allows users to re-edit existing assertions when reopening a session
+                try:
+                    with open(".load_assertion_debug.log", "a") as f:
+                        f.write(f"[assertion_wizard] Type selected: {selected['name']}\n")
+                        f.write(f"[assertion_wizard] session_excel_path exists: {bool(state.session_excel_path and Path(state.session_excel_path).exists())}\n")
+                except:
+                    pass
+                
+                loaded_data = {}
+                if state.session_excel_path:
+                    try:
+                        with open(".load_assertion_debug.log", "a") as f:
+                            f.write(f"[assertion_wizard] Calling _load_assertion_data_from_excel for {selected['name']}\n")
+                    except:
+                        pass
+                    loaded_data = _load_assertion_data_from_excel(state, selected['name'])
+                    try:
+                        with open(".load_assertion_debug.log", "a") as f:
+                            f.write(f"[assertion_wizard] Loaded data: {loaded_data}\n")
+                    except:
+                        pass
+                else:
+                    try:
+                        with open(".load_assertion_debug.log", "a") as f:
+                            f.write(f"[assertion_wizard] No session_excel_path set\n")
+                    except:
+                        pass
+                
+                # Initialize input data with loaded values, or empty if none found
                 state.assertion_input_data.clear()
+                state.assertion_input_data.update(loaded_data)
                 state.assertion_signal_ports.clear()
                 
                 fields = selected.get('fields', [])
@@ -8096,6 +9003,8 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                     return f"No fields defined for {selected['name']}", True
                 current_field = fields[0]
                 msg = f"Selected {selected['name'].upper()}\n"
+                if loaded_data:
+                    msg += f"\n📝 Found existing data in Excel - showing current values\n"
                 msg += f"\nStep 1/{len(fields)}: {current_field.get('title', '')}\n"
                 msg += current_field.get('description', '')
                 return msg, False
@@ -8266,18 +9175,47 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             # Save the selection
             state.assertion_input_data[field_name] = selected_option
             
-            # Auto-advance to next field
-            if state.assertion_current_field_idx < len(fields) - 1:
-                state.assertion_current_field_idx += 1
-                next_field = fields[state.assertion_current_field_idx]
-                step = state.assertion_current_field_idx + 1
-                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
-                msg += next_field.get('description', '')
-                return msg, False
+            # After choice selection, visible fields may change due to show_if conditions
+            # Recalculate visible fields for accurate step counting and advancement
+            plugins = _get_assertion_plugins_info()
+            plugin = next((p for p in plugins if p['name'] == state.assertion_selected_type), None)
+            if plugin:
+                all_fields = plugin.get('fields', [])
+                # Dynamically update base_clock options if needed
+                for field in all_fields:
+                    if field.get('name') == 'base_clock' and field.get('type') == 'choice':
+                        if state.module_info and state.module_info.clocks:
+                            field['options'] = [clk.get('name', '') for clk in state.module_info.clocks if clk.get('name')]
+                        else:
+                            field['options'] = ['I_CLK']
+                
+                # Recalculate visible fields after the choice selection
+                updated_fields = _get_visible_fields(all_fields, state.assertion_input_data)
+                
+                # Auto-advance to next field
+                if state.assertion_current_field_idx < len(updated_fields) - 1:
+                    state.assertion_current_field_idx += 1
+                    next_field = updated_fields[state.assertion_current_field_idx]
+                    step = state.assertion_current_field_idx + 1
+                    msg = f"\nStep {step}/{len(updated_fields)}: {next_field.get('title', '')}\n"
+                    msg += next_field.get('description', '')
+                    return msg, False
+                else:
+                    # All fields done, move to confirm
+                    state.assertion_wizard_stage = 'confirm'
+                    return "\nAll steps complete. Review and press Enter to create.", False
             else:
-                # All fields done, move to confirm
-                state.assertion_wizard_stage = 'confirm'
-                return "\nAll steps complete. Review and press Enter to create.", False
+                # Fallback: try advancing anyway
+                if state.assertion_current_field_idx < len(fields) - 1:
+                    state.assertion_current_field_idx += 1
+                    next_field = fields[state.assertion_current_field_idx]
+                    step = state.assertion_current_field_idx + 1
+                    msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                    msg += next_field.get('description', '')
+                    return msg, False
+                else:
+                    state.assertion_wizard_stage = 'confirm'
+                    return "\nAll steps complete. Review and press Enter to create.", False
         
         elif field_type == 'signal':
             # Command: navigate signal pages (n = next, N = previous)
@@ -8311,11 +9249,11 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 # This could be: [1] signal index, or plain number like "5"
                 idx = int(cmd)
                 
-                # Special handling for fields that expect numbers: [0] = Custom Number/Expression Input
-                # exp_cnt_val, expected_min_value, expected_max_value use custom number/expression
+                # Special handling for fields that expect numbers: [0] = Custom Number Input
+                # exp_cnt_val, expected_min_value, expected_max_value use custom number input
                 if field_name in ('exp_cnt_val', 'expected_min_value', 'expected_max_value') and idx == 0:
-                    state.assertion_waiting_custom_expr = True
-                    return "Enter custom value (number, parameter name, or expression like 'PARAM+10'):", False
+                    state.assertion_waiting_custom_number = True
+                    return "Enter custom number value:", False
                 
                 # Special handling for ALL other signal fields: [0] = Custom Expression Input
                 if field_name not in ('exp_cnt_val', 'expected_min_value', 'expected_max_value') and idx == 0:
@@ -8324,14 +9262,21 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                     return "Enter custom expression using actual signal names (e.g., '(i_sram_rd1 && i_sram_rd2) | i_sram_rd3'):", False
                 
                 # Check if this index exists in signal map (small number = index)
-                # If index >= 100, likely a plain number value
-                if idx in state.assertion_signal_map and idx < 100:
-                    # Treat as signal index
+                # For signal fields: accept signals by index
+                # For number fields (exp_cnt_val, etc.): treat as plain number value, NOT signal index
+                if field_name in ('exp_cnt_val', 'expected_min_value', 'expected_max_value'):
+                    # Number fields: always treat number input as plain value, never as signal index
+                    # This allows entering any number without restriction
+                    selected_signal = cmd
+                    selected_port = {}
+                elif idx in state.assertion_signal_map and idx > 0:
+                    # Signal fields: treat as signal index (but skip 0 and 100+ for plain numbers)
+                    # If idx > 0 and found in map, use the signal
                     selected_signal, selected_port = state.assertion_signal_map[idx]
                 else:
-                    # Treat as plain number value (no signal, just number)
-                    selected_signal = cmd  # Store the number as-is
-                    selected_port = {}  # No port info for plain numbers
+                    # Signal fields: treat as plain number/expression value
+                    selected_signal = cmd
+                    selected_port = {}
             
             elif is_expression:
                 # Expression like "i1 - 1" or "o5 + 2"
@@ -8409,15 +9354,10 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
     elif state.assertion_wizard_stage == 'confirm':
         if cmd == '' or cmd in ('yes', 'y', 'confirm', 'ok', 'create'):
             result = _create_assertion_from_wizard(state)
-            state.assertion_wizard_active = False
-            state.assertion_wizard_stage = ""
-            state.assertion_selected_type = None
-            state.assertion_input_data.clear()
-            state.assertion_signal_ports.clear()
-            state.assertion_current_field_idx = 0
-            state.assertion_waiting_custom_number = False
-            state.assertion_waiting_custom_expr = False
-            return result, True
+            # 생성 후 done 단계로 이동 (검증 결과 표시)
+            state.assertion_wizard_stage = 'done'
+            state.last_assertion_result = result
+            return "Creating assertion...", True
         
         elif cmd in ('prev', 'p', 'back', 'b'):
             # Go back to last field
@@ -8436,6 +9376,22 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
                 return msg, False
         
         return "Press Enter to create or type 'b' to edit", False
+    
+    elif state.assertion_wizard_stage == 'done':
+        # Show completion message and verification results
+        if cmd == '' or cmd in ('ok', 'continue', 'next'):
+            # Close wizard
+            state.assertion_wizard_active = False
+            state.assertion_wizard_stage = ""
+            state.assertion_selected_type = None
+            state.assertion_input_data.clear()
+            state.assertion_signal_ports.clear()
+            state.assertion_current_field_idx = 0
+            state.assertion_waiting_custom_number = False
+            state.assertion_waiting_custom_expr = False
+            return "Assertion created successfully!", True
+        
+        return getattr(state, 'last_assertion_result', 'Done'), False
     
     return "", False
 
@@ -8550,16 +9506,265 @@ def _create_assertion_from_wizard(state: AppState) -> str:
         # Try to write to Excel (pass state for signal width info)
         _write_assertion_to_excel(str(excel_path), plugin_name, plugin_data, state)
         
-        return f"OK. {plugin_name.upper()} assertion created and saved to Excel."
+        # 검증 결과가 있으면 포함해서 반환
+        result_msg = f"✓ {plugin_name.upper()} assertion created and saved to Excel."
+        if hasattr(state, 'last_verification_messages') and state.last_verification_messages:
+            if state.last_verification_success:
+                result_msg += "\n✓ Excel verification passed"
+            else:
+                result_msg += "\n✗ Excel verification failed"
+        
+        return result_msg
     
     except Exception as e:
         return f"OK. Assertion created in memory. Excel write failed: {str(e)}"
+
+
+def _verify_excel_write_tui(excel_path: str, plugin_name: str, data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """
+    Verify that assertion data was correctly written to the Excel sheet (TUI version).
+    Returns: (success: bool, messages: List[str])
+    """
+    from openpyxl import load_workbook  # type: ignore
+    from pathlib import Path
+    
+    messages = []
+    messages.append(f"--- {plugin_name.upper()} 검증 ---")
+    
+    try:
+        wb = load_workbook(excel_path)
+        
+        # Find the sheet for this plugin (case-insensitive)
+        plugin_to_sheet = {
+            'hact': 'HACT',
+            'hsw': 'HSW',
+            'hbp': 'HBP',
+            'counter': 'Counter',
+            'handshake': 'Handshake',
+            'pulseWidth': 'PulseWidth',
+        }
+        target_sheet = plugin_to_sheet.get(plugin_name, plugin_name.title())
+        target_sheet_lower = target_sheet.lower()
+        
+        sheet_name = None
+        for name in wb.sheetnames:
+            if name.lower() == target_sheet_lower:
+                sheet_name = name
+                break
+        
+        if not sheet_name:
+            messages.append(f"✗ Sheet '{target_sheet}' not found")
+            wb.close()
+            return False, messages
+        
+        ws = wb[sheet_name]
+        
+        # Helper to find cell by label
+        def _find_cell_by_label(ws, label: str) -> Tuple[Optional[int], Optional[int]]:
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row):
+                for cell in row:
+                    if cell.value and isinstance(cell.value, str):
+                        if cell.value.strip() == label:
+                            return cell.row, cell.column
+            return None, None
+        
+        # Verify based on plugin type
+        found_count = 0
+        verification_passed = True
+        
+        if plugin_name in ['hact', 'hsw']:
+            blocks = data.get("blocks", [])
+            if blocks:
+                block = blocks[0]
+                for label in ["Base Clock", "Base Reset", "Hsync Signal", "Data Enable Signal", 
+                             "Expected Min Value", "Expected Max Value"]:
+                    row, col = _find_cell_by_label(ws, label)
+                    if row is not None:
+                        cell_value = ws.cell(row=row + 1, column=col).value
+                        expected = block.get(label)
+                        if cell_value == expected:
+                            messages.append(f"  ✓ {label}: {cell_value}")
+                            found_count += 1
+                        else:
+                            messages.append(f"  ✗ {label}: expected {expected}, got {cell_value}")
+                            verification_passed = False
+        
+        elif plugin_name == 'hbp':
+            blocks = data.get("blocks", [])
+            if blocks:
+                block = blocks[0]
+                for label in ["Base Clock", "Base Reset", "Hsync Signal", "Vsync Signal",
+                             "Data Enable Signal", "Expected Min Value", "Expected Max Value"]:
+                    row, col = _find_cell_by_label(ws, label)
+                    if row is not None:
+                        cell_value = ws.cell(row=row + 1, column=col).value
+                        expected = block.get(label)
+                        if cell_value == expected:
+                            messages.append(f"  ✓ {label}: {cell_value}")
+                            found_count += 1
+                        else:
+                            messages.append(f"  ✗ {label}: expected {expected}, got {cell_value}")
+                            verification_passed = False
+        
+        elif plugin_name == 'counter':
+            next_row = 8
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            fields = [('target', 2), ('plus_con', 3), ('reset_con', 4), 
+                     ('trigger_con', 5), ('exp_cnt_val', 6)]
+            for field_name, col in fields:
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected = data.get(field_name)
+                if cell_value == expected:
+                    messages.append(f"  ✓ {field_name}: {cell_value}")
+                    found_count += 1
+                else:
+                    messages.append(f"  ✗ {field_name}: expected {expected}, got {cell_value}")
+                    verification_passed = False
+        
+        elif plugin_name == 'handshake':
+            next_row = 7
+            while ws.cell(row=next_row, column=3).value:
+                next_row += 1
+            
+            fields = [('phase_type', 3), ('sender', 4), ('receiver', 5)]
+            for field_name, col in fields:
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected = data.get(field_name)
+                if cell_value == expected:
+                    messages.append(f"  ✓ {field_name}: {cell_value}")
+                    found_count += 1
+                else:
+                    messages.append(f"  ✗ {field_name}: expected {expected}, got {cell_value}")
+                    verification_passed = False
+        
+        elif plugin_name == 'pulseWidth':
+            next_row = 7
+            while ws.cell(row=next_row, column=3).value:
+                next_row += 1
+            
+            fields = [('pulse_type', 3), ('target_signal', 5), 
+                     ('min_width', 6), ('max_width', 7)]
+            for field_name, col in fields:
+                cell_value = ws.cell(row=next_row, column=col).value
+                expected = data.get(field_name)
+                if cell_value == expected or (field_name == 'target_signal' and 
+                                              str(cell_value or '').split('[')[0].strip() == 
+                                              str(expected or '').split('[')[0].strip()):
+                    messages.append(f"  ✓ {field_name}: {cell_value}")
+                    found_count += 1
+        
+        wb.close()
+        
+        if verification_passed and found_count > 0:
+            messages.append(f"✓ {plugin_name.upper()} 검증 성공 ({found_count}개 항목 확인)")
+            return True, messages
+        elif found_count == 0:
+            messages.append(f"⚠ 검증할 값이 없음")
+            return False, messages
+        else:
+            messages.append(f"✗ {plugin_name.upper()} 검증 실패")
+            return False, messages
+    
+    except Exception as e:
+        messages.append(f"✗ 검증 오류: {e}")
+        return False, messages
+
+
+def _format_data_for_plugin(plugin_name: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert flat TUI input data to plugin's expected format.
+    Different plugins expect different data structures.
+    """
+    plugin_lower = plugin_name.lower()
+    
+    # HACT, HSW, HBP expect {"blocks": [{"Base Clock": ..., ...}]}
+    if plugin_lower in ['hact', 'hsw', 'hbp']:
+        # Map TUI field names to plugin field names
+        block = {}
+        
+        # Common fields for these types
+        # Note: Base Clock and Base Reset should be read from the Excel Define sheet
+        # or passed via data. If not present, we use placeholders.
+        field_mapping = {
+            'base_clock': 'Base Clock',
+            'base_reset': 'Base Reset',
+            'hsync_signal': 'Hsync Signal',
+            'count_trigger': 'Count Trigger',  # For HSW
+            'target_pulse': 'Target Pulse',     # For HSW
+            'data_enable_signal': 'Data Enable Signal',
+            'expected_min_value': 'Expected Min Value',
+            'expected_max_value': 'Expected Max Value',
+            'vsync_signal': 'Vsync Signal',  # For HBP only
+        }
+        
+        for tui_key, plugin_key in field_mapping.items():
+            if tui_key in data and data[tui_key]:
+                block[plugin_key] = data[tui_key]
+        
+        # If Base Clock/Reset not provided, add placeholders
+        # (the plugin's write_to_excel should handle reading from Excel if needed)
+        if 'Base Clock' not in block:
+            block['Base Clock'] = '<Base Clock>'
+        if 'Base Reset' not in block:
+            block['Base Reset'] = '<Base Reset>'
+        
+        return {"blocks": [block]}
+    
+    # BasicAssertion: Convert TUI field names to Excel column headers
+    elif plugin_lower == 'basicassertion':
+        # Map TUI field names to Excel column names
+        # Property fields
+        if data.get('property_or_sequence') == 'property':
+            return {
+                'property_or_sequence': data.get('property_or_sequence', ''),
+                'User Property Name': data.get('prop_name', ''),
+                'Property Base Clock Condition': data.get('clock_condition', ''),
+                'Disable Condition': data.get('disable_condition', ''),
+                'Trigger Condition': data.get('trigger_condition', ''),
+                'User Result': data.get('expected_result', ''),
+            }
+        # Sequence fields
+        elif data.get('property_or_sequence') == 'sequence':
+            return {
+                'property_or_sequence': data.get('property_or_sequence', ''),
+                'User Sequence Name': data.get('seq_name', ''),
+                'Sequence Base Clock Condition': data.get('seq_clock_condition', ''),
+                'User Sequence': data.get('sequence_definition', ''),
+            }
+        else:
+            return data
+    
+    # Counter, Handshake, PulseWidth use flat dict as-is
+    else:
+        return data
 
 
 def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str, Any], state: Optional['AppState'] = None) -> None:
     """Write assertion data to the corresponding Excel sheet using plugin structure."""
     try:
         from openpyxl import load_workbook  # type: ignore
+        from pathlib import Path
+        
+        # Try to use plugin's write_to_excel method if available
+        try:
+            from assertions import get_registered_plugins  # type: ignore
+            for plugin_cls in get_registered_plugins():
+                if plugin_cls.plugin_name == plugin_name:
+                    # Check if plugin has write_to_excel method
+                    if hasattr(plugin_cls, 'write_to_excel') and callable(getattr(plugin_cls, 'write_to_excel')):
+                        # Convert flat TUI data to plugin's expected format
+                        formatted_data = _format_data_for_plugin(plugin_name, data)
+                        plugin_cls.write_to_excel(Path(excel_path), formatted_data, state)
+                        return
+                    break
+        except Exception as e:
+            # Log the error for debugging
+            print(f"[DEBUG] Plugin write_to_excel failed: {e}")
+            import traceback
+            traceback.print_exc()
+            pass  # Fall through to manual write below
         
         wb = load_workbook(excel_path)
         
@@ -8799,8 +10004,105 @@ def _write_assertion_to_excel(excel_path: str, plugin_name: str, data: Dict[str,
             ws.cell(row=next_row, column=6, value=data.get('min_width', ''))
             ws.cell(row=next_row, column=7, value=data.get('max_width', ''))
         
+        elif plugin_name == 'basicAssertion':
+            # BasicAssertion: Write to basicAssertion sheet with Excel column headers
+            sheet_name = find_sheet_ci('basicAssertion')
+            if not sheet_name:
+                sheet_name = 'basicAssertion'
+                wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Ensure header row exists at row 1
+            if not ws.cell(row=1, column=1).value:
+                ws.cell(row=1, column=1, value="basicAssertion")
+            
+            # Find next empty row (data starts from row 2 or later)
+            next_row = 2
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            # Use formatted data (with Excel column names)
+            formatted = _format_data_for_plugin(plugin_name, data)
+            
+            # For Property
+            if formatted.get('property_or_sequence') == 'property':
+                # Write property data vertically (label, value pairs)
+                # Column A: labels, Column B: values
+                row = next_row
+                ws.cell(row=row, column=1, value="User Property Name")
+                ws.cell(row=row, column=2, value=formatted.get('User Property Name', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="Property Base Clock Condition")
+                ws.cell(row=row, column=2, value=formatted.get('Property Base Clock Condition', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="Disable Condition")
+                ws.cell(row=row, column=2, value=formatted.get('Disable Condition', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="Trigger Condition")
+                ws.cell(row=row, column=2, value=formatted.get('Trigger Condition', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="User Result")
+                ws.cell(row=row, column=2, value=formatted.get('User Result', ''))
+            
+            # For Sequence
+            elif formatted.get('property_or_sequence') == 'sequence':
+                # Write sequence data vertically
+                row = next_row
+                ws.cell(row=row, column=1, value="User Sequence Name")
+                ws.cell(row=row, column=2, value=formatted.get('User Sequence Name', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="Sequence Base Clock Condition")
+                ws.cell(row=row, column=2, value=formatted.get('Sequence Base Clock Condition', ''))
+                row += 1
+                ws.cell(row=row, column=1, value="User Sequence")
+                ws.cell(row=row, column=2, value=formatted.get('User Sequence', ''))
+        
+        else:
+            # Generic handler for other assertion types
+            # Find or create sheet for this plugin type
+            sheet_name = find_sheet_ci(plugin_name)
+            if not sheet_name:
+                # Try with different cases
+                sheet_names_to_try = [plugin_name, plugin_name.upper(), plugin_name.lower()]
+                for name in sheet_names_to_try:
+                    if find_sheet_ci(name):
+                        sheet_name = find_sheet_ci(name)
+                        break
+            
+            if not sheet_name:
+                # Create the sheet if it doesn't exist
+                sheet_name = plugin_name
+                wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Generic: Find next empty row starting from row 8
+            next_row = 8
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            # Write all data fields starting from column 2
+            col = 2
+            for key, value in data.items():
+                if value:  # Only write non-empty values
+                    ws.cell(row=next_row, column=col, value=value)
+                    col += 1
+        
         wb.save(excel_path)
         wb.close()
+        
+        # ===== Excel 검증 =====
+        try:
+            success, messages = _verify_excel_write_tui(excel_path, plugin_name, data)
+            # AppState에 검증 결과 저장
+            if state and hasattr(state, 'last_verification_messages'):
+                state.last_verification_messages = messages
+                state.last_verification_success = success
+        except Exception as e:
+            if state and hasattr(state, 'last_verification_messages'):
+                state.last_verification_messages = [f"[오류] Excel 검증 실패: {e}"]
+                state.last_verification_success = False
     
     except Exception as e:
         raise RuntimeError(f"Failed to write to Excel: {str(e)}")

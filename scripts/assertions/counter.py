@@ -525,6 +525,37 @@ class CounterPlugin(BaseAssertionPlugin):
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
+    
+    @classmethod
+    def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
+        """Write counter assertion data to Excel sheet."""
+        from openpyxl import load_workbook  # type: ignore
+        
+        wb = load_workbook(str(excel_path))
+        
+        # Find Counter sheet
+        sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, 'Counter')
+        if not sheet_name:
+            sheet_name = 'Counter'
+            if sheet_name not in wb.sheetnames:
+                wb.create_sheet(sheet_name)
+        
+        ws = wb[sheet_name]
+        
+        # Find next empty row (Counter sheet: data starts at row 8)
+        next_row = 8
+        while ws.cell(row=next_row, column=2).value:
+            next_row += 1
+        
+        # Counter sheet columns (from row 7): col2=Target, col3=Plus, col4=Reset, col5=Trigger, col6=Expect Count
+        ws.cell(row=next_row, column=2, value=data.get('target', ''))
+        ws.cell(row=next_row, column=3, value=data.get('plus_con', ''))
+        ws.cell(row=next_row, column=4, value=data.get('reset_con', ''))
+        ws.cell(row=next_row, column=5, value=data.get('trigger_con', ''))
+        ws.cell(row=next_row, column=6, value=data.get('exp_cnt_val', ''))
+        
+        wb.save(str(excel_path))
+        wb.close()
 
 # Optional: standalone script entry point for legacy usage
 def main(xlsx_path: str) -> None:

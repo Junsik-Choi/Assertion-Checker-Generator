@@ -1,0 +1,367 @@
+{
+  "top_path": "",
+  "module": "ram_ctrl",
+  "rtl_file_path": "C:\\Users\\JunsChoi\\OneDrive - HARMAN\\문서\\TF자료\\Assertion TF\\Assertion Script\\EDA\\RTL\\ram_ctrl.v",
+  "paths": [],
+  "instances": [],
+  "clocks": [
+    {
+      "name": "I_CLK",
+      "width": ""
+    }
+  ],
+  "resets": [
+    {
+      "name": "I_RSTN",
+      "width": ""
+    }
+  ],
+  "inputs": [
+    {
+      "name": "i_blur_mode_cap",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "i_data_sync",
+      "width": "[7:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "DATA_WIDTH"
+      ],
+      "calculated_bit_width": 8,
+      "raw_width": "[ DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "i_den_sync",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "i_hact_cap",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "i_hsync_sync",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "i_htotal",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "i_mirror_mode_cap",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "i_vact_cap",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "i_vsync_sync",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "i_weight_wr_mode_cap",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    }
+  ],
+  "outputs": [
+    {
+      "name": "o_addr1",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_addr2",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_addr3",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_addr4",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_cs1",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_cs2",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_cs3",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_cs4",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_den",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_din1",
+      "width": "[7:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "DATA_WIDTH"
+      ],
+      "calculated_bit_width": 8,
+      "raw_width": "[ DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "o_din2",
+      "width": "[7:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "DATA_WIDTH"
+      ],
+      "calculated_bit_width": 8,
+      "raw_width": "[ DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "o_din3",
+      "width": "[7:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "DATA_WIDTH"
+      ],
+      "calculated_bit_width": 8,
+      "raw_width": "[ DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "o_din4",
+      "width": "[7:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "DATA_WIDTH"
+      ],
+      "calculated_bit_width": 8,
+      "raw_width": "[ DATA_WIDTH-1:0]"
+    },
+    {
+      "name": "o_hor_cnt",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_sel",
+      "width": "[3:0]",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 4,
+      "raw_width": "[ 3:0]"
+    },
+    {
+      "name": "o_vact_state",
+      "width": "[15:0]",
+      "is_parameterized": true,
+      "params_used": [
+        "PARAM_WIDTH"
+      ],
+      "calculated_bit_width": 16,
+      "raw_width": "[PARAM_WIDTH-1:0]"
+    },
+    {
+      "name": "o_we1",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_we2",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_we3",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    },
+    {
+      "name": "o_we4",
+      "width": "",
+      "is_parameterized": false,
+      "params_used": [],
+      "calculated_bit_width": 0,
+      "raw_width": ""
+    }
+  ],
+  "inouts": [],
+  "parameters": [
+    {
+      "name": "PARAM_WIDTH",
+      "default": "16"
+    },
+    {
+      "name": "DATA_WIDTH",
+      "default": "8"
+    },
+    {
+      "name": "IDLE",
+      "default": "0"
+    },
+    {
+      "name": "WRITE1",
+      "default": "1"
+    },
+    {
+      "name": "WAIT1",
+      "default": "2"
+    },
+    {
+      "name": "WRITE2",
+      "default": "3"
+    },
+    {
+      "name": "WAIT2",
+      "default": "4"
+    },
+    {
+      "name": "WRITE3",
+      "default": "5"
+    },
+    {
+      "name": "WAIT3",
+      "default": "6"
+    },
+    {
+      "name": "WRITE4",
+      "default": "7"
+    },
+    {
+      "name": "WAIT4",
+      "default": "8"
+    },
+    {
+      "name": "BUFFER1",
+      "default": "1"
+    },
+    {
+      "name": "BUFFER2",
+      "default": "2"
+    },
+    {
+      "name": "FIRST",
+      "default": "3"
+    },
+    {
+      "name": "BLANK1",
+      "default": "4"
+    },
+    {
+      "name": "READ",
+      "default": "5"
+    },
+    {
+      "name": "BLANK2",
+      "default": "6"
+    },
+    {
+      "name": "LAST",
+      "default": "7"
+    }
+  ],
+  "conditions": []
+}

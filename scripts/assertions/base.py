@@ -49,5 +49,49 @@ class BaseAssertionPlugin:
     # Optional: per-plugin JSON to emit alongside SV
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
+    
+    @classmethod
+    def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
+        """
+        Write assertion data to the corresponding Excel sheet.
+        Default implementation: Generic write to first available columns.
+        Subclasses should override for plugin-specific column mapping.
+        
+        Args:
+            excel_path: Path to Excel file
+            data: Dict of field_name -> value pairs
+            state: Optional AppState for additional context
+        """
+        try:
+            from openpyxl import load_workbook  # type: ignore
+            from openpyxl.cell import MergedCell
+            
+            wb = load_workbook(str(excel_path))
+            
+            # Find sheet case-insensitively
+            sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, cls.sheet_name)
+            if not sheet_name:
+                sheet_name = cls.sheet_name
+                if sheet_name not in wb.sheetnames:
+                    wb.create_sheet(sheet_name)
+            
+            ws = wb[sheet_name]
+            
+            # Find next empty row starting from row 8
+            next_row = 8
+            while ws.cell(row=next_row, column=2).value:
+                next_row += 1
+            
+            # Write all data fields starting from column 2
+            col = 2
+            for key, value in data.items():
+                if value:  # Only write non-empty values
+                    ws.cell(row=next_row, column=col, value=value)
+                    col += 1
+            
+            wb.save(str(excel_path))
+            wb.close()
+        except Exception as e:
+            raise RuntimeError(f"Failed to write {cls.plugin_name} to Excel: {str(e)}")
 
 

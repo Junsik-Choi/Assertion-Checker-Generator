@@ -215,6 +215,40 @@ def find_signal_assignments_header(ws):
     logger.warning("Signal Assignments header NOT found in Define sheet")
     return None
 
+def find_defines_header(ws):
+    """
+    Find 'Defines' header row with Name, Value columns.
+    Returns dict with row and column info, or None.
+    """
+    for row in ws.iter_rows():
+        for cell in row:
+            if isinstance(cell.value, str) and cell.value.strip().casefold() == "defines":
+                # Found "Defines", now find Name/Value in next row
+                header_row = cell.row
+                logger.debug(f"Found 'Defines' at row {header_row}, col {cell.column}")
+                # Check next row for Name/Value
+                next_row = list(ws.iter_rows(min_row=header_row + 1, max_row=header_row + 1))
+                if next_row:
+                    name_col = None
+                    value_col = None
+                    for c in next_row[0]:
+                        if isinstance(c.value, str):
+                            val = c.value.strip().casefold()
+                            if val == "name":
+                                name_col = c.column
+                            elif val == "value":
+                                value_col = c.column
+                    logger.debug(f"  Found columns: name={name_col}, value={value_col}")
+                    if name_col and value_col:
+                        return {
+                            "header_row": header_row,
+                            "data_row": header_row + 1,
+                            "name_col": name_col,
+                            "value_col": value_col
+                        }
+    logger.debug("Defines header NOT found in Define sheet")
+    return None
+
 def create_io_header(ws):
     # 템플릿 없으면 간단 헤더 생성(서식 없음)
     start_row = ws.max_row + 2
@@ -315,6 +349,26 @@ def clear_base(ws):
             rc = right_cell(ws, c)
             rc.value = None  # 값만 지움(서식 유지)
 
+def clear_defines(ws):
+    """Clear all data in Defines section (keep formatting)"""
+    hdr = find_defines_header(ws)
+    if not hdr:
+        logger.debug("Defines header not found, nothing to clear")
+        return
+    
+    start = hdr["data_row"] + 1  # Start after header row
+    cols = [hdr["name_col"], hdr["value_col"]]
+    
+    end = last_used_row_in_cols(ws, cols, start)
+    if end < start:
+        logger.debug("No data to clear in Defines")
+        return
+    
+    logger.debug(f"Clearing Defines from row {start} to {end}")
+    for r in range(start, end + 1):
+        for c in cols:
+            ws.cell(row=r, column=c).value = None  # 값만 지움(서식 유지)
+
 def clear_io(ws):
     hdr = find_io_header(ws)
     if not hdr:
@@ -395,10 +449,14 @@ def main():
     if conditions:
         logger.info(f"Conditions to process: {[c.get('name','?') for c in conditions]}")
 
-    # Target Path: use RTL hierarchy if available (for display)
-    # If no hierarchy, use module name only (not the full file path)
-    # This ensures Excel shows "blur_scaler" not "D:\...\blur_scaler.v"
-    if rtl_hierarchy:
+    # Target Path: Extract parent directory path (everything except the module filename)
+    # E.g., if rtl_file_path is "EDA/RTL/blur_scaler.v", show "EDA/RTL"
+    if rtl_file_path:
+        # Remove the module filename (last component) to get parent path
+        parent_path = str(Path(rtl_file_path).parent)
+        target_path_str = parent_path if parent_path != "." else module
+    elif rtl_hierarchy:
+        # If no full path, use hierarchy if available
         target_path_str = rtl_hierarchy
     elif module:
         target_path_str = module  # Use just module name, not full file path
@@ -417,8 +475,9 @@ def main():
     def run_clear():
         clear_base(ws)
         clear_io(ws)
+        clear_defines(ws)  # Clear Defines section
         clear_signal_assignments(ws)  # Also clear Signal Assignments section
-        logger.debug("기존 값 클리어(서식 유지): Base, IO, Signal Assignments")
+        logger.debug("기존 값 클리어(서식 유지): Base, IO, Defines, Signal Assignments")
     tasks.append((run_clear, "기존 값 클리어"))
 
     # 2) IO 헤더 없으면 생성
@@ -454,6 +513,26 @@ def main():
         set_cell_value_merged_safe(ws, c.row, c.column + 1, rst)
         logger.debug("Base 채움: Base Reset -> %s", rst)
     tasks.append((run_base_reset, "Base: Base Reset"))
+    
+    # Fill Defines section with parameters
+    def run_defines():
+        hdr = find_defines_header(ws)
+        if hdr and params:
+            row = hdr["data_row"] + 1
+            for param in params:
+                param_name = param.get("name", "")
+                param_value = param.get("default", "")
+                if param_name:
+                    ws.cell(row=row, column=hdr["name_col"]).value = param_name
+                    ws.cell(row=row, column=hdr["value_col"]).value = param_value
+                    row += 1
+            logger.debug("Defines 채움: %d parameters", len(params))
+        else:
+            if not hdr:
+                logger.debug("Defines header not found, skipping")
+            if not params:
+                logger.debug("No parameters to fill")
+    tasks.append((run_defines, "Defines: Parameters"))
 
     # 4) Inputs
     for it in inputs:
