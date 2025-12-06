@@ -64,3 +64,17 @@
 [_load_assertion_data_from_excel] Called for type=clockDivider
 [_load_assertion_data_from_excel] Loaded data: {}
 [assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hsw
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hsw
+[_load_assertion_data_from_excel] Called for type=hsw
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}

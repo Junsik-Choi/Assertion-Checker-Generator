@@ -1967,74 +1967,8 @@ def _main(stdscr: "curses._CursesWindow") -> None:
                 atype = asrt.get('type', 'Unknown')
                 adata = asrt.get('data', {})
                 
-                # Extract signal name and build natural language description
-                # user_input_parts: list of (text, column_offset) for user-provided values
-                full_desc = ""
-                user_input_parts = []  # List to store user-provided values for highlighting in GREEN
-                
-                if atype == 'counter':
-                    signal_name = adata.get('target', '?')
-                    exp_cnt = adata.get('exp_cnt_val', '?')
-                    # Truncate signal name to 15 chars
-                    if len(str(signal_name)) > 15:
-                        display_signal = str(signal_name)[:12] + "..."
-                    else:
-                        display_signal = str(signal_name)
-                    full_desc = f"Monitor {display_signal} counter reaching {exp_cnt}"
-                    # Both signal name and counter value are user inputs
-                    user_input_parts.append((display_signal, len("Monitor ")))
-                    user_input_parts.append((str(exp_cnt), len(f"Monitor {display_signal} counter reaching ")))
-                    
-                elif atype == 'handshake':
-                    sender = adata.get('sender', '?')
-                    receiver = adata.get('receiver', '?')
-                    phase = adata.get('phase_type', '?')
-                    
-                    # Truncate sender/receiver to fit in 15 chars
-                    sender_short = sender if len(str(sender)) <= 15 else str(sender)[:12] + "..."
-                    recv_short = receiver if len(str(receiver)) <= 15 else str(receiver)[:12] + "..."
-                    
-                    # Build description based on phase type with clear labels
-                    if phase.lower() == '2phase':
-                        full_desc = f"2-Phase: req={sender_short} ack={recv_short}"
-                        req_prefix_len = len("2-Phase: req=")
-                        ack_prefix_len = len("2-Phase: req=") + len(sender_short) + len(" ack=")
-                    elif phase.lower() == '4phase':
-                        full_desc = f"4-Phase: req={sender_short} ack={recv_short}"
-                        req_prefix_len = len("4-Phase: req=")
-                        ack_prefix_len = len("4-Phase: req=") + len(sender_short) + len(" ack=")
-                    elif phase.lower() == 'ready_valid':
-                        full_desc = f"Ready-Valid: valid={sender_short} ready={recv_short}"
-                        req_prefix_len = len("Ready-Valid: valid=")
-                        ack_prefix_len = len("Ready-Valid: valid=") + len(sender_short) + len(" ready=")
-                    else:
-                        full_desc = f"{phase}: send={sender_short} recv={recv_short}"
-                        req_prefix_len = len(f"{phase}: send=")
-                        ack_prefix_len = len(f"{phase}: send=") + len(sender_short) + len(" recv=")
-                    
-                    # Add sender and receiver (both user inputs)
-                    user_input_parts.append((sender_short, req_prefix_len))
-                    user_input_parts.append((recv_short, ack_prefix_len))
-                    
-                elif atype == 'pulseWidth':
-                    signal_name = adata.get('target_signal', '?')
-                    min_w = adata.get('min_width', '?')
-                    max_w = adata.get('max_width', '?')
-                    
-                    # Truncate signal name to 15 chars
-                    if len(str(signal_name)) > 15:
-                        display_signal = str(signal_name)[:12] + "..."
-                    else:
-                        display_signal = str(signal_name)
-                    
-                    full_desc = f"Pulse width of {display_signal} between {min_w}-{max_w} clocks"
-                    # All three parts are user inputs: signal name, min_width, max_width
-                    user_input_parts.append((display_signal, len("Pulse width of ")))
-                    user_input_parts.append((str(min_w), len(f"Pulse width of {display_signal} between ")))
-                    user_input_parts.append((str(max_w), len(f"Pulse width of {display_signal} between {min_w}-")))
-                
-                else:
-                    full_desc = f"[{atype.upper()}] assertion configured"
+                # Get description using the improved function
+                full_desc, user_input_parts = _get_assertion_display_description(atype, adata)
                 
                 # Format: Index | Type | Description
                 idx_str = f"{i}".ljust(idx_w)
@@ -3691,6 +3625,94 @@ def _load_assertions_from_excel_file(excel_path: str) -> List[Dict[str, Any]]:
                     'description': 'pulseWidth assertion'
                 }
                 assertions.append(assertion_entry)
+        
+        # ============ Video Timing Sheets (HACT, HSW, HBP, HFP, VACT, VBP, VFP, VSW) ============
+        timing_sheet_configs = {
+            'hact': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+            'hsw': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+            'hbp': {'hsync_col': 3, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+            'hfp': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+            'vact': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+            'vbp': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+            'vfp': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+            'vsw': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+        }
+        
+        for timing_type, config in timing_sheet_configs.items():
+            timing_sheet = None
+            for name in wb.sheetnames:
+                if name.lower() == timing_type.lower():
+                    timing_sheet = name
+                    break
+            
+            if not timing_sheet:
+                continue
+            
+            ws = wb[timing_sheet]
+            # Data starts at row 7 (row 6 is header)
+            for row_idx in range(7, ws.max_row + 1):
+                # Check first data column for actual data (skip empty rows and headers)
+                first_val = ws.cell(row=row_idx, column=3).value
+                if not first_val or str(first_val).strip() == '':
+                    continue
+                
+                # Skip header row labels
+                first_str = str(first_val).strip()
+                if first_str in ['Hsync Signal', 'Data Enable Signal', 'Expected Min Value', 'Expected Max Value']:
+                    continue
+                
+                # Extract timing parameters based on type
+                timing_data = {}
+                
+                try:
+                    # Get HSysn signal (always column C / col 3)
+                    hsync_val = ws.cell(row=row_idx, column=3).value
+                    if hsync_val and str(hsync_val).strip():
+                        timing_data['hsync_signal'] = str(hsync_val).strip()
+                    
+                    # Get DE signal or next signal
+                    if 'de_col' in config:
+                        de_val = ws.cell(row=row_idx, column=config['de_col']).value
+                        if de_val and str(de_val).strip():
+                            timing_data['de_signal'] = str(de_val).strip()
+                    
+                    # Get VSYNC signal if applicable
+                    if 'vsync_col' in config:
+                        vsync_val = ws.cell(row=row_idx, column=config['vsync_col']).value
+                        if vsync_val and str(vsync_val).strip():
+                            timing_data['vsync_signal'] = str(vsync_val).strip()
+                    
+                    # Get min value
+                    if 'min_col' in config:
+                        min_val = ws.cell(row=row_idx, column=config['min_col']).value
+                        if min_val:
+                            timing_data['min_value'] = str(min_val).strip()
+                            timing_data['min_count'] = str(min_val).strip()  # For VACT, etc.
+                    
+                    # Get max value
+                    if 'max_col' in config:
+                        max_val = ws.cell(row=row_idx, column=config['max_col']).value
+                        if max_val:
+                            timing_data['max_value'] = str(max_val).strip()
+                            timing_data['max_count'] = str(max_val).strip()  # For VACT, etc.
+                    
+                    # Add common fields
+                    timing_data['clock_signal'] = '<Base Clock>'
+                    timing_data['expected_width'] = timing_data.get('min_value', '?')
+                    
+                    # Only add if we have meaningful data (at least hsync and min/max value)
+                    if 'hsync_signal' in timing_data and ('min_value' in timing_data or 'max_value' in timing_data):
+                        assertion_entry = {
+                            'type': timing_type,
+                            'data': timing_data,
+                            'description': f'{timing_type} assertion'
+                        }
+                        assertions.append(assertion_entry)
+                except Exception:
+                    continue
+        
+        # ============ Other assertion types (basicAssertion, synchronizer, clockGate, clockDivider, QCH, AHB_M, AHB_S) ============
+        # These can be extended similarly if needed
         
         wb.close()
     
@@ -5471,29 +5493,254 @@ def _get_assertion_plugins_info() -> List[Dict[str, Any]]:
     return info_list
 
 
+def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tuple[str, List[Tuple[str, int]]]:
+    """
+    Generate a user-friendly description for a created assertion.
+    
+    Returns:
+        (description_string, list_of_user_inputs)
+        where user_inputs is a list of (text, offset) tuples for highlighting
+    """
+    full_desc = ""
+    user_input_parts = []  # (text, offset) for GREEN highlighting
+    
+    # Format helper for signal names
+    def truncate_signal(sig, max_len=15):
+        sig_str = str(sig) if sig else '?'
+        if len(sig_str) > max_len:
+            return sig_str[:max_len-3] + "..."
+        return sig_str
+    
+    if atype == 'counter':
+        signal = truncate_signal(adata.get('target', '?'))
+        count = str(adata.get('exp_cnt_val', '?'))
+        full_desc = f"Counter {signal} reaches {count}"
+        user_input_parts.append((signal, len("Counter ")))
+        user_input_parts.append((count, len(f"Counter {signal} reaches ")))
+        
+    elif atype == 'handshake':
+        sender = truncate_signal(adata.get('sender', '?'))
+        receiver = truncate_signal(adata.get('receiver', '?'))
+        phase = str(adata.get('phase_type', '?')).lower()
+        if phase == '2phase':
+            full_desc = f"2-Phase: req={sender} ack={receiver}"
+            offset1 = len("2-Phase: req=")
+            offset2 = len("2-Phase: req=") + len(sender) + len(" ack=")
+        elif phase == '4phase':
+            full_desc = f"4-Phase: req={sender} ack={receiver}"
+            offset1 = len("4-Phase: req=")
+            offset2 = len("4-Phase: req=") + len(sender) + len(" ack=")
+        elif phase == 'ready_valid':
+            full_desc = f"Ready-Valid: valid={sender} ready={receiver}"
+            offset1 = len("Ready-Valid: valid=")
+            offset2 = len("Ready-Valid: valid=") + len(sender) + len(" ready=")
+        else:
+            full_desc = f"{phase}: {sender}→{receiver}"
+            offset1 = len(f"{phase}: ")
+            offset2 = len(f"{phase}: {sender}→")
+        user_input_parts.append((sender, offset1))
+        user_input_parts.append((receiver, offset2))
+        
+    elif atype == 'pulseWidth':
+        signal = truncate_signal(adata.get('target_signal', '?'))
+        min_w = str(adata.get('min_width', '?'))
+        max_w = str(adata.get('max_width', '?'))
+        full_desc = f"Pulse {signal} {min_w}~{max_w} cycles"
+        user_input_parts.append((signal, len("Pulse ")))
+        user_input_parts.append((min_w, len(f"Pulse {signal} ")))
+        user_input_parts.append((max_w, len(f"Pulse {signal} {min_w}~")))
+        
+    elif atype == 'hact':
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        min_cnt = str(adata.get('min_count', '?'))
+        max_cnt = str(adata.get('max_count', '?'))
+        full_desc = f"HACT: {de} per {hsync} {min_cnt}~{max_cnt}"
+        user_input_parts.append((de, len("HACT: ")))
+        user_input_parts.append((hsync, len(f"HACT: {de} per ")))
+        user_input_parts.append((min_cnt, len(f"HACT: {de} per {hsync} ")))
+        user_input_parts.append((max_cnt, len(f"HACT: {de} per {hsync} {min_cnt}~")))
+        
+    elif atype == 'hsw':
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        clk = truncate_signal(adata.get('clock_signal', '?'))
+        width = str(adata.get('expected_width', '?'))
+        full_desc = f"HSW: {hsync} measured by {clk} = {width}"
+        user_input_parts.append((hsync, len("HSW: ")))
+        user_input_parts.append((clk, len(f"HSW: {hsync} measured by ")))
+        user_input_parts.append((width, len(f"HSW: {hsync} measured by {clk} = ")))
+        
+    elif atype == 'hbp':
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        de = truncate_signal(adata.get('de_signal', '?'))
+        clk = truncate_signal(adata.get('clock_signal', '?'))
+        min_v = str(adata.get('min_value', '?'))
+        max_v = str(adata.get('max_value', '?'))
+        full_desc = f"HBP: {hsync}→{de} by {clk} {min_v}~{max_v}"
+        user_input_parts.append((hsync, len("HBP: ")))
+        user_input_parts.append((de, len(f"HBP: {hsync}→")))
+        user_input_parts.append((clk, len(f"HBP: {hsync}→{de} by ")))
+        
+    elif atype == 'hfp':
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        clk = truncate_signal(adata.get('clock_signal', '?'))
+        min_v = str(adata.get('min_value', '?'))
+        max_v = str(adata.get('max_value', '?'))
+        full_desc = f"HFP: {de}→{hsync} by {clk} {min_v}~{max_v}"
+        user_input_parts.append((de, len("HFP: ")))
+        user_input_parts.append((hsync, len(f"HFP: {de}→")))
+        user_input_parts.append((clk, len(f"HFP: {de}→{hsync} by ")))
+        
+    elif atype == 'vact':
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        vsync = truncate_signal(adata.get('vsync_signal', '?'))
+        min_cnt = str(adata.get('min_count', '?'))
+        max_cnt = str(adata.get('max_count', '?'))
+        full_desc = f"VACT: {de} {hsync} per {vsync} {min_cnt}~{max_cnt}"
+        user_input_parts.append((de, len("VACT: ")))
+        user_input_parts.append((hsync, len(f"VACT: {de} ")))
+        user_input_parts.append((vsync, len(f"VACT: {de} {hsync} per ")))
+        
+    elif atype == 'vbp':
+        vsync = truncate_signal(adata.get('vsync_signal', '?'))
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        min_ln = str(adata.get('min_lines', '?'))
+        max_ln = str(adata.get('max_lines', '?'))
+        full_desc = f"VBP: {vsync}→{de} ({hsync} count) {min_ln}~{max_ln}"
+        user_input_parts.append((vsync, len("VBP: ")))
+        user_input_parts.append((de, len(f"VBP: {vsync}→")))
+        user_input_parts.append((hsync, len(f"VBP: {vsync}→{de} (")))
+        
+    elif atype == 'vfp':
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        vsync = truncate_signal(adata.get('vsync_signal', '?'))
+        min_ln = str(adata.get('min_lines', '?'))
+        max_ln = str(adata.get('max_lines', '?'))
+        full_desc = f"VFP: {de}→{vsync} ({hsync} count) {min_ln}~{max_ln}"
+        user_input_parts.append((de, len("VFP: ")))
+        user_input_parts.append((hsync, len(f"VFP: {de}→{vsync} (")))
+        user_input_parts.append((vsync, len(f"VFP: {de}→")))
+        
+    elif atype == 'vsw':
+        vsync = truncate_signal(adata.get('vsync_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        width = str(adata.get('expected_width', '?'))
+        full_desc = f"VSW: {vsync} measured by {hsync} count = {width}"
+        user_input_parts.append((vsync, len("VSW: ")))
+        user_input_parts.append((hsync, len(f"VSW: {vsync} measured by ")))
+        user_input_parts.append((width, len(f"VSW: {vsync} measured by {hsync} count = ")))
+        
+    elif atype == 'clockDivider':
+        ref_clk = truncate_signal(adata.get('ref_clk', '?'))
+        out_clk = truncate_signal(adata.get('out_clk', '?'))
+        ratio = str(adata.get('div_ratio', '?'))
+        full_desc = f"ClkDiv: {out_clk} = {ref_clk} / {ratio}"
+        user_input_parts.append((ref_clk, len(f"ClkDiv: {out_clk} = ")))
+        user_input_parts.append((out_clk, len("ClkDiv: ")))
+        user_input_parts.append((ratio, len(f"ClkDiv: {out_clk} = {ref_clk} / ")))
+        
+    elif atype == 'clockGate':
+        gated_clk = truncate_signal(adata.get('gated_clk', '?'))
+        enable = truncate_signal(adata.get('enable_signal', '?'))
+        depth = str(adata.get('depth_sync', '?'))
+        full_desc = f"ClkGate: {gated_clk} gated by {enable} (depth={depth})"
+        user_input_parts.append((gated_clk, len("ClkGate: ")))
+        user_input_parts.append((enable, len(f"ClkGate: {gated_clk} gated by ")))
+        user_input_parts.append((depth, len(f"ClkGate: {gated_clk} gated by {enable} (depth=")))
+        
+    elif atype == 'synchronizer':
+        output = truncate_signal(adata.get('output', '?'))
+        input_sig = truncate_signal(adata.get('input', '?'))
+        depth = str(adata.get('depth_sync', '?'))
+        full_desc = f"CDC: {input_sig} → {output} (sync={depth})"
+        user_input_parts.append((input_sig, len("CDC: ")))
+        user_input_parts.append((output, len(f"CDC: {input_sig} → ")))
+        user_input_parts.append((depth, len(f"CDC: {input_sig} → {output} (sync=")))
+        
+    elif atype == 'basicAssertion':
+        clock = truncate_signal(adata.get('clock', '?'))
+        trigger = truncate_signal(adata.get('trigger_condition', '?'))
+        result = truncate_signal(adata.get('expected_result', '?'))
+        full_desc = f"Custom: {trigger} ⟹ {result} (@{clock})"
+        user_input_parts.append((trigger, len("Custom: ")))
+        user_input_parts.append((result, len(f"Custom: {trigger} ⟹ ")))
+        user_input_parts.append((clock, len(f"Custom: {trigger} ⟹ {result} (@")))
+        
+    elif atype == 'delayCondition':
+        trigger = truncate_signal(adata.get('trigger_signal', '?'))
+        expected = truncate_signal(adata.get('expected_signal', '?'))
+        delay = str(adata.get('delay_cycles', '?'))
+        full_desc = f"Delay: {trigger} +{delay}cy → {expected}"
+        user_input_parts.append((trigger, len("Delay: ")))
+        user_input_parts.append((delay, len(f"Delay: {trigger} +")))
+        user_input_parts.append((expected, len(f"Delay: {trigger} +{delay}cy → ")))
+        
+    elif atype == 'videosyncall':
+        de = truncate_signal(adata.get('de_signal', '?'))
+        hsync = truncate_signal(adata.get('hsync_signal', '?'))
+        vsync = truncate_signal(adata.get('vsync_signal', '?'))
+        full_desc = f"VideoSync: {de}, {hsync}, {vsync} - 8 params"
+        user_input_parts.append((de, len("VideoSync: ")))
+        user_input_parts.append((hsync, len(f"VideoSync: {de}, ")))
+        user_input_parts.append((vsync, len(f"VideoSync: {de}, {hsync}, ")))
+        
+    elif atype == 'QCH':
+        qreq = truncate_signal(adata.get('qreqn', '?'))
+        qacc = truncate_signal(adata.get('qacceptn', '?'))
+        qact = truncate_signal(adata.get('qactive', '?'))
+        full_desc = f"QCH: req={qreq} ack={qacc} active={qact}"
+        user_input_parts.append((qreq, len("QCH: req=")))
+        user_input_parts.append((qacc, len(f"QCH: req={qreq} ack=")))
+        user_input_parts.append((qact, len(f"QCH: req={qreq} ack={qacc} active=")))
+        
+    elif atype == 'AHB_M':
+        haddr = truncate_signal(adata.get('haddr', '?'))
+        htrans = truncate_signal(adata.get('htrans', '?'))
+        full_desc = f"AHB Master: addr={haddr} trans={htrans}"
+        user_input_parts.append((haddr, len("AHB Master: addr=")))
+        user_input_parts.append((htrans, len(f"AHB Master: addr={haddr} trans=")))
+        
+    elif atype == 'AHB_S':
+        haddr = truncate_signal(adata.get('haddr', '?'))
+        hresp = truncate_signal(adata.get('hresp', '?'))
+        full_desc = f"AHB Slave: addr={haddr} resp={hresp}"
+        user_input_parts.append((haddr, len("AHB Slave: addr=")))
+        user_input_parts.append((hresp, len(f"AHB Slave: addr={haddr} resp=")))
+        
+    else:
+        full_desc = f"[{atype.upper()}] configured"
+    
+    return full_desc, user_input_parts
+
+
 def _get_plugin_description(plugin_name: str) -> str:
     """Get description for each plugin type."""
     descriptions = {
-        'counter': '\033[92mCounter\033[0m-based verification: Monitors \033[92m[Target Signal]\033[0m increment on \033[92m[Increment Condition]\033[0m, reset on \033[92m[Reset Condition]\033[0m, and verifies count value at \033[92m[Trigger]\033[0m matches expected value',
-        'handshake': 'Protocol verification: Validates handshake between \033[92m[Sender]\033[0m and \033[92m[Receiver]\033[0m signals using 2-phase, 4-phase, or ready-valid protocol patterns',
-        'sequence': 'Temporal pattern verification: Defines and verifies custom signal sequences with timing relationships',
-        'hact': 'Horizontal Active Pixels: Counts active pixels (when \033[92m[DE]\033[0m is HIGH) per line (between \033[92m[HSYNC]\033[0m pulses) and verifies count is within min/max range',
-        'hsw': 'Horizontal Sync Width: Measures \033[92m[HSYNC]\033[0m pulse width using \033[92m[Clock/Trigger]\033[0m and verifies it matches expected width (in cycles or events)',
-        'hbp': 'Horizontal Back Porch: Measures time from \033[92m[HSYNC]\033[0m falling edge to \033[92m[DE]\033[0m rising edge using \033[92m[Clock]\033[0m, verifies back porch timing is within range',
-        'hfp': 'Horizontal Front Porch: Measures time from \033[92m[DE]\033[0m falling edge to next \033[92m[HSYNC]\033[0m rising edge using \033[92m[Clock]\033[0m, verifies front porch timing is within range',
-        'vact': 'Vertical Active Lines: Counts active lines (when \033[92m[DE]\033[0m is HIGH during \033[92m[HSYNC]\033[0m) per frame (between \033[92m[VSYNC]\033[0m pulses) and verifies count is within min/max range',
-        'vbp': 'Vertical Back Porch: Counts \033[92m[HSYNC]\033[0m pulses from \033[92m[VSYNC]\033[0m falling to first active line (\033[92m[DE]\033[0m HIGH), verifies back porch line count is within range',
-        'vfp': 'Vertical Front Porch: Counts \033[92m[HSYNC]\033[0m pulses from last active line (\033[92m[DE]\033[0m LOW) to next \033[92m[VSYNC]\033[0m, verifies front porch line count is within range',
-        'vsw': 'Vertical Sync Width: Counts \033[92m[HSYNC]\033[0m pulses during \033[92m[VSYNC]\033[0m pulse, verifies sync width (in lines) matches expected value',
-        'clockDivider': 'Clock Divider: Verifies \033[92m[CLKOUT]\033[0m frequency matches \033[92m[Reference Clock]\033[0m divided by \033[92m[DIVRATIO]\033[0m, validates divider ratio from 1 to \033[92m[MAX]\033[0m',
-        'clockGate': 'Clock Gating: Monitors \033[92m[Enable Signal]\033[0m and verifies \033[92m[Clock Output]\033[0m is gated (stopped/enabled) after \033[92m[Depth Sync]\033[0m cycles with proper synchronization',
-        'synchronizer': 'CDC Synchronizer: Validates \033[92m[Output]\033[0m matches \033[92m[Input]\033[0m delayed by \033[92m[Depth Sync]\033[0m stages when \033[92m[Enable]\033[0m is active, ensures proper clock domain crossing',
-        'pulseWidth': 'Pulse Width: Measures \033[92m[Target Signal]\033[0m pulse width using \033[92m[Base Clock]\033[0m (hpulse) or \033[92m[Trigger Signal]\033[0m (vpulse), verifies width is between \033[92m[Min]\033[0m and \033[92m[Max]\033[0m',
-        'basicAssertion': 'Custom Logic: Creates user-defined \033[92mProperty\033[0m (trigger→result) or \033[92mSequence\033[0m (temporal pattern) with custom \033[92m[Clock]\033[0m, \033[92m[Disable]\033[0m, and \033[92m[Logic]\033[0m expressions',
-        'delayCondition': 'Delay Verification: Validates that \033[92m[Expected Signal]\033[0m matches expected condition after \033[92m[Delay Cycles]\033[0m from \033[92m[Trigger Signal]\033[0m activation',
-        'videosyncall': 'Complete Video Timing: Verifies all 8 video timing parameters (HACT, HSW, HBP, HFP, VACT, VSW, VBP, VFP) using \033[92m[HSYNC]\033[0m, \033[92m[VSYNC]\033[0m, and \033[92m[DE]\033[0m signals in a single assertion',
-        'AHB_M': 'AHB Master Protocol: Verifies AMBA AHB bus master transactions - monitors \033[92m[HADDR]\033[0m, \033[92m[HTRANS]\033[0m, \033[92m[HWRITE]\033[0m, \033[92m[HWDATA]\033[0m, \033[92m[HRDATA]\033[0m, \033[92m[HREADY]\033[0m, \033[92m[HRESP]\033[0m signals to ensure proper bus protocol compliance including address/data phases and response handling',
-        'AHB_S': 'AHB Slave Protocol: Verifies AMBA AHB bus slave responses - monitors \033[92m[HADDR]\033[0m, \033[92m[HTRANS]\033[0m, \033[92m[HWRITE]\033[0m, \033[92m[HWDATA]\033[0m, \033[92m[HRDATA]\033[0m, \033[92m[HREADY]\033[0m, \033[92m[HRESP]\033[0m signals to validate slave behavior, ready control, and response generation',
+        'counter': '\033[92mCounter-based Verification\033[0m: Monitors \033[92m[Target Signal]\033[0m incrementing when \033[92m[Increment Condition]\033[0m is true. Resets to zero on \033[92m[Reset Condition]\033[0m and verifies final count equals \033[92m[Expected Count]\033[0m at \033[92m[Trigger]\033[0m',
+        'handshake': '\033[92mHandshake Protocol\033[0m: Validates synchronization between \033[92m[Sender]\033[0m (request) and \033[92m[Receiver]\033[0m (acknowledge) using 2-phase, 4-phase, or ready-valid patterns. Ensures proper request/acknowledge timing',
+        'sequence': '\033[92mSequence Pattern\033[0m: Defines and verifies complex temporal sequences with multiple signal transitions. Validates signals occur in correct order with specified timing relationships',
+        'hact': '\033[92mHorizontal Active Pixels\033[0m (HACT): Counts pixels where \033[92m[DE]\033[0m (Data Enable) is HIGH within each horizontal line (between \033[92m[HSYNC]\033[0m pulses). Verifies pixel count is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m range',
+        'hsw': '\033[92mHorizontal Sync Width\033[0m (HSW): Measures duration of \033[92m[HSYNC]\033[0m pulse using \033[92m[Clock]\033[0m cycles. Verifies pulse width matches expected \033[92m[Width]\033[0m (±tolerance) for proper horizontal synchronization',
+        'hbp': '\033[92mHorizontal Back Porch\033[0m (HBP): Measures non-active time from \033[92m[HSYNC]\033[0m falling edge to \033[92m[DE]\033[0m rising edge using \033[92m[Clock]\033[0m. Verifies back porch duration is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m clock cycles',
+        'hfp': '\033[92mHorizontal Front Porch\033[0m (HFP): Measures non-active time from \033[92m[DE]\033[0m falling edge to next \033[92m[HSYNC]\033[0m pulse using \033[92m[Clock]\033[0m. Verifies front porch duration is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m clock cycles',
+        'vact': '\033[92mVertical Active Lines\033[0m (VACT): Counts horizontal lines where \033[92m[DE]\033[0m is active (between \033[92m[VSYNC]\033[0m pulses) per frame. Verifies active line count is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m range',
+        'vbp': '\033[92mVertical Back Porch\033[0m (VBP): Counts \033[92m[HSYNC]\033[0m pulses from \033[92m[VSYNC]\033[0m falling edge until first active line (\033[92m[DE]\033[0m HIGH). Verifies back porch line count is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m',
+        'vfp': '\033[92mVertical Front Porch\033[0m (VFP): Counts \033[92m[HSYNC]\033[0m pulses from last active line (\033[92m[DE]\033[0m LOW) to next \033[92m[VSYNC]\033[0m pulse. Verifies front porch line count is within \033[92m[Min]\033[0m to \033[92m[Max]\033[0m',
+        'vsw': '\033[92mVertical Sync Width\033[0m (VSW): Measures duration of \033[92m[VSYNC]\033[0m pulse by counting \033[92m[HSYNC]\033[0m pulses during VSYNC assertion. Verifies sync width (in lines) matches expected \033[92m[Width]\033[0m ±tolerance',
+        'clockDivider': '\033[92mClock Divider\033[0m: Verifies \033[92m[Output Clock]\033[0m frequency is exactly \033[92m[Reference Clock]\033[0m divided by \033[92m[Divide Ratio]\033[0m. Validates duty cycle and phase relationship with reference clock',
+        'clockGate': '\033[92mClock Gating\033[0m: Monitors \033[92m[Enable]\033[0m signal and verifies \033[92m[Gated Clock]\033[0m is properly enabled/disabled with zero glitches. Validates synchronization delay of \033[92m[Depth]\033[0m stages before gating takes effect',
+        'synchronizer': '\033[92mCDC Synchronizer\033[0m: Verifies \033[92m[Output]\033[0m signal correctly propagates from \033[92m[Input]\033[0m across clock domains with \033[92m[Depth]\033[0m synchronization stages. Validates metastability safety and timing',
+        'pulseWidth': '\033[92mPulse Width\033[0m: Measures \033[92m[Target Signal]\033[0m pulse duration using \033[92m[Clock]\033[0m (for static pulses) or \033[92m[Trigger]\033[0m (for dynamic pulse detection). Verifies width is between \033[92m[Min]\033[0m and \033[92m[Max]\033[0m cycles',
+        'basicAssertion': '\033[92mCustom Logic Assertion\033[0m: Creates user-defined temporal or combinational properties. Define \033[92m[Clock]\033[0m, \033[92m[Trigger]\033[0m condition, \033[92m[Expected]\033[0m result, and optional \033[92m[Disable]\033[0m gate for flexible property verification',
+        'delayCondition': '\033[92mDelay Verification\033[0m: Validates that \033[92m[Expected Result]\033[0m condition is satisfied after fixed \033[92m[Delay Cycles]\033[0m from \033[92m[Trigger]\033[0m assertion. Useful for pipeline, FIFO, or propagation delay checks',
+        'videosyncall': '\033[92mComplete Video Timing\033[0m: Comprehensive verification of all 8 video timing parameters (HACT, HSW, HBP, HFP, VACT, VSW, VBP, VFP) in one assertion. Monitors \033[92m[HSYNC]\033[0m, \033[92m[VSYNC]\033[0m, \033[92m[DE]\033[0m with single configuration',
+        'AHB_M': '\033[92mAHB Master Protocol\033[0m: Verifies AHB bus master behavior per AMBA AHB spec. Monitors address, transaction type, data, and ready signals. Validates proper address/data phase sequencing and response handling from slave',
+        'AHB_S': '\033[92mAHB Slave Protocol\033[0m: Verifies AHB bus slave behavior per AMBA AHB spec. Validates data presentation timing, ready signal generation, and response (OKAY/ERROR) for received transactions. Ensures proper handshaking',
+        'QCH': '\033[92mQVIP CHannel Protocol\033[0m: Verifies QVIP handshake protocol with \033[92m[QREQn]\033[0m request and \033[92m[QACCEPTn]\033[0m acknowledge signals. Validates proper request/acknowledge handshaking with \033[92m[QACTIVE]\033[0m and optional \033[92m[QDENY]\033[0m denial signal',
     }
     return descriptions.get(plugin_name, 'Custom assertion type')
 
@@ -8947,12 +9194,15 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
         if cmd == 'n':
             if not hasattr(state, 'wizard_page'):
                 state.wizard_page = 0
-            state.wizard_page += 1
+            plugins = _get_assertion_plugins_info()
+            items_per_page = max(5, 10)  # Default items per page
+            total_pages = (len(plugins) + items_per_page - 1) // items_per_page
+            state.wizard_page = min(state.wizard_page + 1, total_pages - 1)
             return "", False
         elif cmd == 'N':
             if not hasattr(state, 'wizard_page'):
                 state.wizard_page = 0
-            state.wizard_page -= 1
+            state.wizard_page = max(state.wizard_page - 1, 0)
             return "", False
         
         if cmd.isdigit():
