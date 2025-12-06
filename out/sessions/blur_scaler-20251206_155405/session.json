@@ -5,7 +5,36 @@
   "session_excel_path": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\blur_scaler-20251206_155405\\blur_scaler.xlsx",
   "out_dir": "D:\\Programing\\Assertion-Checker-Generator\\out\\sessions\\blur_scaler-20251206_155405\\assertions",
   "conditions": [],
-  "assertions": [],
+  "assertions": [
+    {
+      "type": "hact",
+      "data": {
+        "hsync_signal": "i_blur_mode_cap",
+        "de_signal": "45",
+        "min_value": "6",
+        "min_count": "6",
+        "max_value": "3",
+        "max_count": "3",
+        "clock_signal": "<Base Clock>",
+        "expected_width": "6"
+      },
+      "description": "hact assertion"
+    },
+    {
+      "type": "hsw",
+      "data": {
+        "hsync_signal": "abd",
+        "de_signal": "sfs",
+        "min_value": "5",
+        "min_count": "5",
+        "max_value": "6",
+        "max_count": "6",
+        "clock_signal": "<Base Clock>",
+        "expected_width": "5"
+      },
+      "description": "hsw assertion"
+    }
+  ],
   "clocks": [
     {
       "name": "I_CLK",

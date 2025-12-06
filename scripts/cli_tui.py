@@ -1931,6 +1931,17 @@ def _main(stdscr: "curses._CursesWindow") -> None:
         assert_inner_h = assert_h - 2
         assert_inner_w = assert_w - 2
         
+        # Auto-recovery: If assertions is empty but session has Excel, try to reload
+        if not state.assertions and state.session_excel_path:
+            try:
+                # Attempt to reload assertions from Excel
+                loaded_count = _restore_assertions_from_excel(state)
+                if loaded_count > 0:
+                    # Auto-recovery was successful
+                    pass  # Assertions will be displayed below
+            except Exception:
+                pass
+        
         if not state.assertions:
             no_assert_msg = "No assertions created yet. Use 'new' command to create assertions."
             try:
@@ -4260,14 +4271,15 @@ def _load_assertion_data_from_excel(state: AppState, assertion_type: str) -> Dic
         return {}
 
 
-def _restore_assertions_from_excel(state: AppState) -> None:
+def _restore_assertions_from_excel(state: AppState) -> int:
     """
-    Restore assertions from Excel sheets (Counter, Handshake, PulseWidth).
+    Restore assertions from Excel sheets (Counter, Handshake, PulseWidth, Video Timing, etc).
     Excel is the authoritative source, so we read and populate state.assertions.
     If Excel reading fails, falls back to session.json.
+    Returns the number of assertions loaded.
     """
     if not state.session_excel_path or not Path(state.session_excel_path).exists():
-        return
+        return 0
     
     # Try to restore from Excel first (authoritative source)
     excel_success = False
@@ -4425,12 +4437,117 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                     }
                     assertions.append(assertion_entry)
             
+            # ============ Video Timing Sheets (HACT, HSW, HBP, HFP, VACT, VBP, VFP, VSW) ============
+            timing_sheet_configs = {
+                'hact': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+                'hsw': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+                'hbp': {'hsync_col': 3, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+                'hfp': {'hsync_col': 3, 'de_col': 4, 'min_col': 5, 'max_col': 6},
+                'vact': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+                'vbp': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+                'vfp': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+                'vsw': {'hsync_col': 3, 'vsync_col': 4, 'de_col': 5, 'min_col': 6, 'max_col': 7},
+            }
+            
+            for timing_type, config in timing_sheet_configs.items():
+                timing_sheet = None
+                for name in wb.sheetnames:
+                    if name.lower() == timing_type.lower():
+                        timing_sheet = name
+                        break
+                
+                if not timing_sheet:
+                    continue
+                
+                try:
+                    ws = wb[timing_sheet]
+                    # Data starts at row 7 (row 6 is header)
+                    for row_idx in range(7, ws.max_row + 1):
+                        # Check first data column for actual data (skip empty rows and headers)
+                        first_val = ws.cell(row=row_idx, column=3).value
+                        if not first_val or str(first_val).strip() == '':
+                            continue
+                        
+                        # Skip header row labels
+                        first_str = str(first_val).strip()
+                        if first_str in ['Hsync Signal', 'Data Enable Signal', 'Expected Min Value', 'Expected Max Value']:
+                            continue
+                        
+                        # Extract timing parameters based on type
+                        timing_data = {}
+                        
+                        # Get HSysn signal (always column C / col 3)
+                        hsync_val = ws.cell(row=row_idx, column=3).value
+                        if hsync_val and str(hsync_val).strip():
+                            timing_data['hsync_signal'] = str(hsync_val).strip()
+                        
+                        # Get DE signal or next signal
+                        if 'de_col' in config:
+                            de_val = ws.cell(row=row_idx, column=config['de_col']).value
+                            if de_val and str(de_val).strip():
+                                timing_data['de_signal'] = str(de_val).strip()
+                        
+                        # Get VSYNC signal if applicable
+                        if 'vsync_col' in config:
+                            vsync_val = ws.cell(row=row_idx, column=config['vsync_col']).value
+                            if vsync_val and str(vsync_val).strip():
+                                timing_data['vsync_signal'] = str(vsync_val).strip()
+                        
+                        # Get min value
+                        if 'min_col' in config:
+                            min_val = ws.cell(row=row_idx, column=config['min_col']).value
+                            if min_val:
+                                timing_data['min_value'] = str(min_val).strip()
+                                timing_data['min_count'] = str(min_val).strip()
+                        
+                        # Get max value
+                        if 'max_col' in config:
+                            max_val = ws.cell(row=row_idx, column=config['max_col']).value
+                            if max_val:
+                                timing_data['max_value'] = str(max_val).strip()
+                                timing_data['max_count'] = str(max_val).strip()
+                        
+                        # Add common fields
+                        timing_data['clock_signal'] = '<Base Clock>'
+                        timing_data['expected_width'] = timing_data.get('min_value', '?')
+                        
+                        # Only add if we have meaningful data
+                        if 'hsync_signal' in timing_data and ('min_value' in timing_data or 'max_value' in timing_data):
+                            assertion_entry = {
+                                'type': timing_type,
+                                'data': timing_data,
+                                'description': f'{timing_type} assertion'
+                            }
+                            assertions.append(assertion_entry)
+                except Exception as sheet_e:
+                    # Log sheet-specific errors but continue
+                    try:
+                        with open(".restore_assertions_debug.log", "a") as f:
+                            f.write(f"[_restore_assertions_from_excel] {timing_type} sheet error: {sheet_e}\n")
+                    except:
+                        pass
+            
             wb.close()
             
             # If any assertions were found, use them
             if assertions:
                 state.assertions = assertions
                 excel_success = True
+                # Log success
+                try:
+                    with open(".restore_assertions_debug.log", "a") as f:
+                        f.write(f"[_restore_assertions_from_excel] SUCCESS: Loaded {len(assertions)} assertions\n")
+                        for i, asrt in enumerate(assertions, 1):
+                            f.write(f"  {i}. {asrt['type']}: {asrt['data']}\n")
+                except:
+                    pass
+            else:
+                # No assertions found in Excel - log this
+                try:
+                    with open(".restore_assertions_debug.log", "a") as f:
+                        f.write(f"[_restore_assertions_from_excel] No assertions found in Excel\n")
+                except:
+                    pass
         
         except Exception as e:
             # Excel reading failed, will try session.json fallback
@@ -4452,8 +4569,28 @@ def _restore_assertions_from_excel(state: AppState) -> None:
                 data = json.loads(session_json.read_text(encoding="utf-8"))
                 if "assertions" in data and isinstance(data["assertions"], list):
                     state.assertions = data["assertions"]
-            except Exception:
-                pass
+                    # Log fallback success
+                    try:
+                        with open(".restore_assertions_debug.log", "a") as f:
+                            f.write(f"[_restore_assertions_from_excel] Fallback to session.json: Loaded {len(state.assertions)} assertions\n")
+                    except:
+                        pass
+                else:
+                    # Assertions key missing or invalid in session.json
+                    try:
+                        with open(".restore_assertions_debug.log", "a") as f:
+                            f.write(f"[_restore_assertions_from_excel] session.json has no 'assertions' key or it's not a list\n")
+                    except:
+                        pass
+            except Exception as fallback_e:
+                try:
+                    with open(".restore_assertions_debug.log", "a") as f:
+                        f.write(f"[_restore_assertions_from_excel] Fallback failed: {fallback_e}\n")
+                except:
+                    pass
+    
+    # Return the number of assertions loaded
+    return len(state.assertions) if state.assertions else 0
 
 
 def _sanitize_path_for_display(p: str) -> str:
@@ -5514,30 +5651,30 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
     if atype == 'counter':
         signal = truncate_signal(adata.get('target', '?'))
         count = str(adata.get('exp_cnt_val', '?'))
-        full_desc = f"Counter {signal} reaches {count}"
+        full_desc = f"Counter {signal} increments, reaches count {count}"
         user_input_parts.append((signal, len("Counter ")))
-        user_input_parts.append((count, len(f"Counter {signal} reaches ")))
+        user_input_parts.append((count, len(f"Counter {signal} increments, reaches count ")))
         
     elif atype == 'handshake':
         sender = truncate_signal(adata.get('sender', '?'))
         receiver = truncate_signal(adata.get('receiver', '?'))
         phase = str(adata.get('phase_type', '?')).lower()
         if phase == '2phase':
-            full_desc = f"2-Phase: req={sender} ack={receiver}"
-            offset1 = len("2-Phase: req=")
-            offset2 = len("2-Phase: req=") + len(sender) + len(" ack=")
+            full_desc = f"Handshake 2-phase: request {sender}, acknowledge {receiver}"
+            offset1 = len("Handshake 2-phase: request ")
+            offset2 = len(f"Handshake 2-phase: request {sender}, acknowledge ")
         elif phase == '4phase':
-            full_desc = f"4-Phase: req={sender} ack={receiver}"
-            offset1 = len("4-Phase: req=")
-            offset2 = len("4-Phase: req=") + len(sender) + len(" ack=")
+            full_desc = f"Handshake 4-phase: request {sender}, acknowledge {receiver}"
+            offset1 = len("Handshake 4-phase: request ")
+            offset2 = len(f"Handshake 4-phase: request {sender}, acknowledge ")
         elif phase == 'ready_valid':
-            full_desc = f"Ready-Valid: valid={sender} ready={receiver}"
-            offset1 = len("Ready-Valid: valid=")
-            offset2 = len("Ready-Valid: valid=") + len(sender) + len(" ready=")
+            full_desc = f"Handshake ready-valid: valid {sender}, ready {receiver}"
+            offset1 = len("Handshake ready-valid: valid ")
+            offset2 = len(f"Handshake ready-valid: valid {sender}, ready ")
         else:
-            full_desc = f"{phase}: {sender}→{receiver}"
-            offset1 = len(f"{phase}: ")
-            offset2 = len(f"{phase}: {sender}→")
+            full_desc = f"Handshake {phase}: {sender} to {receiver}"
+            offset1 = len(f"Handshake {phase}: ")
+            offset2 = len(f"Handshake {phase}: {sender} to ")
         user_input_parts.append((sender, offset1))
         user_input_parts.append((receiver, offset2))
         
@@ -5545,30 +5682,30 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         signal = truncate_signal(adata.get('target_signal', '?'))
         min_w = str(adata.get('min_width', '?'))
         max_w = str(adata.get('max_width', '?'))
-        full_desc = f"Pulse {signal} {min_w}~{max_w} cycles"
-        user_input_parts.append((signal, len("Pulse ")))
-        user_input_parts.append((min_w, len(f"Pulse {signal} ")))
-        user_input_parts.append((max_w, len(f"Pulse {signal} {min_w}~")))
+        full_desc = f"Pulse width {signal} within {min_w}-{max_w} cycles"
+        user_input_parts.append((signal, len("Pulse width ")))
+        user_input_parts.append((min_w, len(f"Pulse width {signal} within ")))
+        user_input_parts.append((max_w, len(f"Pulse width {signal} within {min_w}-")))
         
     elif atype == 'hact':
         de = truncate_signal(adata.get('de_signal', '?'))
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
         min_cnt = str(adata.get('min_count', '?'))
         max_cnt = str(adata.get('max_count', '?'))
-        full_desc = f"HACT: {de} per {hsync} {min_cnt}~{max_cnt}"
-        user_input_parts.append((de, len("HACT: ")))
-        user_input_parts.append((hsync, len(f"HACT: {de} per ")))
-        user_input_parts.append((min_cnt, len(f"HACT: {de} per {hsync} ")))
-        user_input_parts.append((max_cnt, len(f"HACT: {de} per {hsync} {min_cnt}~")))
+        full_desc = f"HACT counts {de} active within {hsync}, range {min_cnt}-{max_cnt}"
+        user_input_parts.append((de, len("HACT counts ")))
+        user_input_parts.append((hsync, len(f"HACT counts {de} active within ")))
+        user_input_parts.append((min_cnt, len(f"HACT counts {de} active within {hsync}, range ")))
+        user_input_parts.append((max_cnt, len(f"HACT counts {de} active within {hsync}, range {min_cnt}-")))
         
     elif atype == 'hsw':
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
         clk = truncate_signal(adata.get('clock_signal', '?'))
         width = str(adata.get('expected_width', '?'))
-        full_desc = f"HSW: {hsync} measured by {clk} = {width}"
-        user_input_parts.append((hsync, len("HSW: ")))
-        user_input_parts.append((clk, len(f"HSW: {hsync} measured by ")))
-        user_input_parts.append((width, len(f"HSW: {hsync} measured by {clk} = ")))
+        full_desc = f"HSW measures {hsync} pulse width by {clk}, expect {width} cycles"
+        user_input_parts.append((hsync, len("HSW measures ")))
+        user_input_parts.append((clk, len(f"HSW measures {hsync} pulse width by ")))
+        user_input_parts.append((width, len(f"HSW measures {hsync} pulse width by {clk}, expect ")))
         
     elif atype == 'hbp':
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
@@ -5576,10 +5713,10 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         clk = truncate_signal(adata.get('clock_signal', '?'))
         min_v = str(adata.get('min_value', '?'))
         max_v = str(adata.get('max_value', '?'))
-        full_desc = f"HBP: {hsync}→{de} by {clk} {min_v}~{max_v}"
-        user_input_parts.append((hsync, len("HBP: ")))
-        user_input_parts.append((de, len(f"HBP: {hsync}→")))
-        user_input_parts.append((clk, len(f"HBP: {hsync}→{de} by ")))
+        full_desc = f"HBP measures back porch {hsync} to {de} by {clk}, {min_v}-{max_v}"
+        user_input_parts.append((hsync, len("HBP measures back porch ")))
+        user_input_parts.append((de, len(f"HBP measures back porch {hsync} to ")))
+        user_input_parts.append((clk, len(f"HBP measures back porch {hsync} to {de} by ")))
         
     elif atype == 'hfp':
         de = truncate_signal(adata.get('de_signal', '?'))
@@ -5587,10 +5724,10 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         clk = truncate_signal(adata.get('clock_signal', '?'))
         min_v = str(adata.get('min_value', '?'))
         max_v = str(adata.get('max_value', '?'))
-        full_desc = f"HFP: {de}→{hsync} by {clk} {min_v}~{max_v}"
-        user_input_parts.append((de, len("HFP: ")))
-        user_input_parts.append((hsync, len(f"HFP: {de}→")))
-        user_input_parts.append((clk, len(f"HFP: {de}→{hsync} by ")))
+        full_desc = f"HFP measures front porch {de} to {hsync} by {clk}, {min_v}-{max_v}"
+        user_input_parts.append((de, len("HFP measures front porch ")))
+        user_input_parts.append((hsync, len(f"HFP measures front porch {de} to ")))
+        user_input_parts.append((clk, len(f"HFP measures front porch {de} to {hsync} by ")))
         
     elif atype == 'vact':
         de = truncate_signal(adata.get('de_signal', '?'))
@@ -5598,10 +5735,10 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         vsync = truncate_signal(adata.get('vsync_signal', '?'))
         min_cnt = str(adata.get('min_count', '?'))
         max_cnt = str(adata.get('max_count', '?'))
-        full_desc = f"VACT: {de} {hsync} per {vsync} {min_cnt}~{max_cnt}"
-        user_input_parts.append((de, len("VACT: ")))
-        user_input_parts.append((hsync, len(f"VACT: {de} ")))
-        user_input_parts.append((vsync, len(f"VACT: {de} {hsync} per ")))
+        full_desc = f"VACT counts {de} active lines per {vsync}, range {min_cnt}-{max_cnt}"
+        user_input_parts.append((de, len("VACT counts ")))
+        user_input_parts.append((hsync, len(f"VACT counts {de} active lines per ")))
+        user_input_parts.append((vsync, len(f"VACT counts {de} active lines per {vsync}, range ")))
         
     elif atype == 'vbp':
         vsync = truncate_signal(adata.get('vsync_signal', '?'))
@@ -5609,10 +5746,10 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
         min_ln = str(adata.get('min_lines', '?'))
         max_ln = str(adata.get('max_lines', '?'))
-        full_desc = f"VBP: {vsync}→{de} ({hsync} count) {min_ln}~{max_ln}"
-        user_input_parts.append((vsync, len("VBP: ")))
-        user_input_parts.append((de, len(f"VBP: {vsync}→")))
-        user_input_parts.append((hsync, len(f"VBP: {vsync}→{de} (")))
+        full_desc = f"VBP measures back porch {vsync} to {de} using {hsync} count, {min_ln}-{max_ln}"
+        user_input_parts.append((vsync, len("VBP measures back porch ")))
+        user_input_parts.append((de, len(f"VBP measures back porch {vsync} to ")))
+        user_input_parts.append((hsync, len(f"VBP measures back porch {vsync} to {de} using ")))
         
     elif atype == 'vfp':
         de = truncate_signal(adata.get('de_signal', '?'))
@@ -5620,99 +5757,99 @@ def _get_assertion_display_description(atype: str, adata: Dict[str, Any]) -> Tup
         vsync = truncate_signal(adata.get('vsync_signal', '?'))
         min_ln = str(adata.get('min_lines', '?'))
         max_ln = str(adata.get('max_lines', '?'))
-        full_desc = f"VFP: {de}→{vsync} ({hsync} count) {min_ln}~{max_ln}"
-        user_input_parts.append((de, len("VFP: ")))
-        user_input_parts.append((hsync, len(f"VFP: {de}→{vsync} (")))
-        user_input_parts.append((vsync, len(f"VFP: {de}→")))
+        full_desc = f"VFP measures front porch {de} to {vsync} using {hsync} count, {min_ln}-{max_ln}"
+        user_input_parts.append((de, len("VFP measures front porch ")))
+        user_input_parts.append((vsync, len(f"VFP measures front porch {de} to ")))
+        user_input_parts.append((hsync, len(f"VFP measures front porch {de} to {vsync} using ")))
         
     elif atype == 'vsw':
         vsync = truncate_signal(adata.get('vsync_signal', '?'))
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
         width = str(adata.get('expected_width', '?'))
-        full_desc = f"VSW: {vsync} measured by {hsync} count = {width}"
-        user_input_parts.append((vsync, len("VSW: ")))
-        user_input_parts.append((hsync, len(f"VSW: {vsync} measured by ")))
-        user_input_parts.append((width, len(f"VSW: {vsync} measured by {hsync} count = ")))
+        full_desc = f"VSW measures {vsync} pulse width by {hsync} count, expect {width}"
+        user_input_parts.append((vsync, len("VSW measures ")))
+        user_input_parts.append((hsync, len(f"VSW measures {vsync} pulse width by ")))
+        user_input_parts.append((width, len(f"VSW measures {vsync} pulse width by {hsync} count, expect ")))
         
     elif atype == 'clockDivider':
         ref_clk = truncate_signal(adata.get('ref_clk', '?'))
         out_clk = truncate_signal(adata.get('out_clk', '?'))
         ratio = str(adata.get('div_ratio', '?'))
-        full_desc = f"ClkDiv: {out_clk} = {ref_clk} / {ratio}"
-        user_input_parts.append((ref_clk, len(f"ClkDiv: {out_clk} = ")))
-        user_input_parts.append((out_clk, len("ClkDiv: ")))
-        user_input_parts.append((ratio, len(f"ClkDiv: {out_clk} = {ref_clk} / ")))
+        full_desc = f"Clock divider {out_clk} divides {ref_clk} by ratio {ratio}"
+        user_input_parts.append((out_clk, len("Clock divider ")))
+        user_input_parts.append((ref_clk, len(f"Clock divider {out_clk} divides ")))
+        user_input_parts.append((ratio, len(f"Clock divider {out_clk} divides {ref_clk} by ratio ")))
         
     elif atype == 'clockGate':
         gated_clk = truncate_signal(adata.get('gated_clk', '?'))
         enable = truncate_signal(adata.get('enable_signal', '?'))
         depth = str(adata.get('depth_sync', '?'))
-        full_desc = f"ClkGate: {gated_clk} gated by {enable} (depth={depth})"
-        user_input_parts.append((gated_clk, len("ClkGate: ")))
-        user_input_parts.append((enable, len(f"ClkGate: {gated_clk} gated by ")))
-        user_input_parts.append((depth, len(f"ClkGate: {gated_clk} gated by {enable} (depth=")))
+        full_desc = f"Clock gating {gated_clk} controlled by {enable}, sync depth {depth}"
+        user_input_parts.append((gated_clk, len("Clock gating ")))
+        user_input_parts.append((enable, len(f"Clock gating {gated_clk} controlled by ")))
+        user_input_parts.append((depth, len(f"Clock gating {gated_clk} controlled by {enable}, sync depth ")))
         
     elif atype == 'synchronizer':
         output = truncate_signal(adata.get('output', '?'))
         input_sig = truncate_signal(adata.get('input', '?'))
         depth = str(adata.get('depth_sync', '?'))
-        full_desc = f"CDC: {input_sig} → {output} (sync={depth})"
-        user_input_parts.append((input_sig, len("CDC: ")))
-        user_input_parts.append((output, len(f"CDC: {input_sig} → ")))
-        user_input_parts.append((depth, len(f"CDC: {input_sig} → {output} (sync=")))
+        full_desc = f"CDC synchronizes {input_sig} to {output}, {depth} stage stages"
+        user_input_parts.append((input_sig, len("CDC synchronizes ")))
+        user_input_parts.append((output, len(f"CDC synchronizes {input_sig} to ")))
+        user_input_parts.append((depth, len(f"CDC synchronizes {input_sig} to {output}, ")))
         
     elif atype == 'basicAssertion':
         clock = truncate_signal(adata.get('clock', '?'))
         trigger = truncate_signal(adata.get('trigger_condition', '?'))
         result = truncate_signal(adata.get('expected_result', '?'))
-        full_desc = f"Custom: {trigger} ⟹ {result} (@{clock})"
-        user_input_parts.append((trigger, len("Custom: ")))
-        user_input_parts.append((result, len(f"Custom: {trigger} ⟹ ")))
-        user_input_parts.append((clock, len(f"Custom: {trigger} ⟹ {result} (@")))
+        full_desc = f"Custom assertion: when {trigger} then {result} (clock {clock})"
+        user_input_parts.append((trigger, len("Custom assertion: when ")))
+        user_input_parts.append((result, len(f"Custom assertion: when {trigger} then ")))
+        user_input_parts.append((clock, len(f"Custom assertion: when {trigger} then {result} (clock ")))
         
     elif atype == 'delayCondition':
         trigger = truncate_signal(adata.get('trigger_signal', '?'))
         expected = truncate_signal(adata.get('expected_signal', '?'))
         delay = str(adata.get('delay_cycles', '?'))
-        full_desc = f"Delay: {trigger} +{delay}cy → {expected}"
-        user_input_parts.append((trigger, len("Delay: ")))
-        user_input_parts.append((delay, len(f"Delay: {trigger} +")))
-        user_input_parts.append((expected, len(f"Delay: {trigger} +{delay}cy → ")))
+        full_desc = f"Delay verification: {trigger} then {expected} within {delay} cycles"
+        user_input_parts.append((trigger, len("Delay verification: ")))
+        user_input_parts.append((expected, len(f"Delay verification: {trigger} then ")))
+        user_input_parts.append((delay, len(f"Delay verification: {trigger} then {expected} within ")))
         
     elif atype == 'videosyncall':
         de = truncate_signal(adata.get('de_signal', '?'))
         hsync = truncate_signal(adata.get('hsync_signal', '?'))
         vsync = truncate_signal(adata.get('vsync_signal', '?'))
-        full_desc = f"VideoSync: {de}, {hsync}, {vsync} - 8 params"
-        user_input_parts.append((de, len("VideoSync: ")))
-        user_input_parts.append((hsync, len(f"VideoSync: {de}, ")))
-        user_input_parts.append((vsync, len(f"VideoSync: {de}, {hsync}, ")))
+        full_desc = f"Video timing complete: {de}, {hsync}, {vsync} all 8 parameters"
+        user_input_parts.append((de, len("Video timing complete: ")))
+        user_input_parts.append((hsync, len(f"Video timing complete: {de}, ")))
+        user_input_parts.append((vsync, len(f"Video timing complete: {de}, {hsync}, ")))
         
     elif atype == 'QCH':
         qreq = truncate_signal(adata.get('qreqn', '?'))
         qacc = truncate_signal(adata.get('qacceptn', '?'))
         qact = truncate_signal(adata.get('qactive', '?'))
-        full_desc = f"QCH: req={qreq} ack={qacc} active={qact}"
-        user_input_parts.append((qreq, len("QCH: req=")))
-        user_input_parts.append((qacc, len(f"QCH: req={qreq} ack=")))
-        user_input_parts.append((qact, len(f"QCH: req={qreq} ack={qacc} active=")))
+        full_desc = f"QCH protocol: request {qreq}, accept {qacc}, active {qact}"
+        user_input_parts.append((qreq, len("QCH protocol: request ")))
+        user_input_parts.append((qacc, len(f"QCH protocol: request {qreq}, accept ")))
+        user_input_parts.append((qact, len(f"QCH protocol: request {qreq}, accept {qacc}, active ")))
         
     elif atype == 'AHB_M':
         haddr = truncate_signal(adata.get('haddr', '?'))
         htrans = truncate_signal(adata.get('htrans', '?'))
-        full_desc = f"AHB Master: addr={haddr} trans={htrans}"
-        user_input_parts.append((haddr, len("AHB Master: addr=")))
-        user_input_parts.append((htrans, len(f"AHB Master: addr={haddr} trans=")))
+        full_desc = f"AHB master: address {haddr}, transaction type {htrans}"
+        user_input_parts.append((haddr, len("AHB master: address ")))
+        user_input_parts.append((htrans, len(f"AHB master: address {haddr}, transaction type ")))
         
     elif atype == 'AHB_S':
         haddr = truncate_signal(adata.get('haddr', '?'))
         hresp = truncate_signal(adata.get('hresp', '?'))
-        full_desc = f"AHB Slave: addr={haddr} resp={hresp}"
-        user_input_parts.append((haddr, len("AHB Slave: addr=")))
-        user_input_parts.append((hresp, len(f"AHB Slave: addr={haddr} resp=")))
+        full_desc = f"AHB slave: address {haddr}, response {hresp}"
+        user_input_parts.append((haddr, len("AHB slave: address ")))
+        user_input_parts.append((hresp, len(f"AHB slave: address {haddr}, response ")))
         
     else:
-        full_desc = f"[{atype.upper()}] configured"
+        full_desc = f"[{atype.upper()}] assertion configured"
     
     return full_desc, user_input_parts
 
@@ -6061,20 +6198,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 1920',
+                'title': 'Expected Min Pixel Count',
+                'description': 'Enter minimum pixel count (e.g., 1280)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 1280 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 1920',
+                'title': 'Expected Max Pixel Count',
+                'description': 'Enter maximum pixel count (e.g., 1920)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 1920 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6099,20 +6236,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 100',
+                'title': 'Expected Min Pulse Width (cycles)',
+                'description': 'Enter minimum pulse width in cycles (e.g., 100)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 100 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 200',
+                'title': 'Expected Max Pulse Width (cycles)',
+                'description': 'Enter maximum pulse width in cycles (e.g., 200)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 200 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6137,20 +6274,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 50',
+                'title': 'Expected Min Back Porch (cycles)',
+                'description': 'Enter minimum back porch duration in cycles (e.g., 50)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 50 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 100',
+                'title': 'Expected Max Back Porch (cycles)',
+                'description': 'Enter maximum back porch duration in cycles (e.g., 100)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 100 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6175,20 +6312,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 20',
+                'title': 'Expected Min Front Porch (cycles)',
+                'description': 'Enter minimum front porch duration in cycles (e.g., 20)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 20 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 50',
+                'title': 'Expected Max Front Porch (cycles)',
+                'description': 'Enter maximum front porch duration in cycles (e.g., 50)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 50 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6213,20 +6350,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 10',
+                'title': 'Expected Min Back Porch (lines)',
+                'description': 'Enter minimum back porch in lines (e.g., 10)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 10 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 20',
+                'title': 'Expected Max Back Porch (lines)',
+                'description': 'Enter maximum back porch in lines (e.g., 20)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 20 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6251,20 +6388,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 5',
+                'title': 'Expected Min Front Porch (lines)',
+                'description': 'Enter minimum front porch in lines (e.g., 5)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 5 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 15',
+                'title': 'Expected Max Front Porch (lines)',
+                'description': 'Enter maximum front porch in lines (e.g., 15)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 15 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6289,20 +6426,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 3,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 2',
+                'title': 'Expected Min Vertical Sync Width (lines)',
+                'description': 'Enter minimum vertical sync pulse width in lines (e.g., 2)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 2 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 5',
+                'title': 'Expected Max Vertical Sync Width (lines)',
+                'description': 'Enter maximum vertical sync pulse width in lines (e.g., 5)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 5 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -6336,20 +6473,20 @@ def _get_plugin_fields(plugin_name: str) -> List[Dict[str, Any]]:
             },
             {
                 'name': 'expected_min_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 4,
-                'title': 'Expected Min Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 1080',
+                'title': 'Expected Min Active Lines',
+                'description': 'Enter minimum number of active lines (e.g., 1080)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 1080 or type s for signal selection',
                 'required': True,
             },
             {
                 'name': 'expected_max_value',
-                'type': 'signal',
+                'type': 'numeric',
                 'step': 5,
-                'title': 'Expected Max Value',
-                'description': 'Select signal/parameter or enter number (0 for custom expression)',
-                'example': 'Select signal, parameter, or enter number like 1080',
+                'title': 'Expected Max Active Lines',
+                'description': 'Enter maximum number of active lines (e.g., 1080)\n  - Type a number for direct value\n  - Type s to select a signal or parameter instead',
+                'example': 'Enter 1080 or type s for signal selection',
                 'required': True,
             },
         ],
@@ -7164,6 +7301,16 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
                     val_line = "[Enter value]"
                     stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
                                   curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
+            
+            elif current_field['type'] == 'numeric':
+                if current_val:
+                    val_line = f"Current: {current_val}"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                                  curses.color_pair(_PAIR_BY_NAME.get("green", 0)))
+                else:
+                    val_line = "[Enter number or 's' for signal selection]"
+                    stdscr.addnstr(y, margin_x + 2, _truncate(val_line, left_w), left_w, 
+                                  curses.color_pair(_PAIR_BY_NAME.get("yellow", 0)))
         except curses.error:
             pass
     
@@ -7191,6 +7338,8 @@ def _render_field_input_step(stdscr: "curses._CursesWindow", state: AppState, to
             inst = "Enter expression (e.g., 'i1 & i2', 'o1 | rst', '(a & b) | c') | 'q' to cancel"
         elif current_field['type'] == 'choice':
             inst = "Enter [1-9] to select | 'prev'/'p' for previous | 'q' to cancel"
+        elif current_field['type'] == 'numeric':
+            inst = "Enter number or 's' for signal selection | 'prev'/'p' | 'q' to cancel"
         elif current_field['type'] == 'signal':
             # Special instruction for exp_cnt_val field
             if field_name == 'exp_cnt_val':
@@ -9555,6 +9704,153 @@ def _handle_assertion_wizard_command(state: AppState, cmdline: str) -> Tuple[str
             # Save signal name to assertion_input_data and port_dict to assertion_signal_ports
             state.assertion_input_data[field_name] = selected_signal
             state.assertion_signal_ports[field_name] = selected_port
+            
+            # Auto-advance to next field
+            if state.assertion_current_field_idx < len(fields) - 1:
+                state.assertion_current_field_idx += 1
+                next_field = fields[state.assertion_current_field_idx]
+                step = state.assertion_current_field_idx + 1
+                msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                msg += next_field.get('description', '')
+                return msg, False
+            else:
+                # All fields done, move to confirm
+                state.assertion_wizard_stage = 'confirm'
+                return "\nAll steps complete. Review and press Enter to create.", False
+        
+        elif field_type == 'numeric':
+            # Handle numeric input with optional signal selection via 's'
+            
+            # First, check if we're IN signal selection mode (state.assertion_signal_list is populated)
+            if state.assertion_signal_list:
+                # We're in signal selection mode - handle signal index input
+                
+                # Check if user wants to go back to numeric input
+                if cmd == 'back' or cmd == 'b':
+                    state.assertion_signal_list = []
+                    state.assertion_signal_map = {}
+                    return "Enter numeric value or 's' for signal selection:", False
+                
+                # Try to select a signal by number
+                if cmd.isdigit():
+                    idx = int(cmd)
+                    if idx in state.assertion_signal_map:
+                        sig_name, _ = state.assertion_signal_map[idx]
+                        if sig_name == '<Select a signal or parameter>':
+                            return "Please select a signal or parameter [1-N] or type 'back':", False
+                        
+                        state.assertion_input_data[field_name] = sig_name
+                        state.assertion_signal_ports[field_name] = state.assertion_signal_map.get(idx, (None, {}))[1]
+                        state.assertion_signal_list = []  # Clear signal list
+                        state.assertion_signal_map = {}
+                        
+                        # Auto-advance to next field
+                        if state.assertion_current_field_idx < len(fields) - 1:
+                            state.assertion_current_field_idx += 1
+                            next_field = fields[state.assertion_current_field_idx]
+                            step = state.assertion_current_field_idx + 1
+                            msg = f"\nStep {step}/{len(fields)}: {next_field.get('title', '')}\n"
+                            msg += next_field.get('description', '')
+                            return msg, False
+                        else:
+                            state.assertion_wizard_stage = 'confirm'
+                            return "\nAll steps complete. Review and press Enter to create.", False
+                    else:
+                        return f"Invalid signal index {idx}. Try [1-{len(state.assertion_signal_map)-1}]:", False
+                else:
+                    return "Enter signal index number [1-N] or 'back' to return:", False
+            
+            # NOT in signal selection mode - handle normal numeric or 's' command
+            
+            # Check if user wants to switch to signal selection
+            if cmd == 's' or cmd == 'S':
+                # Switch to signal selection mode
+                state.assertion_signal_page = 0
+                
+                # Rebuild signal list for this field
+                all_signals = []
+                idx = 0
+                
+                # Clock signals
+                if state.module_info and state.module_info.clocks:
+                    for clk in state.module_info.clocks:
+                        clk_name = clk.get('name', '')
+                        all_signals.append((idx, clk_name, 'clock', clk))
+                        idx += 1
+                
+                # Reset signals
+                if state.module_info and state.module_info.resets:
+                    for rst in state.module_info.resets:
+                        rst_name = rst.get('name', '')
+                        all_signals.append((idx, rst_name, 'reset', rst))
+                        idx += 1
+                
+                # Input signals
+                if state.module_info and state.module_info.inputs:
+                    for inp in state.module_info.inputs:
+                        inp_name = inp.get('name', '')
+                        all_signals.append((idx, inp_name, 'input', inp))
+                        idx += 1
+                
+                # Output signals
+                if state.module_info and state.module_info.outputs:
+                    for out in state.module_info.outputs:
+                        out_name = out.get('name', '')
+                        all_signals.append((idx, out_name, 'output', out))
+                        idx += 1
+                
+                # Parameters
+                if state.module_info and state.module_info.parameters:
+                    for param in state.module_info.parameters:
+                        param_name = param.get('name', '')
+                        all_signals.append((idx, param_name, 'parameter', param))
+                        idx += 1
+                
+                # MS Signals (user-defined)
+                if state.conditions:
+                    for cond in state.conditions:
+                        cond_name = cond.get('name', '')
+                        all_signals.append((idx, cond_name, 'ms_signal', cond))
+                        idx += 1
+                
+                # If no signals available, return error
+                if not all_signals:
+                    return "No signals or parameters available. Enter a number or 'back':", False
+                
+                state.assertion_signal_list = all_signals
+                
+                # Build signal map
+                signal_map = {}
+                for idx_num, name, sig_type, port_dict in all_signals:
+                    signal_map[idx_num] = (name, port_dict)
+                state.assertion_signal_map = signal_map
+                
+                # Now show signal selection instead of numeric input
+                return "Select signal or parameter by number [1-N] or 'back' to return to number input:", False
+            
+            # Normal numeric input (NOT in signal selection, NOT 's' command)
+            if not cmd.isdigit():
+                return "Please enter a valid number or 's' for signal selection:", False
+            
+            # Validate numeric input
+            try:
+                num_val = int(cmd)
+                if num_val < 0:
+                    return "Please enter a non-negative number:", False
+            except ValueError:
+                return "Please enter a valid number:", False
+            
+            # Special validation for expected_max_value (must be >= expected_min_value)
+            if 'expected_min_value' in field_name and 'max' in field_name.lower():
+                try:
+                    min_val = int(state.assertion_input_data.get('expected_min_value', '0'))
+                    max_val = int(cmd)
+                    if max_val < min_val:
+                        return f"Error: Max ({max_val}) must be >= Min ({min_val}). Please re-enter:", False
+                except ValueError:
+                    pass  # Already validated above
+            
+            state.assertion_input_data[field_name] = cmd
             
             # Auto-advance to next field
             if state.assertion_current_field_idx < len(fields) - 1:

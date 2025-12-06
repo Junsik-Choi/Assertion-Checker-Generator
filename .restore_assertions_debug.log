@@ -1,0 +1,34 @@
+[_restore_assertions_from_excel] SUCCESS: Loaded 2 assertions
+  1. hact: {'hsync_signal': 'i_blur_mode_cap', 'de_signal': '45', 'min_value': '6', 'min_count': '6', 'max_value': '3', 'max_count': '3', 'clock_signal': '<Base Clock>', 'expected_width': '6'}
+  2. hsw: {'hsync_signal': 'abd', 'de_signal': 'sfs', 'min_value': '5', 'min_count': '5', 'max_value': '6', 'max_count': '6', 'clock_signal': '<Base Clock>', 'expected_width': '5'}
+[_restore_assertions_from_excel] SUCCESS: Loaded 2 assertions
+  1. hact: {'hsync_signal': 'i_blur_mode_cap', 'de_signal': '45', 'min_value': '6', 'min_count': '6', 'max_value': '3', 'max_count': '3', 'clock_signal': '<Base Clock>', 'expected_width': '6'}
+  2. hsw: {'hsync_signal': 'abd', 'de_signal': 'sfs', 'min_value': '5', 'min_count': '5', 'max_value': '6', 'max_count': '6', 'clock_signal': '<Base Clock>', 'expected_width': '5'}
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions
+[_restore_assertions_from_excel] No assertions found in Excel
+[_restore_assertions_from_excel] Fallback to session.json: Loaded 0 assertions

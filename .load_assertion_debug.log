@@ -78,3 +78,31 @@
 [_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
 [_load_assertion_data_from_excel] Loaded data: {}
 [assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_blur_mode_cap', 'data_enable_signal': '45', 'expected_min_value': '6', 'expected_max_value': '3'}
+[assertion_wizard] Loaded data: {'hsync_signal': 'i_blur_mode_cap', 'data_enable_signal': '45', 'expected_min_value': '6', 'expected_max_value': '3'}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {'hsync_signal': 'i_blur_mode_cap', 'data_enable_signal': '45', 'expected_min_value': '6', 'expected_max_value': '3'}
+[assertion_wizard] Loaded data: {'hsync_signal': 'i_blur_mode_cap', 'data_enable_signal': '45', 'expected_min_value': '6', 'expected_max_value': '3'}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}
+[assertion_wizard] Type selected: hact
+[assertion_wizard] session_excel_path exists: True
+[assertion_wizard] Calling _load_assertion_data_from_excel for hact
+[_load_assertion_data_from_excel] Called for type=hact
+[_load_assertion_data_from_excel] state.session_excel_path=D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
+[_load_assertion_data_from_excel] Loaded data: {}
+[assertion_wizard] Loaded data: {}

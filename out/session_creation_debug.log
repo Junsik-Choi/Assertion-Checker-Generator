@@ -2484,3 +2484,60 @@ UnicodeEncodeError: 'charmap' codec can't encode characters in position 38-39: c
 
 [15:54:07] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405
 [15:54:07] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_155405\blur_scaler.xlsx
+[18:58:47] === _create_session_excel_and_fill() CALLED ===
+[18:58:47] state.excel_path = D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx
+[18:58:47] state.target_module = blur_scaler
+[18:58:47] state.module_info.module = blur_scaler
+[18:58:47] Creating session directory: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847
+[18:58:47] Session directory created successfully
+[18:58:47] Assertions directory created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\assertions
+[18:58:47] Copying Excel from D:\Programing\Assertion-Checker-Generator\Data\Assertion_TF.xlsx to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
+[18:58:47] Excel copied successfully to D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
+[18:58:47] state.session_excel_path SET TO: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
+[18:58:47] Verifying Define sheet...
+[18:58:47] Define sheet verified OK
+[18:58:47] Creating define JSON...
+[18:58:47] Define JSON created: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\module_define.json
+[18:58:47] Running fill_define.py...
+[18:58:48] fill_define.py returned: 0
+[18:58:48] fill_define.py stdout: [18:58:48] INFO: Loaded data: module=blur_scaler, inputs=20, outputs=4, conditions=0
+[18:58:48] INFO: 작업 시작 (총 35 단계)
+[----------------------------]   2% - 기존 값 클리어
+[#---------------------------]   5% - Base: Target Name
+[##--------------------------]   8% - Base: Target Path
+[###-------------------------]  11% - Base: Base Clock
+[###-------------------------]  14% - Base: Base Reset
+[####------------------------]  17% - Defines: Parameters
+[#####-----------------------]  20% - Inputs: i_blur_mode_cap
+[######----------------------]  22% - Inputs: i_den
+[#######---------------------]  25% - Inputs: i_hor_cnt
+[#######---------------------]  28% - Inputs: i_hsync
+[########--------------------]  31% - Inputs: i_mirror_mode_cap
+[#########-------------------]  34% - Inputs: i_sram_rd1
+[##########------------------]  37% - Inputs: i_sram_rd2
+[###########-----------------]  40% - Inputs: i_sram_rd3
+[###########-----------------]  42% - Inputs: i_vact_state
+[############----------------]  45% - Inputs: i_vsync
+[#############---------------]  48% - Inputs: i_w1_cap
+[##############--------------]  51% - Inputs: i_w2_cap
+[###############-------------]  54% - Inputs: i_w3_cap
+[###############-------------]  57% - Inputs: i_w4_cap
+[################------------]  60% - Inputs: i_w5_cap
+[#################-----------]  62% - Inputs: i_w6_cap
+[##################----------]  65% - Inputs: i_w7_cap
+[###################---------]  68% - Inputs: i_w8_cap
+[###################---------]  71% - Inputs: i_w9_cap
+[####################--------]  74% - Inputs: i_weight_wr_mode_cap
+[#####################-------]  77% - Outputs: o_data
+[######################------]  80% - Outputs: o_den
+[######################------]  82% - Outputs: o_hsync
+[#######################-----]  85% - Outputs: o_vsync
+[########################----]  88% - Parameters: WEIGHT_WIDTH
+[#########################---]  91% - Parameters: PARAM_WIDTH
+[##########################--]  94% - Parameters: DATA_WIDTH
+[###########################-]  97% - Parameters: SUM_WIDTH
+[############################] 100% - 엑셀 저장
+[18:58:48] INFO: 모든 작업 완료
+
+[18:58:48] SUCCESS! Session created at: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847
+[18:58:48] Final state.session_excel_path: D:\Programing\Assertion-Checker-Generator\out\sessions\blur_scaler-20251206_185847\blur_scaler.xlsx
