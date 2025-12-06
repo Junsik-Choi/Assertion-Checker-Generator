@@ -73,8 +73,9 @@ def _ensure_counter_layout(ws) -> Tuple[int, int, int]:
         ws.cell(row=c_row + 2, column=c_col + 1, value="Plus Condition")
         ws.cell(row=c_row + 2, column=c_col + 2, value="Reset Condition")
         ws.cell(row=c_row + 1, column=c_col + 3, value="Assertion Condition")
-        ws.cell(row=c_row + 2, column=c_col + 3, value="Trigger Condition")
-        ws.cell(row=c_row + 2, column=c_col + 4, value="Expect Count Value")
+        ws.cell(row=c_row + 2, column=c_col + 3, value="Disable Condition")
+        ws.cell(row=c_row + 2, column=c_col + 4, value="Trigger Condition")
+        ws.cell(row=c_row + 2, column=c_col + 5, value="Expect Count Value")
     min_col = c_col
     for mr in ws.merged_cells.ranges:
         if ws.cell(row=c_row, column=c_col).coordinate in mr:
@@ -89,9 +90,11 @@ def _ensure_counter_layout(ws) -> Tuple[int, int, int]:
     if not ws.cell(row=target_row, column=target_col + 2).value:
         ws.cell(row=target_row, column=target_col + 2, value="Reset Condition")
     if not ws.cell(row=target_row, column=target_col + 3).value:
-        ws.cell(row=target_row, column=target_col + 3, value="Trigger Condition")
+        ws.cell(row=target_row, column=target_col + 3, value="Disable Condition")
     if not ws.cell(row=target_row, column=target_col + 4).value:
-        ws.cell(row=target_row, column=target_col + 4, value="Expect Count Value")
+        ws.cell(row=target_row, column=target_col + 4, value="Trigger Condition")
+    if not ws.cell(row=target_row, column=target_col + 5).value:
+        ws.cell(row=target_row, column=target_col + 5, value="Expect Count Value")
     data_row = target_row + 1
     return c_row, target_col, data_row
 
@@ -103,14 +106,16 @@ def parse_counter_block_for_row(ws, row: int, target_col: int) -> Dict[str, Any]
     target = ws.cell(row=row, column=target_col).value
     plus_con = ws.cell(row=row, column=target_col + 1).value
     reset_con = ws.cell(row=row, column=target_col + 2).value
-    trigger_con = ws.cell(row=row, column=target_col + 3).value
-    exp_cnt_val = ws.cell(row=row, column=target_col + 4).value
+    disable_con = ws.cell(row=row, column=target_col + 3).value
+    trigger_con = ws.cell(row=row, column=target_col + 4).value
+    exp_cnt_val = ws.cell(row=row, column=target_col + 5).value
     return {
         "Base Clock": str(base_clk).strip() if base_clk else "",
         "Reset": str(base_rst).strip() if base_rst else "",
         "Target": str(target).strip() if target else "",
         "Plus Condition": str(plus_con).strip() if plus_con else "",
         "Reset Condition": str(reset_con).strip() if reset_con else "",
+        "Disable Condition": str(disable_con).strip() if disable_con else "",
         "Trigger Condition": str(trigger_con).strip() if trigger_con else "",
         "Expect Count Value": str(exp_cnt_val).strip() if exp_cnt_val else "",
     }
@@ -259,8 +264,9 @@ def _update_counter_sheet(ws, cnt_cfg: Dict[str, str], module_info: Dict[str, An
     ws.cell(row=write_row, column=target_col,     value=(cnt_cfg.get("target", "") or "").strip())
     ws.cell(row=write_row, column=target_col + 1, value=(cnt_cfg.get("plus_con", "") or "").strip())
     ws.cell(row=write_row, column=target_col + 2, value=(cnt_cfg.get("reset_con", "") or "").strip())
-    ws.cell(row=write_row, column=target_col + 3, value=(cnt_cfg.get("trigger_con", "") or "").strip())
-    ws.cell(row=write_row, column=target_col + 4, value=(cnt_cfg.get("exp_cnt_val", "") or "").strip())
+    ws.cell(row=write_row, column=target_col + 3, value=(cnt_cfg.get("disable_con", "") or "").strip())
+    ws.cell(row=write_row, column=target_col + 4, value=(cnt_cfg.get("trigger_con", "") or "").strip())
+    ws.cell(row=write_row, column=target_col + 5, value=(cnt_cfg.get("exp_cnt_val", "") or "").strip())
 
     # Base Clock / Base Reset 라벨 및 값 정리
     clk_label = find_cell(ws, "Base Clock")
@@ -281,6 +287,7 @@ def generate_verilog(info: Dict[str, Any]) -> str:
     rst         = info["Reset"]
     plus_con    = info["Plus Condition"]
     reset_con   = info["Reset Condition"]
+    disable_con = info["Disable Condition"]
     trigger_con = info["Trigger Condition"]
     exp_cnt_val = info["Expect Count Value"]
     cnt         = info["Target"]
@@ -299,6 +306,11 @@ def generate_verilog(info: Dict[str, Any]) -> str:
             logic_list.append(f"logic {width} {name};"); declared.add(name)
 
     for name, w in (info.get("Reset Condition Ports") or []):
+        if name not in declared:
+            width = w or "[0:0]"
+            logic_list.append(f"logic {width} {name};"); declared.add(name)
+
+    for name, w in (info.get("Disable Condition Ports") or []):
         if name not in declared:
             width = w or "[0:0]"
             logic_list.append(f"logic {width} {name};"); declared.add(name)
@@ -338,7 +350,7 @@ always @(posedge {clk} or negedge {rst}) begin
 end
 
 property p_counter_check;
-    @(posedge {clk}) disable iff(!{rst})
+    @(posedge {clk}) disable iff(!{rst} || {disable_con})
     {trigger_con} |-> ({cnt} == {exp_cnt_val});
 endproperty
 
@@ -361,6 +373,10 @@ def generate_inst_verilog(info: Dict[str, Any]) -> str:
             assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
 
     for name, w in (info.get("Reset Condition Ports") or []):
+        if name not in assigned:
+            assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
+
+    for name, w in (info.get("Disable Condition Ports") or []):
         if name not in assigned:
             assign_list.append(f"assign u_assertion_intf.{name} = top.dut.{name};"); assigned.add(name)
 
@@ -410,6 +426,7 @@ class CounterPlugin(BaseAssertionPlugin):
         target = "<Target>"
         reset_con = "<Reset Condition>"
         plus_con = "<Plus Condition>"
+        disable_con = "<Disable Condition>"
         trigger_con = "<Trigger Condition>"
         exp_cnt_val = "<Expect Counter Value>"
         while True:
@@ -430,8 +447,8 @@ class CounterPlugin(BaseAssertionPlugin):
             print(f"end")
             print(f"")
             print(f"property p_counter_check;")
-            print(f"    @(posedge clk) disable iff(!rstn)")
-            print(f"    [4]{trigger_con} |-> ([1]{target} == [5]{exp_cnt_val});")
+            print(f"    @(posedge clk) disable iff(!rstn || [4]{disable_con})")
+            print(f"    [5]{trigger_con} |-> ([1]{target} == [6]{exp_cnt_val});")
             print(f"endproperty")
             print("=========================================================")
             print("Select item number to edit")
@@ -442,8 +459,9 @@ class CounterPlugin(BaseAssertionPlugin):
                 if target       in ("", "<Target>"):                missing.append("[1]")
                 if reset_con    in ("", "<Reset Condition>"):       missing.append("[2]")
                 if plus_con     in ("", "<Plus Condition>"):        missing.append("[3]")
-                if trigger_con  in ("", "<Trigger Condition>"):     missing.append("[4]")
-                if exp_cnt_val  in ("", "<Expect Counter Value>"):  missing.append("[5]")
+                if disable_con  in ("", "<Disable Condition>"):     missing.append("[4]")
+                if trigger_con  in ("", "<Trigger Condition>"):     missing.append("[5]")
+                if exp_cnt_val  in ("", "<Expect Counter Value>"):  missing.append("[6]")
                 if missing: print(f"{','.join(missing)} has NOT been entered yet.")
                 print("Press Enter again to confirm, or select item number to edit")
                 choice = input("> ").strip()
@@ -456,13 +474,15 @@ class CounterPlugin(BaseAssertionPlugin):
             elif choice == "3":
                 plus_con = _pick_one("Select Plus Condition", sig_opts, allow_custom=True)
             elif choice == "4":
-                trigger_con = _pick_one("Select Trigger Condition", sig_opts, allow_custom=True)
+                disable_con = _pick_one("Select Disable Condition", sig_opts, allow_custom=True)
             elif choice == "5":
+                trigger_con = _pick_one("Select Trigger Condition", sig_opts, allow_custom=True)
+            elif choice == "6":
                 exp_cnt_val = _pick_one("Select Expect Counter Value", sig_opts, allow_custom=True)
             else:
                 print("Invalid selection. Try again.")
                 continue
-        return {"target": target, "plus_con": plus_con, "reset_con": reset_con, "trigger_con": trigger_con, "exp_cnt_val": exp_cnt_val}
+        return {"target": target, "plus_con": plus_con, "reset_con": reset_con, "disable_con": disable_con, "trigger_con": trigger_con, "exp_cnt_val": exp_cnt_val}
 
     def parse(self, xls_path: Path) -> Dict[str, Any]:
         # 1) 플러그인 선택 직후: 타입/신호 선택 프롬프트
@@ -491,16 +511,18 @@ class CounterPlugin(BaseAssertionPlugin):
         info["Reset Width"] = _port_width_token(mod, info.get("Reset", ""))
         info["Plus Condition Width"] = _port_width_token(mod, info.get("Plus Condition", ""))
         info["Reset Condition Width"] = _port_width_token(mod, info.get("Reset Condition", ""))
+        info["Disable Condition Width"] = _port_width_token(mod, info.get("Disable Condition", ""))
         info["Trigger Condition Width"] = _port_width_token(mod, info.get("Trigger Condition", ""))
         info["Expect Count Value Width"] = _port_width_token(mod, info.get("Expect Count Value", ""))
         # attach 'ports in custom' from module define
         info["Plus Condition Ports"] = _collect_expr_ports(mod, info.get("Plus Condition", ""))
         info["Reset Condition Ports"] = _collect_expr_ports(mod, info.get("Reset Condition", ""))
+        info["Disable Condition Ports"] = _collect_expr_ports(mod, info.get("Disable Condition", ""))
         info["Trigger Condition Ports"] = _collect_expr_ports(mod, info.get("Trigger Condition", ""))
         info["Expect Count Value Ports"] = _collect_expr_ports(mod, info.get("Expect Count Value", ""))
         blocks: List[Dict[str, Any]] = []
         ct = "counter"
-        if ct in ALLOWED_TYPES and info.get("Target") and info.get("Plus Condition") and info.get("Trigger Condition") and info.get("Expect Count Value"):
+        if ct in ALLOWED_TYPES and info.get("Target") and info.get("Plus Condition") and info.get("Disable Condition") and info.get("Trigger Condition") and info.get("Expect Count Value"):
             blocks.append(info)
 
         # 선택된 타입만 남기기
@@ -525,35 +547,36 @@ class CounterPlugin(BaseAssertionPlugin):
 
     def emit_json(self, parsed: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         return parsed
-    
+
     @classmethod
     def write_to_excel(cls, excel_path: Path, data: Dict[str, Any], state: Optional[Any] = None) -> None:
         """Write counter assertion data to Excel sheet."""
         from openpyxl import load_workbook  # type: ignore
-        
+
         wb = load_workbook(str(excel_path))
-        
+
         # Find Counter sheet
         sheet_name = cls.find_sheet_case_insensitive(wb.sheetnames, 'Counter')
         if not sheet_name:
             sheet_name = 'Counter'
             if sheet_name not in wb.sheetnames:
                 wb.create_sheet(sheet_name)
-        
+
         ws = wb[sheet_name]
-        
-        # Find next empty row (Counter sheet: data starts at row 8)
-        next_row = 8
+
+        # Find next empty row (Counter sheet: data starts at row 7)
+        next_row = 7
         while ws.cell(row=next_row, column=2).value:
             next_row += 1
-        
-        # Counter sheet columns (from row 7): col2=Target, col3=Plus, col4=Reset, col5=Trigger, col6=Expect Count
+
+        # Counter sheet columns (from row 7): col2=Target, col3=Plus, col4=Reset, col5=Disable, col6=Trigger, col7=Expect Count
         ws.cell(row=next_row, column=2, value=data.get('target', ''))
         ws.cell(row=next_row, column=3, value=data.get('plus_con', ''))
         ws.cell(row=next_row, column=4, value=data.get('reset_con', ''))
-        ws.cell(row=next_row, column=5, value=data.get('trigger_con', ''))
-        ws.cell(row=next_row, column=6, value=data.get('exp_cnt_val', ''))
-        
+        ws.cell(row=next_row, column=5, value=data.get('disable_con', ''))
+        ws.cell(row=next_row, column=6, value=data.get('trigger_con', ''))
+        ws.cell(row=next_row, column=7, value=data.get('exp_cnt_val', ''))
+
         wb.save(str(excel_path))
         wb.close()
 
